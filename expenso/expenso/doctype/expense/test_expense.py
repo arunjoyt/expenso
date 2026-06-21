@@ -1,12 +1,13 @@
 import datetime
+import unittest
 
 import frappe
-from frappe.tests import IntegrationTestCase, UnitTestCase
+from frappe.tests.utils import FrappeTestCase
 
 from expenso.expenso.doctype.expense.expense import _validate_amount
 
 
-class TestExpenseUnit(UnitTestCase):
+class TestExpenseUnit(unittest.TestCase):
     # U1
     def test_validate_amount_zero(self):
         self.assertRaises(frappe.ValidationError, _validate_amount, 0)
@@ -16,7 +17,7 @@ class TestExpenseUnit(UnitTestCase):
         self.assertRaises(frappe.ValidationError, _validate_amount, -1)
 
 
-class TestExpenseIntegration(IntegrationTestCase):
+class TestExpenseIntegration(FrappeTestCase):
     def setUp(self):
         self.family = frappe.get_doc({
             "doctype": "Family",
@@ -56,7 +57,7 @@ class TestExpenseIntegration(IntegrationTestCase):
             "amount": 50.0,
             "family": self.family.name,
         }).insert(ignore_permissions=True)
-        self.assertEqual(doc.date, datetime.date.today())
+        self.assertEqual(str(doc.date), str(datetime.date.today()))
 
     # I14
     def test_create_expense_without_category_succeeds(self):

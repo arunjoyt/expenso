@@ -1,10 +1,8 @@
-import re
-
 import frappe
-from frappe.tests import IntegrationTestCase
+from frappe.tests.utils import FrappeTestCase
 
 
-class TestCategoryIntegration(IntegrationTestCase):
+class TestCategoryIntegration(FrappeTestCase):
     def setUp(self):
         self.family = frappe.get_doc({
             "doctype": "Family",

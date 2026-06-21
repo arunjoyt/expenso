@@ -9,4 +9,5 @@ def _validate_amount(amount):
 
 class Expense(Document):
     def validate(self):
-        _validate_amount(self.amount)
+        if self.amount is not None:
+            _validate_amount(self.amount)

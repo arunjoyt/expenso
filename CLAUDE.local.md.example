@@ -1,0 +1,43 @@
+# CLAUDE.local.md
+
+Local machine setup — not checked in (see .gitignore). Loaded alongside CLAUDE.md.
+Do not scan filesystem other than the project folder without checking with me.
+
+## Bench
+
+- **Binary:** `/path/to/venv/bin/bench`
+- **Bench root** (run bench commands from here): `/path/to/benches/<bench-name>`
+
+## Expenso site
+
+- **Site name:** `<site-name>.test`
+- **URL:** `http://127.0.0.1:<port>/`
+- **Login:** `administrator` / `<password>`
+
+If the site is not reachable, ask me to start the bench.
+
+## ERPNext site (separate, for reference only)
+
+- **Site name:** `<erpnext-site-name>.test`
+- **URL:** `http://127.0.0.1:<port>`
+- **Login:** `Administrator` / `<password>`
+- Default ERPNext demo data is available on this site.
+
+## Useful commands
+
+```bash
+# Start bench (Frappe dev server + Redis + workers)
+/path/to/venv/bin/bench start
+
+# Migrate after DocType changes
+/path/to/venv/bin/bench --site <site-name>.test migrate
+
+# Clear cache after hooks.py or permission changes
+/path/to/venv/bin/bench --site <site-name>.test clear-cache
+
+# List installed apps
+/path/to/venv/bin/bench --site <site-name>.test list-apps
+
+# Frontend dev server with HMR (from apps/expenso/frontend/)
+npm run dev
+```

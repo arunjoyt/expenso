@@ -1,0 +1,37 @@
+{
+    "doctype": "DocType",
+    "name": "Family",
+    "module": "Expenso",
+    "engine": "InnoDB",
+    "autoname": "hash",
+    "fields": [
+        {
+            "fieldname": "family_name",
+            "fieldtype": "Data",
+            "label": "Family Name",
+            "reqd": 1
+        },
+        {
+            "fieldname": "currency",
+            "fieldtype": "Link",
+            "label": "Currency",
+            "options": "Currency",
+            "reqd": 1
+        },
+        {
+            "fieldname": "members",
+            "fieldtype": "Table",
+            "label": "Members",
+            "options": "Family Member"
+        }
+    ],
+    "permissions": [
+        {
+            "role": "System Manager",
+            "read": 1,
+            "write": 1,
+            "create": 1,
+            "delete": 1
+        }
+    ]
+}

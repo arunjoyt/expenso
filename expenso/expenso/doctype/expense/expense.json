@@ -1,0 +1,43 @@
+{
+    "doctype": "DocType",
+    "name": "Expense",
+    "module": "Expenso",
+    "engine": "InnoDB",
+    "autoname": "hash",
+    "fields": [
+        {
+            "fieldname": "amount",
+            "fieldtype": "Float",
+            "label": "Amount",
+            "reqd": 1
+        },
+        {
+            "fieldname": "date",
+            "fieldtype": "Date",
+            "label": "Date",
+            "default": "Today"
+        },
+        {
+            "fieldname": "category",
+            "fieldtype": "Link",
+            "label": "Category",
+            "options": "Category"
+        },
+        {
+            "fieldname": "family",
+            "fieldtype": "Link",
+            "label": "Family",
+            "options": "Family",
+            "reqd": 1
+        }
+    ],
+    "permissions": [
+        {
+            "role": "System Manager",
+            "read": 1,
+            "write": 1,
+            "create": 1,
+            "delete": 1
+        }
+    ]
+}

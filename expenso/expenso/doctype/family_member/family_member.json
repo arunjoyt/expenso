@@ -1,0 +1,16 @@
+{
+    "doctype": "DocType",
+    "name": "Family Member",
+    "module": "Expenso",
+    "engine": "InnoDB",
+    "istable": 1,
+    "fields": [
+        {
+            "fieldname": "user",
+            "fieldtype": "Link",
+            "label": "User",
+            "options": "User",
+            "reqd": 1
+        }
+    ]
+}

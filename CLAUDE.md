@@ -84,9 +84,14 @@ A single GitHub issue (`📍 Project Roadmap`) is the live progress dashboard fo
 1. Check GitHub state: `gh issue list` + `gh pr list --state all` + `gh issue view 16`
 2. `git checkout -b phase-<N>-streak-<N>-<slug>` from latest `develop`
 3. Implement the streak **and** write all tests listed for it in `docs/TEST_PLAN.md`
-4. Commit with `Refs #<streak-issue>` or `Closes #<streak-issue>` in each commit message body; bump `__version__`
-5. `git push -u origin <branch>`
-6. `gh pr create` using the PR body template above
-7. Post a comment on the roadmap issue linking to the new PR
-8. Leave the PR open — do not merge
+4. Run tests: `bench --site expenso1.test run-tests --app expenso`
+5. Run linter (auto-fixes in place, then re-run to confirm clean):
+   ```bash
+   /Users/arunjoyt/Desktop/Work/venv/fb/bin/pre-commit run --all-files
+   ```
+6. Commit with `Refs #<streak-issue>` or `Closes #<streak-issue>` in each commit message body; bump `__version__`
+7. `git push -u origin <branch>`
+8. `gh pr create` using the PR body template above
+9. Post a comment on the roadmap issue linking to the new PR
+10. Leave the PR open — do not merge
 

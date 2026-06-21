@@ -21,7 +21,7 @@ git log --oneline -20             # recent commits for context
 gh issue view 16                  # overall progress dashboard (📍 Project Roadmap)
 ```
 
-`docs/IMPLEMENTATION_PLAN.md` is the **ordered** source of truth for phases and streaks. Each streak depends on the ones before it within its phase. Treat `docs/ARCHITECTURE.md` as the source of truth for the data model, screen specs, and file layout. Treat `docs/DEPLOYMENT.md` as the source of truth for production setup and the end-to-end verification checklist. `docs/GLOSSARY.md` is the source of truth for all domain terminology — use it before introducing or renaming any concept.
+`docs/IMPLEMENTATION_PLAN.md` is the **ordered** source of truth for phases and streaks. Each streak depends on the ones before it within its phase. Treat `docs/ARCHITECTURE.md` as the source of truth for the data model, screen specs, and file layout. Treat `docs/DEPLOYMENT.md` as the source of truth for production setup and the end-to-end verification checklist. `docs/GLOSSARY.md` is the source of truth for all domain terminology — use it before introducing or renaming any concept. **`docs/TEST_PLAN.md` is the source of truth for all tests** — every streak has a numbered test table there; implement every test in that streak's section alongside the feature code.
 
 ---
 
@@ -83,7 +83,7 @@ A single GitHub issue (`📍 Project Roadmap`) is the live progress dashboard fo
 
 1. Check GitHub state: `gh issue list` + `gh pr list --state all` + `gh issue view 16`
 2. `git checkout -b phase-<N>-streak-<N>-<slug>` from latest `develop`
-3. Implement the streak
+3. Implement the streak **and** write all tests listed for it in `docs/TEST_PLAN.md`
 4. Commit with `Refs #<streak-issue>` or `Closes #<streak-issue>` in each commit message body; bump `__version__`
 5. `git push -u origin <branch>`
 6. `gh pr create` using the PR body template above

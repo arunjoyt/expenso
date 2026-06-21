@@ -2,7 +2,7 @@
 
 Ordered phases and streaks. Each streak depends on the ones before it within its phase. Each streak maps to one GitHub Issue.
 
-See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layout. See `docs/DEPLOYMENT.md` for production setup and the end-to-end verification checklist.
+See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layout. See `docs/DEPLOYMENT.md` for production setup and the end-to-end verification checklist. See `docs/TEST_PLAN.md` for the complete numbered test tables — each streak section there lists every unit and integration test to implement alongside the feature.
 
 ---
 

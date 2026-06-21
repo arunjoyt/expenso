@@ -1,0 +1,425 @@
+# Expenso — Test Plan
+
+Complete unit and integration test plan across all three phases. Backend tests use Frappe's `UnitTestCase` (no DB) and `IntegrationTestCase` (DB, auto-rollback). Frontend tests use Vitest.
+
+---
+
+## How tests are organised
+
+| Layer | Tool | Location |
+|---|---|---|
+| Backend unit | `frappe.tests.UnitTestCase` | `expenso/expenso/expenso/doctype/<dt>/test_<dt>.py` |
+| Backend integration | `frappe.tests.IntegrationTestCase` | same file, separate class |
+| Backend API integration | `IntegrationTestCase` | `expenso/expenso/expenso/tests/test_<feature>.py` |
+| Frontend unit / component | Vitest + Vue Test Utils | `frontend/src/**/__tests__/` |
+
+---
+
+## Phase 1 — Core Expense Ledger
+
+### P1-S1 · DocTypes: Family, FamilyMember, Expense, Category
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U1 | `Expense.validate` with `amount = 0` | raises `ValidationError` |
+| U2 | `Expense.validate` with `amount < 0` | raises `ValidationError` |
+
+**Integration tests**
+
+*Family*
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I1 | Create Family with `family_name` + `currency` | inserts; `name` is auto-set |
+| I2 | Create Family without `family_name` | raises `MandatoryError` |
+| I3 | Create Family without `currency` | raises `MandatoryError` |
+| I4 | Create Family with two `FamilyMember` child rows | both rows present after fetch |
+| I5 | Add `FamilyMember` child row without `user` | raises `MandatoryError` |
+
+*Category*
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I6 | Create Category with `category_name` + `family` | inserts; `name` matches `CAT-\d+` |
+| I7 | Create Category without `category_name` | raises `MandatoryError` |
+| I8 | Create Category without `family` | raises `MandatoryError` |
+| I9 | Two Categories with same `category_name` in different Families | both insert (no uniqueness constraint across Families) |
+
+*Expense*
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I10 | Create Expense with `amount` + `family` | inserts successfully |
+| I11 | Create Expense without `amount` | raises `MandatoryError` |
+| I12 | Create Expense without `family` | raises `MandatoryError` |
+| I13 | Create Expense without `date` | inserts; `date` equals today |
+| I14 | Create Expense without `category` | inserts (category is optional) |
+| I15 | Create Expense with valid `category` belonging to same Family | inserts successfully |
+
+---
+
+### P1-S2 · Permissions: Family Member role, query conditions, `has_permission`
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I16 | `Family Member` role exists in the database | `frappe.get_all("Role")` contains the role |
+| I17 | `permission_query_conditions` for a Member | returns SQL clause filtering to their Family |
+| I18 | `permission_query_conditions` for a user with no Family | returns clause that returns no rows |
+| I19 | `has_permission` for a Member on their own Family's Expense | returns `True` |
+| I20 | `has_permission` for a Member on a different Family's Expense | returns `False` |
+| I21 | Member A reads Expense list — only their Family's Expenses appear | Expense from Family B not in results |
+| I22 | Member A attempts to fetch Expense from Family B by name | raises `PermissionError` |
+
+---
+
+### P1-S3 · Family lifecycle: `after_insert` seeds default Categories
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I23 | Insert a new Family | exactly 8 Categories are created for it |
+| I24 | Seeded Category names | `{"Groceries", "Dining", "Transport", "Utilities", "Health", "Entertainment", "Shopping", "Other"}` |
+| I25 | All seeded Categories have `family` pointing to the new Family | no orphan Categories |
+| I26 | Save the Family again (update) | Category count stays at 8 (no double-seeding) |
+
+---
+
+### P1-S4 · Frontend scaffold: Login screen, routing
+
+**Frontend unit tests (Vitest)**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F1 | Unauthenticated user visits `/` | redirected to `/login` |
+| F2 | Authenticated user visits `/login` | redirected to `/feed` |
+| F3 | Login page renders | username field, password field, and submit button present |
+| F4 | Login form submitted with wrong credentials | error message visible |
+| F5 | Login form submitted with valid credentials | redirected to `/feed` |
+
+---
+
+### P1-S5 · Feed screen: monthly list, date grouping, month navigation
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U3 | Date grouping — today's date | label = `"Today"` |
+| U4 | Date grouping — yesterday's date | label = `"Yesterday"` |
+| U5 | Date grouping — older date e.g. 2025-06-12 | label = `"Jun 12"` |
+| U6 | Month store `prevMonth` from Jan 2025 | becomes Dec 2024 |
+| U7 | Month store `nextMonth` from Dec 2024 | becomes Jan 2025 |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I27 | `get_expenses(family, month, year)` with Expenses in that month | returns only those Expenses |
+| I28 | `get_expenses` with Expenses in different months | Expenses from other months excluded |
+| I29 | `get_expenses` with no Expenses | returns empty list |
+| I30 | `get_expenses` response order | newest date first within each date group |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F6 | Feed renders Expense rows grouped under date headers | group headers visible |
+| F7 | Month label in header matches store | header shows "June 2025" |
+| F8 | Prev month button click | month store decrements |
+| F9 | Next month button click | month store increments |
+| F10 | Feed for a month with no Expenses | empty state visible |
+| F11 | Monthly total shown at top | total equals sum of rendered Expenses |
+
+---
+
+### P1-S6 · Expense bottom sheet: Add / Edit / Delete + realtime
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I31 | `create_expense(amount, date, family)` | Expense exists in DB; realtime event published |
+| I32 | `create_expense` without `amount` | raises `ValidationError` |
+| I33 | `update_expense(name, amount=...)` | updated field persisted |
+| I34 | `delete_expense(name)` | Expense no longer in DB |
+| I35 | `create_expense` by Member of different Family | raises `PermissionError` |
+| I36 | `update_expense` on Expense from different Family | raises `PermissionError` |
+| I37 | `delete_expense` on Expense from different Family | raises `PermissionError` |
+| I38 | Realtime event payload on create | contains Expense `name` and `family` |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F12 | FAB click | ExpenseSheet slides up |
+| F13 | ExpenseSheet — `amount` field is required | submit disabled without amount |
+| F14 | ExpenseSheet — `date` defaults to today | date field pre-filled |
+| F15 | ExpenseSheet — `category` is optional | can submit without it |
+| F16 | Successful add submit | sheet closes; Feed list updated |
+| F17 | Tapping Expense row | ExpenseSheet opens in edit mode with fields pre-filled |
+| F18 | Delete action in edit mode | confirmation prompt shown |
+| F19 | Confirmed delete | Expense removed from Feed |
+| F20 | Tap outside sheet / swipe down | sheet closes without saving |
+
+---
+
+### P1-S7 · Analytics screen: monthly total + Category breakdown
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U8 | Category breakdown aggregation on sample data | groups correctly, amounts sum correctly |
+| U9 | Expenses with no Category | appear as a separate uncategorized group |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I39 | `get_analytics(family, month, year)` | returns `{ total, categories: [{ name, amount }] }` |
+| I40 | `total` value | equals sum of all Expenses for the month |
+| I41 | Category list ordering | sorted by `amount` descending |
+| I42 | No Expenses for month | returns `{ total: 0, categories: [] }` |
+| I43 | Expenses without Category | counted in `total`; listed separately as uncategorized |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F21 | Analytics shows monthly total | correct amount displayed |
+| F22 | Analytics shows Category rows | each row has name + amount |
+| F23 | Uncategorized row | visible when Expenses have no Category |
+
+---
+
+### P1-S8 · Settings screen: Category list, app version
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I44 | `add_category(name)` | Category created for user's Family; returned |
+| I45 | `rename_category(id, new_name)` | `category_name` updated; old name gone |
+| I46 | `get_app_version()` | returns `__version__` string from `expenso/__init__.py` |
+| I47 | `add_category` called by Member — Category linked to their Family, not another | `family` field is correct |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F24 | Settings lists all Categories for the Family | all names visible |
+| F25 | Add Category form | new Category appears in list after submit |
+| F26 | Rename inline edit | tapping name shows input; saving updates displayed name |
+| F27 | App version in footer | matches value from API |
+
+---
+
+## Phase 2 — Income & Savings
+
+### P2-S1 · DocTypes: Income + Source; permissions; default Sources
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U10 | `Income.validate` with `amount = 0` | raises `ValidationError` |
+| U11 | `Income.validate` with `amount < 0` | raises `ValidationError` |
+
+**Integration tests**
+
+*Source*
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I48 | Create Source with `source_name` + `family` | inserts; `name` matches `SRC-\d+` |
+| I49 | Create Source without `source_name` | raises `MandatoryError` |
+| I50 | Create Source without `family` | raises `MandatoryError` |
+
+*Income*
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I51 | Create Income with `amount` + `family` | inserts successfully |
+| I52 | Create Income without `amount` | raises `MandatoryError` |
+| I53 | Create Income without `family` | raises `MandatoryError` |
+| I54 | Create Income without `date` | inserts; `date` equals today |
+| I55 | Create Income without `source` | inserts (source is optional) |
+
+*Lifecycle*
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I56 | Insert new Family | exactly 4 Sources seeded: `{"Salary", "Freelance", "Rental", "Other"}` |
+| I57 | All seeded Sources have `family` pointing to the new Family | no orphan Sources |
+| I58 | Save Family again | Source count stays at 4 (no double-seeding) |
+
+*Permissions*
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I59 | Member reads Income list | only their Family's Income records returned |
+| I60 | Member fetches Income from different Family by name | raises `PermissionError` |
+
+---
+
+### P2-S2 · Analytics: Income total, Savings line
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U12 | Savings = income_total − expense_total (positive) | correct |
+| U13 | Savings with no Income | equals `−expense_total` (negative) |
+| U14 | Savings with no Expenses | equals `income_total` |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I61 | `get_analytics` response | includes `income_total` and `savings` fields |
+| I62 | `savings` value | equals `income_total − expense_total` |
+| I63 | No Income records for month | `income_total = 0`, `savings = −expense_total` |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F28 | Analytics shows income_total row | correct amount |
+| F29 | Analytics shows Savings row | correct (can be negative) |
+| F30 | "Add Income" button visible on Analytics | present in DOM |
+| F31 | "Add Income" button click | IncomeSheet slides up |
+
+---
+
+### P2-S3 · Income bottom sheet: Add / Edit / Delete
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I64 | `create_income(amount, date, family)` | Income exists in DB |
+| I65 | `update_income(name, amount=...)` | updated field persisted |
+| I66 | `delete_income(name)` | Income no longer in DB |
+| I67 | `create_income` by Member of different Family | raises `PermissionError` |
+| I68 | `update_income` on Income from different Family | raises `PermissionError` |
+| I69 | `delete_income` on Income from different Family | raises `PermissionError` |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F32 | IncomeSheet `amount` is required | submit disabled without amount |
+| F33 | IncomeSheet `date` defaults to today | pre-filled |
+| F34 | IncomeSheet `source` is optional | can submit without it |
+| F35 | Successful add submit | sheet closes; Analytics totals updated |
+| F36 | Delete action | confirmation prompt shown |
+| F37 | Confirmed delete | Income removed; Analytics recalculates |
+
+---
+
+### P2-S4 · Settings: Source list management
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I70 | `add_source(name)` | Source created for user's Family; returned |
+| I71 | `rename_source(id, new_name)` | `source_name` updated |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F38 | Settings shows Sources section | all Source names visible |
+| F39 | Add Source form | new Source appears in list after submit |
+| F40 | Rename Source inline edit | saving updates displayed name |
+
+---
+
+## Phase 3 — Budgeting
+
+### P3-S1 · DocType: Budget; one Budget per Category per Family
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U15 | `compute_budget_status(spent=0, budget=100)` | `"Normal"` |
+| U16 | `compute_budget_status(spent=79, budget=100)` | `"Normal"` |
+| U17 | `compute_budget_status(spent=80, budget=100)` | `"Warning"` |
+| U18 | `compute_budget_status(spent=99, budget=100)` | `"Warning"` |
+| U19 | `compute_budget_status(spent=100, budget=100)` | `"Exceeded"` |
+| U20 | `compute_budget_status(spent=150, budget=100)` | `"Exceeded"` |
+| U21 | `compute_budget_status` with `budget=0` | no division-by-zero; returns `None` or `"Normal"` |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I72 | Create Budget with `category` + `family` + `amount` | inserts successfully |
+| I73 | Create second Budget for same Category + Family | raises `ValidationError` |
+| I74 | Create Budget for different Category in same Family | inserts successfully (allowed) |
+| I75 | Create Budget without `category` | raises `MandatoryError` |
+| I76 | Create Budget without `family` | raises `MandatoryError` |
+| I77 | Create Budget with `amount = 0` | raises `ValidationError` |
+| I78 | Create Budget with `amount < 0` | raises `ValidationError` |
+
+---
+
+### P3-S2 · Settings: Budget amount per Category
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I79 | `set_budget(category_id, amount=500)` — no prior Budget | Budget created; amount = 500 |
+| I80 | `set_budget(category_id, amount=800)` — Budget exists | Budget updated; amount = 800 |
+| I81 | `set_budget(category_id, amount=None)` — Budget exists | Budget deleted |
+| I82 | `get_categories_with_budgets()` | returns list with `budget_amount` (null if no Budget) |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F41 | Settings shows budget amount input next to each Category | inputs present |
+| F42 | Entering amount and saving | Budget persisted; input shows saved value |
+| F43 | Clearing amount and saving | Budget removed; input shows empty |
+| F44 | Category with existing Budget | input pre-filled with current amount |
+
+---
+
+### P3-S3 · Analytics: Budget Status per Category
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I83 | `get_analytics` with Budget set and spent < 80% | category row has `budget_status: "Normal"` |
+| I84 | `get_analytics` with Budget set and spent ≥ 80% | `budget_status: "Warning"` |
+| I85 | `get_analytics` with Budget set and spent ≥ 100% | `budget_status: "Exceeded"` |
+| I86 | `get_analytics` for Category with no Budget | `budget_status: null` |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F45 | Category row with `budget_status: null` | no threshold indicator in DOM |
+| F46 | Category row with `budget_status: "Warning"` | yellow indicator present |
+| F47 | Category row with `budget_status: "Exceeded"` | red indicator present |
+| F48 | Category row with `budget_status: "Normal"` | no threshold indicator |
+
+---
+
+## Totals
+
+| Layer | Count |
+|---|---|
+| Backend unit tests | 21 |
+| Backend integration tests | 86 |
+| Frontend unit tests | 48 |
+| **Total** | **155** |

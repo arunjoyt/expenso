@@ -89,6 +89,12 @@ A single GitHub issue (`📍 Project Roadmap`) is the live progress dashboard fo
    ```bash
    /Users/arunjoyt/Desktop/Work/venv/fb/bin/pre-commit run --all-files
    ```
+   > **Note:** pre-commit only covers ruff/prettier/eslint. The CI also runs Semgrep
+   > (`frappe-semgrep-rules`) which has no local equivalent. Key Semgrep rule to remember:
+   > all user-facing strings in `frappe.throw(...)` / `frappe.msgprint(...)` must be
+   > wrapped in `_("...")` (Frappe's translate function), e.g. `frappe.throw(_("msg"), exc)`.
+   > Always add `from frappe import _` to any file that calls `frappe.throw/msgprint`
+   > (ruff also flags `_` as undefined without the explicit import).
 6. Commit with `Refs #<streak-issue>` or `Closes #<streak-issue>` in each commit message body; bump `__version__`
 7. `git push -u origin <branch>`
 8. `gh pr create` using the PR body template above

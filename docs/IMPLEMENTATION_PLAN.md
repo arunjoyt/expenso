@@ -20,6 +20,7 @@ See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layou
 | P1-S6 | #6 | Expense bottom sheet: Add / Edit / Delete + realtime WebSocket refresh | Full-stack |
 | P1-S7 | #7 | Analytics screen: monthly total + category breakdown | Frontend |
 | P1-S8 | #8 | Settings screen: Category list (add, rename) + app version in footer | Full-stack |
+| P1-S9 | #19 | Workspace: Expenso admin Workspace with links to Family, Category, Expense | Backend |
 
 ---
 

@@ -219,6 +219,17 @@ Complete unit and integration test plan across all three phases. Backend tests u
 
 ---
 
+### P1-S9 · Workspace: Expenso admin Workspace with links to core DocTypes
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I48 | `Expenso` Workspace exists in the database | `frappe.db.exists("Workspace", "Expenso")` |
+| I49 | Workspace links | contains links to `Family`, `Category`, `Expense` (no link for `FamilyMember`, a child table) |
+
+---
+
 ## Phase 2 — Income & Savings
 
 ### P2-S1 · DocTypes: Income + Source; permissions; default Sources

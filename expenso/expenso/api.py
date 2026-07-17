@@ -6,7 +6,7 @@ from expenso.expenso.permissions import get_user_family
 
 
 @frappe.whitelist()
-def get_expenses(month, year):
+def get_expenses(month: int, year: int):
 	family = get_user_family(frappe.session.user)
 	if not family:
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)

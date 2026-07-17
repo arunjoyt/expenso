@@ -33,8 +33,8 @@ gh issue view 16                  # overall progress dashboard (📍 Project Roa
 
 1. **Never commit directly to `develop` or `main`** for any streak work. Create a dedicated branch first.
 2. **Branch naming** — `phase-<N>-streak-<N>-<short-slug>`, e.g. `phase-1-streak-1-doctypes`.
-3. **One PR per streak** — open the PR against `develop` as soon as the branch is pushed; keep it open (do not merge) until the user explicitly approves a merge.
-4. **Do not merge to `develop`** — create the PR and leave it. The user will review and merge.
+3. **One PR per streak** — open the PR against `develop` as soon as the branch is pushed.
+4. **Auto-merge once checks pass** — after opening the PR, poll `gh pr checks <pr-number>` until all required GitHub checks complete. If they all pass, merge the PR into `develop` with `gh pr merge <pr-number> --merge` (no `--admin`/`--auto`, no skipping checks) and then start the next streak. If any check fails, stop and fix the issue on the branch instead of merging — do not merge a red PR.
 5. Always `git push -u origin <branch>` before creating the PR.
 
 ### Cross-referencing on GitHub
@@ -99,5 +99,6 @@ A single GitHub issue (`📍 Project Roadmap`) is the live progress dashboard fo
 7. `git push -u origin <branch>`
 8. `gh pr create` using the PR body template above
 9. Post a comment on the roadmap issue linking to the new PR
-10. Leave the PR open — do not merge
+10. Wait for GitHub checks to complete on the PR (`gh pr checks <pr-number>`, polling until done). If green, merge into `develop` (`gh pr merge <pr-number> --merge`); post a comment on the roadmap issue noting what shipped. If red, fix on the branch, push, and re-check — do not merge a failing PR.
+11. Once merged, move on to the next streak per `docs/IMPLEMENTATION_PLAN.md`'s ordering (repeat from step 1), continuing into the next phase when the current one's streaks are all merged.
 

@@ -2,9 +2,7 @@ import frappe
 
 
 def get_user_family(user):
-	return frappe.db.get_value(
-		"Family Member", {"user": user, "parenttype": "Family"}, "parent"
-	)
+	return frappe.db.get_value("Family Member", {"user": user, "parenttype": "Family"}, "parent")
 
 
 def get_permission_query_conditions(user):

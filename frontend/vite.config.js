@@ -10,6 +10,9 @@ export default defineConfig(async () => {
 		plugins: [
 			frappeui({
 				frontendRoute: "/expenso",
+				buildConfig: {
+					indexHtmlPath: "../expenso/www/expenso.html",
+				},
 			}),
 			vue(),
 			VitePWA({

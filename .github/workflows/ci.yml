@@ -93,6 +93,7 @@ jobs:
           bench setup requirements --dev
           bench new-site --db-root-password root --admin-password admin test_site
           bench --site test_site install-app expenso
+          bench --site test_site execute frappe.db.set_default --args "['currency', 'USD']"
           bench build
         env:
           CI: 'Yes'

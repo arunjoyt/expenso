@@ -6,3 +6,7 @@ tags
 node_modules
 __pycache__
 CLAUDE.local.md
+expenso/public/frontend
+expenso/www/expenso.html
+frontend/auto-imports.d.ts
+frontend/components.d.ts

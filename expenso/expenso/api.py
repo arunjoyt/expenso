@@ -85,3 +85,40 @@ def delete_expense(name: str):
 	frappe.delete_doc("Expense", name, ignore_permissions=True)
 
 	_publish_expense_event("expense_deleted", family, name)
+
+
+def _aggregate_categories(expenses):
+	totals = {}
+	for expense in expenses:
+		label = expense.get("category_name") or _("Uncategorized")
+		totals[label] = totals.get(label, 0) + expense.get("amount", 0)
+
+	categories = [{"name": name, "amount": amount} for name, amount in totals.items()]
+	categories.sort(key=lambda category: category["amount"], reverse=True)
+	return categories
+
+
+@frappe.whitelist()
+def get_analytics(month: int, year: int):
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	month = cint(month)
+	year = cint(year)
+	period_start = get_first_day(f"{year}-{month:02d}-01")
+	period_end = get_last_day(f"{year}-{month:02d}-01")
+
+	expenses = frappe.get_all(
+		"Expense",
+		filters={
+			"family": family,
+			"date": ["between", [period_start, period_end]],
+		},
+		fields=["amount", "category", "category.category_name as category_name"],
+	)
+
+	return {
+		"total": sum(expense.amount for expense in expenses),
+		"categories": _aggregate_categories(expenses),
+	}

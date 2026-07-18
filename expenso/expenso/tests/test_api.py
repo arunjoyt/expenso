@@ -1,7 +1,14 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-from expenso.expenso.api import create_expense, delete_expense, get_expenses, update_expense
+from expenso.expenso.api import (
+	_aggregate_categories,
+	create_expense,
+	delete_expense,
+	get_analytics,
+	get_expenses,
+	update_expense,
+)
 
 
 def _ensure_test_user(email):
@@ -188,3 +195,146 @@ class TestExpenseCrudApi(FrappeTestCase):
 		payload = next(entry[1] for entry in frappe.local._realtime_log if entry[0] == "expense_created")
 		self.assertEqual(payload["name"], doc.name)
 		self.assertEqual(payload["family"], self.family_a.name)
+
+
+class TestAggregateCategories(FrappeTestCase):
+	# U8
+	def test_groups_and_sums_by_category(self):
+		expenses = [
+			{"amount": 10.0, "category_name": "Groceries"},
+			{"amount": 5.0, "category_name": "Groceries"},
+			{"amount": 20.0, "category_name": "Dining"},
+		]
+		categories = _aggregate_categories(expenses)
+		self.assertEqual(
+			categories,
+			[
+				{"name": "Dining", "amount": 20.0},
+				{"name": "Groceries", "amount": 15.0},
+			],
+		)
+
+	# U9
+	def test_expenses_without_category_form_uncategorized_group(self):
+		expenses = [
+			{"amount": 10.0, "category_name": None},
+			{"amount": 5.0, "category_name": None},
+		]
+		categories = _aggregate_categories(expenses)
+		self.assertEqual(categories, [{"name": "Uncategorized", "amount": 15.0}])
+
+
+class TestGetAnalyticsApi(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("analytics.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Analytics Test Family",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+		self.groceries = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Groceries",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I39 / I40
+	def test_get_analytics_returns_total_and_categories(self):
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 30.0,
+				"date": "2025-06-15",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 20.0,
+				"date": "2025-06-20",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+
+		self.assertEqual(result["total"], 50.0)
+		self.assertEqual(
+			result["categories"],
+			[
+				{"name": "Groceries", "amount": 30.0},
+				{"name": "Uncategorized", "amount": 20.0},
+			],
+		)
+
+	# I41
+	def test_get_analytics_category_list_sorted_by_amount_descending(self):
+		dining = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Dining",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 10.0,
+				"date": "2025-06-01",
+				"category": dining.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 40.0,
+				"date": "2025-06-02",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+		amounts = [c["amount"] for c in result["categories"]]
+		self.assertEqual(amounts, sorted(amounts, reverse=True))
+
+	# I42
+	def test_get_analytics_with_no_expenses_returns_zero_total_empty_categories(self):
+		frappe.set_user(self.member)
+		result = get_analytics(month=1, year=2020)
+		self.assertEqual(result, {"total": 0, "categories": []})
+
+	# I43
+	def test_get_analytics_expenses_without_category_counted_and_listed_separately(self):
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 15.0,
+				"date": "2025-06-05",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+
+		self.assertEqual(result["total"], 15.0)
+		self.assertEqual(result["categories"], [{"name": "Uncategorized", "amount": 15.0}])

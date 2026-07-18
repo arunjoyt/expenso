@@ -2,6 +2,12 @@
 
 A family expense tracker where multiple household members share and record expenses
 
+### Screenshots
+
+| Feed | Analytics | Settings |
+|---|---|---|
+| ![Feed](docs/images/feed.png) | ![Analytics](docs/images/analytics.png) | ![Settings](docs/images/settings.png) |
+
 ### Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:

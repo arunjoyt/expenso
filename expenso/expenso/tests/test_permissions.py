@@ -160,3 +160,21 @@ class TestPermissions(FrappeTestCase):
 				frappe.get_doc("Income", self.income_b.name).check_permission("read")
 		finally:
 			frappe.set_user("Administrator")
+
+	def test_permission_query_conditions_scopes_source_by_family(self):
+		condition = get_permission_query_conditions(self.member_a, doctype="Source")
+		self.assertIn(self.family_a.name, condition)
+		self.assertIn("tabSource", condition)
+
+	def test_member_reads_only_own_family_sources(self):
+		frappe.set_user(self.member_a)
+		try:
+			names = frappe.get_list("Source", pluck="name")
+		finally:
+			frappe.set_user("Administrator")
+		own_sources = frappe.get_all("Source", filters={"family": self.family_a.name}, pluck="name")
+		other_sources = frappe.get_all("Source", filters={"family": self.family_b.name}, pluck="name")
+		for name in own_sources:
+			self.assertIn(name, names)
+		for name in other_sources:
+			self.assertNotIn(name, names)

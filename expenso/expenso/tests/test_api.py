@@ -6,12 +6,15 @@ from expenso.expenso.api import (
 	_compute_savings,
 	add_category,
 	create_expense,
+	create_income,
 	delete_expense,
+	delete_income,
 	get_analytics,
 	get_app_version,
 	get_expenses,
 	rename_category,
 	update_expense,
+	update_income,
 )
 
 
@@ -466,3 +469,83 @@ class TestCategorySettingsApi(FrappeTestCase):
 
 		self.assertEqual(doc.family, self.family.name)
 		self.assertNotEqual(doc.family, other_family.name)
+
+
+class TestIncomeCrudApi(FrappeTestCase):
+	def setUp(self):
+		self.member_a = _ensure_test_user("income.membera@expenso.test")
+		self.member_b = _ensure_test_user("income.memberb@expenso.test")
+		self.outsider = _ensure_test_user("income.outsider@expenso.test")
+
+		for email in (self.member_a, self.member_b):
+			user = frappe.get_doc("User", email)
+			if "Family Member" not in {r.role for r in user.roles}:
+				user.add_roles("Family Member")
+
+		self.family_a = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Income CRUD Test Family A",
+				"currency": "USD",
+				"members": [{"user": self.member_a}],
+			}
+		).insert(ignore_permissions=True)
+
+		self.family_b = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Income CRUD Test Family B",
+				"currency": "USD",
+				"members": [{"user": self.member_b}],
+			}
+		).insert(ignore_permissions=True)
+
+		self.income_b = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 400.0,
+				"family": self.family_b.name,
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I64
+	def test_create_income_persists(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0, date="2025-06-01")
+		self.assertTrue(frappe.db.exists("Income", doc.name))
+
+	# I65
+	def test_update_income_persists_changed_field(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0)
+		updated = update_income(name=doc.name, amount=300.0)
+		self.assertEqual(updated.amount, 300.0)
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "amount"), 300.0)
+
+	# I66
+	def test_delete_income_removes_from_db(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0)
+		delete_income(name=doc.name)
+		self.assertFalse(frappe.db.exists("Income", doc.name))
+
+	# I67
+	def test_create_income_by_user_without_family_raises_permission_error(self):
+		frappe.set_user(self.outsider)
+		with self.assertRaises(frappe.PermissionError):
+			create_income(amount=250.0)
+
+	# I68
+	def test_update_income_from_different_family_raises_permission_error(self):
+		frappe.set_user(self.member_a)
+		with self.assertRaises(frappe.PermissionError):
+			update_income(name=self.income_b.name, amount=999.0)
+
+	# I69
+	def test_delete_income_from_different_family_raises_permission_error(self):
+		frappe.set_user(self.member_a)
+		with self.assertRaises(frappe.PermissionError):
+			delete_income(name=self.income_b.name)

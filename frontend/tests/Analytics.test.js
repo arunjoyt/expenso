@@ -10,10 +10,12 @@ vi.mock("@/composables/useAnalytics", () => ({
 
 import { useAnalytics } from "@/composables/useAnalytics";
 
-function mockAnalytics(total, categories, loading = false) {
+function mockAnalytics(total, categories, { incomeTotal = 0, savings = 0, loading = false } = {}) {
 	useAnalytics.mockReturnValue({
 		total: ref(total),
 		categories: ref(categories),
+		incomeTotal: ref(incomeTotal),
+		savings: ref(savings),
 		loading: ref(loading),
 		reload: vi.fn(),
 	});
@@ -53,5 +55,39 @@ describe("Analytics page", () => {
 		mockAnalytics(15, [{ name: "Uncategorized", amount: 15 }]);
 		const wrapper = mount(Analytics);
 		expect(wrapper.text()).toContain("Uncategorized");
+	});
+
+	// F28
+	it("shows the income total", () => {
+		mockAnalytics(50, [], { incomeTotal: 200 });
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="income-total"]').text()).toContain(
+			new Intl.NumberFormat().format(200)
+		);
+	});
+
+	// F29
+	it("shows the savings, including when negative", () => {
+		mockAnalytics(50, [], { incomeTotal: 20, savings: -30 });
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="savings"]').text()).toContain(
+			new Intl.NumberFormat().format(-30)
+		);
+	});
+
+	// F30
+	it("shows an Add Income button", () => {
+		mockAnalytics(50, []);
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="add-income-button"]').exists()).toBe(true);
+	});
+
+	// F31
+	it("opens the IncomeSheet on Add Income click", async () => {
+		mockAnalytics(50, []);
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
+		await wrapper.find('[data-test="add-income-button"]').trigger("click");
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(true);
 	});
 });

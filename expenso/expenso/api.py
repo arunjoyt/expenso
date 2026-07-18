@@ -99,6 +99,10 @@ def _aggregate_categories(expenses):
 	return categories
 
 
+def _compute_savings(income_total, expense_total):
+	return income_total - expense_total
+
+
 @frappe.whitelist()
 def get_analytics(month: int, year: int):
 	family = get_user_family(frappe.session.user)
@@ -118,10 +122,23 @@ def get_analytics(month: int, year: int):
 		},
 		fields=["amount", "category", "category.category_name as category_name"],
 	)
+	incomes = frappe.get_all(
+		"Income",
+		filters={
+			"family": family,
+			"date": ["between", [period_start, period_end]],
+		},
+		fields=["amount"],
+	)
+
+	expense_total = sum(expense.amount for expense in expenses)
+	income_total = sum(income.amount for income in incomes)
 
 	return {
-		"total": sum(expense.amount for expense in expenses),
+		"total": expense_total,
 		"categories": _aggregate_categories(expenses),
+		"income_total": income_total,
+		"savings": _compute_savings(income_total, expense_total),
 	}
 
 

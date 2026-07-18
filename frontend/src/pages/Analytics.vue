@@ -37,7 +37,19 @@
 			data-test="category-row"
 			class="flex justify-between border-b border-gray-100 py-2"
 		>
-			<span>{{ category.name }}</span>
+			<span class="flex items-center gap-2">
+				{{ category.name }}
+				<span
+					v-if="category.budget_status === 'Warning'"
+					data-test="budget-status-warning"
+					class="h-2 w-2 rounded-full bg-yellow-400"
+				></span>
+				<span
+					v-if="category.budget_status === 'Exceeded'"
+					data-test="budget-status-exceeded"
+					class="h-2 w-2 rounded-full bg-red-500"
+				></span>
+			</span>
 			<span>{{ formatAmount(category.amount) }}</span>
 		</div>
 

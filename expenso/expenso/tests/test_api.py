@@ -289,8 +289,8 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		self.assertEqual(
 			result["categories"],
 			[
-				{"name": "Groceries", "amount": 30.0},
-				{"name": "Uncategorized", "amount": 20.0},
+				{"name": "Groceries", "amount": 30.0, "budget_status": None},
+				{"name": "Uncategorized", "amount": 20.0, "budget_status": None},
 			],
 		)
 
@@ -349,7 +349,9 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		result = get_analytics(month=6, year=2025)
 
 		self.assertEqual(result["total"], 15.0)
-		self.assertEqual(result["categories"], [{"name": "Uncategorized", "amount": 15.0}])
+		self.assertEqual(
+			result["categories"], [{"name": "Uncategorized", "amount": 15.0, "budget_status": None}]
+		)
 
 	# I61 / I62
 	def test_get_analytics_includes_income_total_and_savings(self):
@@ -392,6 +394,97 @@ class TestGetAnalyticsApi(FrappeTestCase):
 
 		self.assertEqual(result["income_total"], 0)
 		self.assertEqual(result["savings"], -40.0)
+
+	def _category_row(self, result, name):
+		return next(c for c in result["categories"] if c["name"] == name)
+
+	# I83
+	def test_budget_status_normal_when_spent_below_eighty_percent(self):
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 100.0,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 50.0,
+				"date": "2025-06-15",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+		self.assertEqual(self._category_row(result, "Groceries")["budget_status"], "Normal")
+
+	# I84
+	def test_budget_status_warning_when_spent_at_least_eighty_percent(self):
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 100.0,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 80.0,
+				"date": "2025-06-15",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+		self.assertEqual(self._category_row(result, "Groceries")["budget_status"], "Warning")
+
+	# I85
+	def test_budget_status_exceeded_when_spent_at_least_hundred_percent(self):
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 100.0,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 120.0,
+				"date": "2025-06-15",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+		self.assertEqual(self._category_row(result, "Groceries")["budget_status"], "Exceeded")
+
+	# I86
+	def test_budget_status_none_for_category_without_budget(self):
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 30.0,
+				"date": "2025-06-15",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+		self.assertIsNone(self._category_row(result, "Groceries")["budget_status"])
 
 
 class TestComputeSavings(FrappeTestCase):

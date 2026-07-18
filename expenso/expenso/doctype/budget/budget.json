@@ -1,0 +1,45 @@
+{
+    "doctype": "DocType",
+    "name": "Budget",
+    "module": "Expenso",
+    "engine": "InnoDB",
+    "autoname": "hash",
+    "fields": [
+        {
+            "fieldname": "category",
+            "fieldtype": "Link",
+            "label": "Category",
+            "options": "Category",
+            "reqd": 1
+        },
+        {
+            "fieldname": "amount",
+            "fieldtype": "Float",
+            "label": "Amount",
+            "reqd": 1
+        },
+        {
+            "fieldname": "family",
+            "fieldtype": "Link",
+            "label": "Family",
+            "options": "Family",
+            "reqd": 1
+        }
+    ],
+    "permissions": [
+        {
+            "role": "System Manager",
+            "read": 1,
+            "write": 1,
+            "create": 1,
+            "delete": 1
+        },
+        {
+            "role": "Family Member",
+            "read": 1,
+            "write": 1,
+            "create": 1,
+            "delete": 1
+        }
+    ]
+}

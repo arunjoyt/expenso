@@ -104,3 +104,21 @@ class TestFamilyIntegration(FrappeTestCase):
 		family.family_name = "Renamed Test Family"
 		family.save(ignore_permissions=True)
 		self.assertEqual(frappe.db.count("Category", {"family": family.name}), 8)
+
+	# I56
+	def test_family_creation_seeds_four_sources(self):
+		family = self._make_family()
+		self.assertEqual(frappe.db.count("Source", {"family": family.name}), 4)
+
+	# I57
+	def test_seeded_sources_all_point_to_new_family(self):
+		family = self._make_family()
+		names = frappe.get_all("Source", filters={"family": family.name}, pluck="source_name")
+		self.assertEqual(set(names), {"Salary", "Freelance", "Rental", "Other"})
+
+	# I58
+	def test_updating_family_does_not_double_seed_sources(self):
+		family = self._make_family()
+		family.family_name = "Renamed Test Family"
+		family.save(ignore_permissions=True)
+		self.assertEqual(frappe.db.count("Source", {"family": family.name}), 4)

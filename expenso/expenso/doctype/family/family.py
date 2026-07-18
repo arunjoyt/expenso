@@ -12,6 +12,13 @@ DEFAULT_CATEGORIES = [
 	"Other",
 ]
 
+DEFAULT_SOURCES = [
+	"Salary",
+	"Freelance",
+	"Rental",
+	"Other",
+]
+
 
 class Family(Document):
 	def after_insert(self):
@@ -20,6 +27,15 @@ class Family(Document):
 				{
 					"doctype": "Category",
 					"category_name": category_name,
+					"family": self.name,
+				}
+			).insert(ignore_permissions=True)
+
+		for source_name in DEFAULT_SOURCES:
+			frappe.get_doc(
+				{
+					"doctype": "Source",
+					"source_name": source_name,
 					"family": self.name,
 				}
 			).insert(ignore_permissions=True)

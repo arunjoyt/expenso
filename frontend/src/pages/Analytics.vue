@@ -21,7 +21,7 @@
 		<button
 			type="button"
 			data-test="add-income-button"
-			class="mb-4 rounded-lg bg-gray-900 px-4 py-2 text-sm text-white"
+			class="mb-4 rounded-lg bg-accent-600 px-4 py-2 text-sm text-white hover:bg-accent-700"
 			@click="sheetOpen = true"
 		>
 			Add Income

@@ -46,7 +46,9 @@
 				:model-value="newCategoryName"
 				@input="newCategoryName = $event"
 			/>
-			<Button data-test="add-category-button" type="submit" variant="solid">Add</Button>
+			<Button data-test="add-category-button" type="submit" variant="solid" theme="blue"
+				>Add</Button
+			>
 		</form>
 
 		<h2 class="mb-2 text-sm font-medium text-gray-500">Sources</h2>
@@ -82,7 +84,9 @@
 				:model-value="newSourceName"
 				@input="newSourceName = $event"
 			/>
-			<Button data-test="add-source-button" type="submit" variant="solid">Add</Button>
+			<Button data-test="add-source-button" type="submit" variant="solid" theme="blue"
+				>Add</Button
+			>
 		</form>
 
 		<div class="mt-8 text-center text-xs text-gray-400" data-test="app-version">

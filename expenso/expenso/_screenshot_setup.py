@@ -22,9 +22,7 @@ def run():
 
 	categories = {
 		c.category_name: c.name
-		for c in frappe.get_all(
-			"Category", filters={"family": family.name}, fields=["name", "category_name"]
-		)
+		for c in frappe.get_all("Category", filters={"family": family.name}, fields=["name", "category_name"])
 	}
 
 	today = frappe.utils.today()

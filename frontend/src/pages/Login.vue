@@ -22,7 +22,9 @@
 					required
 				/>
 				<ErrorMessage :message="errorMessage" />
-				<Button variant="solid" :loading="loading" type="submit"> Login </Button>
+				<Button variant="solid" theme="blue" :loading="loading" type="submit">
+					Login
+				</Button>
 			</form>
 		</div>
 	</div>

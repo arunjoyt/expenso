@@ -45,6 +45,7 @@
 				<Button
 					data-test="submit-button"
 					variant="solid"
+					theme="blue"
 					type="submit"
 					:loading="saving"
 					:disabled="!canSubmit"

@@ -21,10 +21,17 @@
 					data-test="income-amount-input"
 					label="Amount"
 					type="number"
-					v-model="amount"
+					:model-value="amount"
+					@input="amount = $event"
 					required
 				/>
-				<Input data-test="income-date-input" label="Date" type="date" v-model="date" />
+				<Input
+					data-test="income-date-input"
+					label="Date"
+					type="date"
+					:model-value="date"
+					@input="date = $event"
+				/>
 				<Input
 					data-test="income-source-select"
 					label="Source"

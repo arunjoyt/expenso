@@ -21,10 +21,17 @@
 					data-test="amount-input"
 					label="Amount"
 					type="number"
-					v-model="amount"
+					:model-value="amount"
+					@input="amount = $event"
 					required
 				/>
-				<Input data-test="date-input" label="Date" type="date" v-model="date" />
+				<Input
+					data-test="date-input"
+					label="Date"
+					type="date"
+					:model-value="date"
+					@input="date = $event"
+				/>
 				<Input
 					data-test="category-select"
 					label="Category"

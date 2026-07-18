@@ -43,7 +43,8 @@
 			<Input
 				data-test="add-category-input"
 				placeholder="New category"
-				v-model="newCategoryName"
+				:model-value="newCategoryName"
+				@input="newCategoryName = $event"
 			/>
 			<Button data-test="add-category-button" type="submit" variant="solid">Add</Button>
 		</form>
@@ -75,7 +76,12 @@
 		</div>
 
 		<form class="mt-4 flex gap-2" @submit.prevent="submitAddSource">
-			<Input data-test="add-source-input" placeholder="New source" v-model="newSourceName" />
+			<Input
+				data-test="add-source-input"
+				placeholder="New source"
+				:model-value="newSourceName"
+				@input="newSourceName = $event"
+			/>
 			<Button data-test="add-source-button" type="submit" variant="solid">Add</Button>
 		</form>
 

@@ -26,23 +26,56 @@
 			<div
 				v-for="expense in group.expenses"
 				:key="expense.name"
-				class="flex justify-between border-b border-gray-100 py-2"
+				data-test="expense-row"
+				class="flex cursor-pointer justify-between border-b border-gray-100 py-2"
+				@click="openEdit(expense)"
 			>
 				<span>{{ expense.category_name || "Uncategorized" }}</span>
 				<span>{{ formatAmount(expense.amount) }}</span>
 			</div>
 		</div>
 	</div>
+
+	<button
+		type="button"
+		data-test="fab"
+		aria-label="Add expense"
+		class="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-gray-900 text-2xl text-white shadow-lg"
+		@click="openAdd"
+	>
+		+
+	</button>
+
+	<ExpenseSheet v-if="sheetOpen" :expense="editingExpense" @close="closeSheet" />
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { useMonthStore } from "@/stores/month";
 import { useExpenses } from "@/composables/useExpenses";
 import { dateGroupLabel } from "@/utils/dateGroup";
+import ExpenseSheet from "@/components/ExpenseSheet.vue";
 
 const monthStore = useMonthStore();
 const { expenses, loading } = useExpenses(monthStore);
+
+const sheetOpen = ref(false);
+const editingExpense = ref(null);
+
+function openAdd() {
+	editingExpense.value = null;
+	sheetOpen.value = true;
+}
+
+function openEdit(expense) {
+	editingExpense.value = expense;
+	sheetOpen.value = true;
+}
+
+function closeSheet() {
+	sheetOpen.value = false;
+	editingExpense.value = null;
+}
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);

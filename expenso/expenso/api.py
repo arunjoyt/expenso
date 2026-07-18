@@ -25,3 +25,63 @@ def get_expenses(month: int, year: int):
 		fields=["name", "amount", "date", "category", "category.category_name as category_name"],
 		order_by="date desc, `tabExpense`.creation desc",
 	)
+
+
+def _publish_expense_event(event: str, family: str, expense_name: str):
+	members = frappe.get_all(
+		"Family Member", filters={"parenttype": "Family", "parent": family}, pluck="user"
+	)
+	for member in members:
+		frappe.publish_realtime(
+			event, {"name": expense_name, "family": family}, user=member, after_commit=True
+		)
+
+
+@frappe.whitelist()
+def create_expense(amount: float, date: str | None = None, category: str | None = None):
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	doc = frappe.get_doc(
+		{
+			"doctype": "Expense",
+			"amount": amount,
+			"date": date,
+			"category": category,
+			"family": family,
+		}
+	).insert(ignore_permissions=True)
+
+	_publish_expense_event("expense_created", family, doc.name)
+	return doc
+
+
+@frappe.whitelist()
+def update_expense(
+	name: str, amount: float | None = None, date: str | None = None, category: str | None = None
+):
+	doc = frappe.get_doc("Expense", name)
+	doc.check_permission("write")
+
+	if amount is not None:
+		doc.amount = amount
+	if date is not None:
+		doc.date = date
+	doc.category = category
+
+	doc.save(ignore_permissions=True)
+
+	_publish_expense_event("expense_updated", doc.family, doc.name)
+	return doc
+
+
+@frappe.whitelist()
+def delete_expense(name: str):
+	doc = frappe.get_doc("Expense", name)
+	doc.check_permission("delete")
+
+	family = doc.family
+	frappe.delete_doc("Expense", name, ignore_permissions=True)
+
+	_publish_expense_event("expense_deleted", family, name)

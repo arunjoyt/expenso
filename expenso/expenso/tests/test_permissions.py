@@ -107,3 +107,21 @@ class TestPermissions(FrappeTestCase):
 				frappe.get_doc("Expense", self.expense_b.name).check_permission("read")
 		finally:
 			frappe.set_user("Administrator")
+
+	def test_permission_query_conditions_scopes_category_by_family(self):
+		condition = get_permission_query_conditions(self.member_a, doctype="Category")
+		self.assertIn(self.family_a.name, condition)
+		self.assertIn("tabCategory", condition)
+
+	def test_member_reads_only_own_family_categories(self):
+		frappe.set_user(self.member_a)
+		try:
+			names = frappe.get_list("Category", pluck="name")
+		finally:
+			frappe.set_user("Administrator")
+		own_categories = frappe.get_all("Category", filters={"family": self.family_a.name}, pluck="name")
+		other_categories = frappe.get_all("Category", filters={"family": self.family_b.name}, pluck="name")
+		for name in own_categories:
+			self.assertIn(name, names)
+		for name in other_categories:
+			self.assertNotIn(name, names)

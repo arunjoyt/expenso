@@ -170,3 +170,42 @@ def rename_category(name: str, new_name: str):
 @frappe.whitelist()
 def get_app_version():
 	return __version__
+
+
+@frappe.whitelist()
+def create_income(amount: float, date: str | None = None, source: str | None = None):
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	return frappe.get_doc(
+		{
+			"doctype": "Income",
+			"amount": amount,
+			"date": date,
+			"source": source,
+			"family": family,
+		}
+	).insert(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def update_income(name: str, amount: float | None = None, date: str | None = None, source: str | None = None):
+	doc = frappe.get_doc("Income", name)
+	doc.check_permission("write")
+
+	if amount is not None:
+		doc.amount = amount
+	if date is not None:
+		doc.date = date
+	doc.source = source
+
+	doc.save(ignore_permissions=True)
+	return doc
+
+
+@frappe.whitelist()
+def delete_income(name: str):
+	doc = frappe.get_doc("Income", name)
+	doc.check_permission("delete")
+	frappe.delete_doc("Income", name, ignore_permissions=True)

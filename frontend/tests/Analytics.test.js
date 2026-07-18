@@ -7,6 +7,18 @@ import Analytics from "@/pages/Analytics.vue";
 vi.mock("@/composables/useAnalytics", () => ({
 	useAnalytics: vi.fn(),
 }));
+vi.mock("@/composables/useSources", () => ({
+	useSources: vi.fn(() => ({
+		sources: ref([]),
+		loading: ref(false),
+		reload: vi.fn(),
+	})),
+}));
+vi.mock("@/composables/useIncome", () => ({
+	createIncome: vi.fn(),
+	updateIncome: vi.fn(),
+	deleteIncome: vi.fn(),
+}));
 
 import { useAnalytics } from "@/composables/useAnalytics";
 
@@ -89,5 +101,24 @@ describe("Analytics page", () => {
 		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
 		await wrapper.find('[data-test="add-income-button"]').trigger("click");
 		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(true);
+	});
+
+	// F35 / F37
+	it("reloads analytics totals when the IncomeSheet closes", async () => {
+		const reload = vi.fn();
+		useAnalytics.mockReturnValue({
+			total: ref(50),
+			categories: ref([]),
+			incomeTotal: ref(0),
+			savings: ref(0),
+			loading: ref(false),
+			reload,
+		});
+		const wrapper = mount(Analytics);
+		await wrapper.find('[data-test="add-income-button"]').trigger("click");
+		await wrapper.find('[data-test="income-sheet-backdrop"]').trigger("click");
+
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
+		expect(reload).toHaveBeenCalled();
 	});
 });

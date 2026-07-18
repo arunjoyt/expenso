@@ -41,7 +41,7 @@
 			<span>{{ formatAmount(category.amount) }}</span>
 		</div>
 
-		<IncomeSheet v-if="sheetOpen" @close="sheetOpen = false" />
+		<IncomeSheet v-if="sheetOpen" @close="closeSheet" />
 	</div>
 </template>
 
@@ -52,9 +52,14 @@ import { useAnalytics } from "@/composables/useAnalytics";
 import IncomeSheet from "@/components/IncomeSheet.vue";
 
 const monthStore = useMonthStore();
-const { total, categories, incomeTotal, savings, loading } = useAnalytics(monthStore);
+const { total, categories, incomeTotal, savings, loading, reload } = useAnalytics(monthStore);
 
 const sheetOpen = ref(false);
+
+function closeSheet() {
+	sheetOpen.value = false;
+	reload();
+}
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);

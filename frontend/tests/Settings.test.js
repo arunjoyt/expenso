@@ -4,7 +4,6 @@ import { mount, flushPromises } from "@vue/test-utils";
 import Settings from "@/pages/Settings.vue";
 
 vi.mock("@/composables/useCategories", () => ({
-	useCategories: vi.fn(),
 	addCategory: vi.fn(),
 	renameCategory: vi.fn(),
 }));
@@ -13,17 +12,22 @@ vi.mock("@/composables/useSources", () => ({
 	addSource: vi.fn(),
 	renameSource: vi.fn(),
 }));
+vi.mock("@/composables/useBudgets", () => ({
+	useBudgets: vi.fn(),
+	setBudget: vi.fn(),
+}));
 vi.mock("frappe-ui", async (importOriginal) => {
 	const actual = await importOriginal();
 	return { ...actual, call: vi.fn() };
 });
 
 import { call } from "frappe-ui";
-import { addCategory, renameCategory, useCategories } from "@/composables/useCategories";
+import { addCategory, renameCategory } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
+import { setBudget, useBudgets } from "@/composables/useBudgets";
 
 function mockCategories(categories, reload = vi.fn()) {
-	useCategories.mockReturnValue({
+	useBudgets.mockReturnValue({
 		categories: ref(categories),
 		loading: ref(false),
 		reload,
@@ -45,6 +49,7 @@ beforeEach(() => {
 	renameCategory.mockResolvedValue({});
 	addSource.mockResolvedValue({ name: "SRC-2" });
 	renameSource.mockResolvedValue({});
+	setBudget.mockResolvedValue({});
 	mockSources([]);
 });
 
@@ -66,7 +71,7 @@ describe("Settings page", () => {
 			categoriesRef.value = [{ name: "CAT-1", category_name: "Travel" }];
 		});
 		const categoriesRef = ref([]);
-		useCategories.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
+		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
 
 		const wrapper = mount(Settings);
 		await wrapper.find('[data-test="add-category-input"]').setValue("Travel");
@@ -83,7 +88,7 @@ describe("Settings page", () => {
 		const reload = vi.fn(() => {
 			categoriesRef.value = [{ name: "CAT-1", category_name: "Groceries & Household" }];
 		});
-		useCategories.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
+		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
 
 		const wrapper = mount(Settings);
 		expect(wrapper.find('[data-test="rename-input"]').exists()).toBe(false);
@@ -161,5 +166,66 @@ describe("Settings page", () => {
 
 		expect(renameSource).toHaveBeenCalledWith("SRC-1", "Monthly Salary");
 		expect(wrapper.text()).toContain("Monthly Salary");
+	});
+
+	// F41
+	it("shows a budget amount input next to each Category", () => {
+		mockCategories([
+			{ name: "CAT-1", category_name: "Groceries", budget_amount: null },
+			{ name: "CAT-2", category_name: "Dining", budget_amount: null },
+		]);
+		const wrapper = mount(Settings);
+		expect(wrapper.findAll('[data-test="budget-amount-input"]')).toHaveLength(2);
+	});
+
+	// F42
+	it("persists the budget amount on save and reflects it in the input", async () => {
+		const categoriesRef = ref([
+			{ name: "CAT-1", category_name: "Groceries", budget_amount: null },
+		]);
+		const reload = vi.fn(() => {
+			categoriesRef.value = [
+				{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 },
+			];
+		});
+		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
+
+		const wrapper = mount(Settings);
+		const input = wrapper.find('[data-test="budget-amount-input"]');
+		await input.setValue("500");
+		await input.trigger("blur");
+		await flushPromises();
+
+		expect(setBudget).toHaveBeenCalledWith("CAT-1", 500);
+		expect(wrapper.find('[data-test="budget-amount-input"]').element.value).toBe("500");
+	});
+
+	// F43
+	it("removes the budget when the amount is cleared and saved", async () => {
+		const categoriesRef = ref([
+			{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 },
+		]);
+		const reload = vi.fn(() => {
+			categoriesRef.value = [
+				{ name: "CAT-1", category_name: "Groceries", budget_amount: null },
+			];
+		});
+		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
+
+		const wrapper = mount(Settings);
+		const input = wrapper.find('[data-test="budget-amount-input"]');
+		await input.setValue("");
+		await input.trigger("blur");
+		await flushPromises();
+
+		expect(setBudget).toHaveBeenCalledWith("CAT-1", null);
+		expect(wrapper.find('[data-test="budget-amount-input"]').element.value).toBe("");
+	});
+
+	// F44
+	it("pre-fills the budget input with the existing amount", () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 }]);
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="budget-amount-input"]').element.value).toBe("500");
 	});
 });

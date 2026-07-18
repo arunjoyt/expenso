@@ -7,7 +7,7 @@
 			v-for="category in categories"
 			:key="category.name"
 			data-test="category-row"
-			class="flex items-center border-b border-gray-100 py-2"
+			class="flex items-center justify-between gap-2 border-b border-gray-100 py-2"
 		>
 			<Input
 				v-if="editingCategoryName === category.name"
@@ -26,6 +26,17 @@
 			>
 				{{ category.category_name }}
 			</span>
+
+			<Input
+				data-test="budget-amount-input"
+				type="number"
+				placeholder="Budget"
+				inputClass="w-24"
+				:model-value="budgetValue(category)"
+				@input="budgetDrafts[category.name] = $event"
+				@blur="saveBudget(category)"
+				@keyup.enter="$event.target.blur()"
+			/>
 		</div>
 
 		<form class="mb-8 mt-4 flex gap-2" @submit.prevent="submitAddCategory">
@@ -75,12 +86,13 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { call, Input, Button } from "frappe-ui";
-import { addCategory, renameCategory, useCategories } from "@/composables/useCategories";
+import { addCategory, renameCategory } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
+import { setBudget, useBudgets } from "@/composables/useBudgets";
 
-const { categories, reload: reloadCategories } = useCategories();
+const { categories, reload: reloadCategories } = useBudgets();
 const { sources, reload: reloadSources } = useSources();
 
 const newCategoryName = ref("");
@@ -109,6 +121,21 @@ async function saveCategoryRename(category) {
 		await renameCategory(category.name, newName);
 		await reloadCategories();
 	}
+}
+
+const budgetDrafts = reactive({});
+
+function budgetValue(category) {
+	if (category.name in budgetDrafts) return budgetDrafts[category.name];
+	return category.budget_amount ?? "";
+}
+
+async function saveBudget(category) {
+	const raw = budgetValue(category);
+	const amount = raw === "" || raw === null ? null : Number(raw);
+	delete budgetDrafts[category.name];
+	await setBudget(category.name, amount);
+	await reloadCategories();
 }
 
 const newSourceName = ref("");

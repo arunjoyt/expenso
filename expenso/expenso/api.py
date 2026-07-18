@@ -234,3 +234,57 @@ def rename_source(name: str, new_name: str):
 	doc.source_name = new_name
 	doc.save(ignore_permissions=True)
 	return doc
+
+
+@frappe.whitelist()
+def get_categories_with_budgets():
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	categories = frappe.get_all(
+		"Category",
+		filters={"family": family},
+		fields=["name", "category_name"],
+		order_by="category_name asc",
+	)
+	budgets = frappe.get_all(
+		"Budget",
+		filters={"family": family},
+		fields=["category", "amount"],
+	)
+	budget_by_category = {budget.category: budget.amount for budget in budgets}
+
+	for category in categories:
+		category["budget_amount"] = budget_by_category.get(category.name)
+
+	return categories
+
+
+@frappe.whitelist()
+def set_budget(category: str, amount: float | None = None):
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	existing_name = frappe.db.exists("Budget", {"category": category, "family": family})
+
+	if amount is None:
+		if existing_name:
+			frappe.delete_doc("Budget", existing_name, ignore_permissions=True)
+		return None
+
+	if existing_name:
+		doc = frappe.get_doc("Budget", existing_name)
+		doc.amount = amount
+		doc.save(ignore_permissions=True)
+		return doc
+
+	return frappe.get_doc(
+		{
+			"doctype": "Budget",
+			"category": category,
+			"family": family,
+			"amount": amount,
+		}
+	).insert(ignore_permissions=True)

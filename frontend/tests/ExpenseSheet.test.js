@@ -55,7 +55,7 @@ describe("ExpenseSheet", () => {
 		await flushPromises();
 
 		expect(createExpense).toHaveBeenCalledWith(
-			expect.objectContaining({ amount: 25, category: null }),
+			expect.objectContaining({ amount: 25, category: null })
 		);
 		expect(wrapper.emitted("close")).toBeTruthy();
 	});
@@ -83,7 +83,7 @@ describe("ExpenseSheet", () => {
 		await flushPromises();
 
 		expect(updateExpense).toHaveBeenCalledWith(
-			expect.objectContaining({ name: "EXP-1", amount: 99 }),
+			expect.objectContaining({ name: "EXP-1", amount: 99 })
 		);
 		expect(wrapper.emitted("close")).toBeTruthy();
 	});

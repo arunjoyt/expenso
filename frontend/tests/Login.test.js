@@ -53,10 +53,10 @@ describe("Login page", () => {
 		await wrapper.find('input[name="password"]').setValue("correct-password");
 		await wrapper.find("form").trigger("submit");
 		await flushPromises();
-		// router.replace() resolves the lazy Feed.vue import a tick after
-		// the microtask queue drained by flushPromises(), so wait one more.
-		await new Promise((resolve) => setTimeout(resolve, 20));
-
-		expect(router.currentRoute.value.name).toBe("Feed");
+		// router.replace() resolves the lazy Feed.vue import asynchronously,
+		// so poll instead of guessing how long that import takes.
+		await vi.waitFor(() => {
+			expect(router.currentRoute.value.name).toBe("Feed");
+		});
 	});
 });

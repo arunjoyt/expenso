@@ -46,7 +46,11 @@
 				</Button>
 
 				<template v-if="isEdit && !confirmingDelete">
-					<Button data-test="delete-button" variant="ghost" @click="confirmingDelete = true">
+					<Button
+						data-test="delete-button"
+						variant="ghost"
+						@click="confirmingDelete = true"
+					>
 						Delete
 					</Button>
 				</template>

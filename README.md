@@ -4,9 +4,17 @@ A family expense tracker where multiple household members share and record expen
 
 ### Screenshots
 
-| Feed | Analytics | Settings |
+| Login | Feed | Analytics |
 |---|---|---|
-| ![Feed](docs/images/feed.png) | ![Analytics](docs/images/analytics.png) | ![Settings](docs/images/settings.png) |
+| ![Login](docs/images/login.png) | ![Feed](docs/images/feed.png) | ![Analytics](docs/images/analytics.png) |
+
+| Add Expense | Edit Expense | Add Income |
+|---|---|---|
+| ![Add Expense](docs/images/add-expense.png) | ![Edit Expense](docs/images/edit-expense.png) | ![Add Income](docs/images/add-income.png) |
+
+| Settings |
+|---|
+| ![Settings](docs/images/settings.png) |
 
 ### Installation
 

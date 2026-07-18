@@ -209,3 +209,28 @@ def delete_income(name: str):
 	doc = frappe.get_doc("Income", name)
 	doc.check_permission("delete")
 	frappe.delete_doc("Income", name, ignore_permissions=True)
+
+
+@frappe.whitelist()
+def add_source(name: str):
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	return frappe.get_doc(
+		{
+			"doctype": "Source",
+			"source_name": name,
+			"family": family,
+		}
+	).insert(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def rename_source(name: str, new_name: str):
+	doc = frappe.get_doc("Source", name)
+	doc.check_permission("write")
+
+	doc.source_name = new_name
+	doc.save(ignore_permissions=True)
+	return doc

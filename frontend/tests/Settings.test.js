@@ -8,6 +8,11 @@ vi.mock("@/composables/useCategories", () => ({
 	addCategory: vi.fn(),
 	renameCategory: vi.fn(),
 }));
+vi.mock("@/composables/useSources", () => ({
+	useSources: vi.fn(),
+	addSource: vi.fn(),
+	renameSource: vi.fn(),
+}));
 vi.mock("frappe-ui", async (importOriginal) => {
 	const actual = await importOriginal();
 	return { ...actual, call: vi.fn() };
@@ -15,10 +20,19 @@ vi.mock("frappe-ui", async (importOriginal) => {
 
 import { call } from "frappe-ui";
 import { addCategory, renameCategory, useCategories } from "@/composables/useCategories";
+import { addSource, renameSource, useSources } from "@/composables/useSources";
 
 function mockCategories(categories, reload = vi.fn()) {
 	useCategories.mockReturnValue({
 		categories: ref(categories),
+		loading: ref(false),
+		reload,
+	});
+}
+
+function mockSources(sources, reload = vi.fn()) {
+	useSources.mockReturnValue({
+		sources: ref(sources),
 		loading: ref(false),
 		reload,
 	});
@@ -29,6 +43,9 @@ beforeEach(() => {
 	call.mockResolvedValue("0.0.9");
 	addCategory.mockResolvedValue({ name: "CAT-2" });
 	renameCategory.mockResolvedValue({});
+	addSource.mockResolvedValue({ name: "SRC-2" });
+	renameSource.mockResolvedValue({});
+	mockSources([]);
 });
 
 describe("Settings page", () => {
@@ -90,5 +107,59 @@ describe("Settings page", () => {
 		const wrapper = mount(Settings);
 		await flushPromises();
 		expect(wrapper.find('[data-test="app-version"]').text()).toContain("1.2.3");
+	});
+
+	// F38
+	it("lists all Sources for the Family", () => {
+		mockCategories([]);
+		mockSources([
+			{ name: "SRC-1", source_name: "Salary" },
+			{ name: "SRC-2", source_name: "Freelance" },
+		]);
+		const wrapper = mount(Settings);
+		expect(wrapper.text()).toContain("Salary");
+		expect(wrapper.text()).toContain("Freelance");
+	});
+
+	// F39
+	it("shows the new Source in the list after the add form is submitted", async () => {
+		mockCategories([]);
+		const sourcesRef = ref([]);
+		const reload = vi.fn(() => {
+			sourcesRef.value = [{ name: "SRC-1", source_name: "Bonus" }];
+		});
+		useSources.mockReturnValue({ sources: sourcesRef, loading: ref(false), reload });
+
+		const wrapper = mount(Settings);
+		await wrapper.find('[data-test="add-source-input"]').setValue("Bonus");
+		await wrapper.findAll("form")[1].trigger("submit.prevent");
+		await flushPromises();
+
+		expect(addSource).toHaveBeenCalledWith("Bonus");
+		expect(wrapper.text()).toContain("Bonus");
+	});
+
+	// F40
+	it("shows an input on tapping a Source name and saves the rename on blur", async () => {
+		mockCategories([]);
+		const sourcesRef = ref([{ name: "SRC-1", source_name: "Salary" }]);
+		const reload = vi.fn(() => {
+			sourcesRef.value = [{ name: "SRC-1", source_name: "Monthly Salary" }];
+		});
+		useSources.mockReturnValue({ sources: sourcesRef, loading: ref(false), reload });
+
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="source-rename-input"]').exists()).toBe(false);
+
+		await wrapper.find('[data-test="source-name"]').trigger("click");
+		expect(wrapper.find('[data-test="source-rename-input"]').exists()).toBe(true);
+
+		const input = wrapper.find('[data-test="source-rename-input"]');
+		await input.setValue("Monthly Salary");
+		await input.trigger("blur");
+		await flushPromises();
+
+		expect(renameSource).toHaveBeenCalledWith("SRC-1", "Monthly Salary");
+		expect(wrapper.text()).toContain("Monthly Salary");
 	});
 });

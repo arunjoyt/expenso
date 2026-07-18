@@ -23,3 +23,11 @@ export function useSources() {
 
 	return { sources, loading, reload };
 }
+
+export async function addSource(name) {
+	return call("expenso.expenso.api.add_source", { name });
+}
+
+export async function renameSource(name, newName) {
+	return call("expenso.expenso.api.rename_source", { name, new_name: newName });
+}

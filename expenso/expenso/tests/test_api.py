@@ -3,10 +3,13 @@ from frappe.tests.utils import FrappeTestCase
 
 from expenso.expenso.api import (
 	_aggregate_categories,
+	add_category,
 	create_expense,
 	delete_expense,
 	get_analytics,
+	get_app_version,
 	get_expenses,
+	rename_category,
 	update_expense,
 )
 
@@ -338,3 +341,70 @@ class TestGetAnalyticsApi(FrappeTestCase):
 
 		self.assertEqual(result["total"], 15.0)
 		self.assertEqual(result["categories"], [{"name": "Uncategorized", "amount": 15.0}])
+
+
+class TestCategorySettingsApi(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("settings.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Settings Test Family",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I44
+	def test_add_category_creates_category_for_users_family(self):
+		frappe.set_user(self.member)
+		doc = add_category(name="Groceries")
+
+		self.assertTrue(frappe.db.exists("Category", doc.name))
+		self.assertEqual(doc.category_name, "Groceries")
+
+	# I45
+	def test_rename_category_updates_category_name(self):
+		frappe.set_user(self.member)
+		doc = add_category(name="Groceries")
+
+		rename_category(name=doc.name, new_name="Groceries & Household")
+
+		self.assertEqual(
+			frappe.db.get_value("Category", doc.name, "category_name"),
+			"Groceries & Household",
+		)
+
+	# I46
+	def test_get_app_version_returns_version_from_init(self):
+		from expenso import __version__
+
+		self.assertEqual(get_app_version(), __version__)
+
+	# I47
+	def test_add_category_is_linked_to_callers_family_not_another(self):
+		other_member = _ensure_test_user("settings.other@expenso.test")
+		other_user = frappe.get_doc("User", other_member)
+		if "Family Member" not in {r.role for r in other_user.roles}:
+			other_user.add_roles("Family Member")
+		other_family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Settings Other Family",
+				"currency": "USD",
+				"members": [{"user": other_member}],
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		doc = add_category(name="Dining")
+
+		self.assertEqual(doc.family, self.family.name)
+		self.assertNotEqual(doc.family, other_family.name)

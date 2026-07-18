@@ -2,6 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, get_first_day, get_last_day
 
+from expenso import __version__
 from expenso.expenso.permissions import get_user_family
 
 
@@ -122,3 +123,33 @@ def get_analytics(month: int, year: int):
 		"total": sum(expense.amount for expense in expenses),
 		"categories": _aggregate_categories(expenses),
 	}
+
+
+@frappe.whitelist()
+def add_category(name: str):
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	return frappe.get_doc(
+		{
+			"doctype": "Category",
+			"category_name": name,
+			"family": family,
+		}
+	).insert(ignore_permissions=True)
+
+
+@frappe.whitelist()
+def rename_category(name: str, new_name: str):
+	doc = frappe.get_doc("Category", name)
+	doc.check_permission("write")
+
+	doc.category_name = new_name
+	doc.save(ignore_permissions=True)
+	return doc
+
+
+@frappe.whitelist()
+def get_app_version():
+	return __version__

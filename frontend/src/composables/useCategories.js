@@ -23,3 +23,11 @@ export function useCategories() {
 
 	return { categories, loading, reload };
 }
+
+export async function addCategory(name) {
+	return call("expenso.expenso.api.add_category", { name });
+}
+
+export async function renameCategory(name, newName) {
+	return call("expenso.expenso.api.rename_category", { name, new_name: newName });
+}

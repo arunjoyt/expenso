@@ -12,9 +12,11 @@ from expenso.expenso.api import (
 	delete_income,
 	get_analytics,
 	get_app_version,
+	get_categories_with_budgets,
 	get_expenses,
 	rename_category,
 	rename_source,
+	set_budget,
 	update_expense,
 	update_income,
 )
@@ -592,3 +594,75 @@ class TestSourceSettingsApi(FrappeTestCase):
 			frappe.db.get_value("Source", doc.name, "source_name"),
 			"Annual Bonus",
 		)
+
+
+class TestBudgetSettingsApi(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("budgetsettings.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Budget Settings Test Family",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+		self.groceries = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Groceries",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I79
+	def test_set_budget_creates_budget_when_none_exists(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, amount=500)
+
+		amount = frappe.db.get_value("Budget", {"category": self.groceries.name}, "amount")
+		self.assertEqual(amount, 500)
+
+	# I80
+	def test_set_budget_updates_existing_budget(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, amount=500)
+		set_budget(category=self.groceries.name, amount=800)
+
+		amount = frappe.db.get_value("Budget", {"category": self.groceries.name}, "amount")
+		self.assertEqual(amount, 800)
+		self.assertEqual(frappe.db.count("Budget", {"category": self.groceries.name}), 1)
+
+	# I81
+	def test_set_budget_with_none_amount_deletes_existing_budget(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, amount=500)
+		set_budget(category=self.groceries.name, amount=None)
+
+		self.assertFalse(frappe.db.exists("Budget", {"category": self.groceries.name}))
+
+	# I82
+	def test_get_categories_with_budgets_includes_budget_amount(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, amount=500)
+		dining = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Dining",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		result = get_categories_with_budgets()
+		by_name = {c["name"]: c["budget_amount"] for c in result}
+
+		self.assertEqual(by_name[self.groceries.name], 500)
+		self.assertIsNone(by_name[dining.name])

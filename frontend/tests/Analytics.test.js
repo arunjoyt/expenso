@@ -121,4 +121,36 @@ describe("Analytics page", () => {
 		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
 		expect(reload).toHaveBeenCalled();
 	});
+
+	// F45
+	it("shows no threshold indicator for a Category with no Budget", () => {
+		mockAnalytics(50, [{ name: "Groceries", amount: 50, budget_status: null }]);
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="budget-status-warning"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="budget-status-exceeded"]').exists()).toBe(false);
+	});
+
+	// F46
+	it("shows a yellow indicator for a Warning budget status", () => {
+		mockAnalytics(50, [{ name: "Groceries", amount: 50, budget_status: "Warning" }]);
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="budget-status-warning"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="budget-status-exceeded"]').exists()).toBe(false);
+	});
+
+	// F47
+	it("shows a red indicator for an Exceeded budget status", () => {
+		mockAnalytics(50, [{ name: "Groceries", amount: 50, budget_status: "Exceeded" }]);
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="budget-status-exceeded"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="budget-status-warning"]').exists()).toBe(false);
+	});
+
+	// F48
+	it("shows no threshold indicator for a Normal budget status", () => {
+		mockAnalytics(50, [{ name: "Groceries", amount: 50, budget_status: "Normal" }]);
+		const wrapper = mount(Analytics);
+		expect(wrapper.find('[data-test="budget-status-warning"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="budget-status-exceeded"]').exists()).toBe(false);
+	});
 });

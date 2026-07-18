@@ -3,6 +3,7 @@ from frappe import _
 from frappe.utils import cint, get_first_day, get_last_day
 
 from expenso import __version__
+from expenso.expenso.doctype.budget.budget import compute_budget_status
 from expenso.expenso.permissions import get_user_family
 
 
@@ -99,6 +100,34 @@ def _aggregate_categories(expenses):
 	return categories
 
 
+def _attach_budget_status(categories, expenses, family):
+	spent_by_category_id = {}
+	category_id_by_label = {}
+	for expense in expenses:
+		category_id = expense.get("category")
+		if not category_id:
+			continue
+		label = expense.get("category_name") or _("Uncategorized")
+		category_id_by_label[label] = category_id
+		spent_by_category_id[category_id] = spent_by_category_id.get(category_id, 0) + expense.get(
+			"amount", 0
+		)
+
+	budgets = frappe.get_all("Budget", filters={"family": family}, fields=["category", "amount"])
+	budget_amount_by_category_id = {budget.category: budget.amount for budget in budgets}
+
+	for category in categories:
+		category_id = category_id_by_label.get(category["name"])
+		budget_amount = budget_amount_by_category_id.get(category_id) if category_id else None
+		category["budget_status"] = (
+			compute_budget_status(spent_by_category_id.get(category_id, 0), budget_amount)
+			if category_id
+			else None
+		)
+
+	return categories
+
+
 def _compute_savings(income_total, expense_total):
 	return income_total - expense_total
 
@@ -134,9 +163,11 @@ def get_analytics(month: int, year: int):
 	expense_total = sum(expense.amount for expense in expenses)
 	income_total = sum(income.amount for income in incomes)
 
+	categories = _attach_budget_status(_aggregate_categories(expenses), expenses, family)
+
 	return {
 		"total": expense_total,
-		"categories": _aggregate_categories(expenses),
+		"categories": categories,
 		"income_total": income_total,
 		"savings": _compute_savings(income_total, expense_total),
 	}

@@ -133,10 +133,12 @@ fixtures = [
 
 permission_query_conditions = {
 	"Expense": "expenso.expenso.permissions.get_permission_query_conditions",
+	"Category": "expenso.expenso.permissions.get_permission_query_conditions",
 }
 
 has_permission = {
 	"Expense": "expenso.expenso.permissions.has_permission",
+	"Category": "expenso.expenso.permissions.has_permission",
 }
 
 # DocType Class

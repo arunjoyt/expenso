@@ -27,6 +27,10 @@
             "write": 1,
             "create": 1,
             "delete": 1
+        },
+        {
+            "role": "Family Member",
+            "read": 1
         }
     ]
 }

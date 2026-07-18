@@ -7,6 +7,16 @@ import Feed from "@/pages/Feed.vue";
 
 vi.mock("@/composables/useExpenses", () => ({
 	useExpenses: vi.fn(),
+	createExpense: vi.fn(),
+	updateExpense: vi.fn(),
+	deleteExpense: vi.fn(),
+}));
+vi.mock("@/composables/useCategories", () => ({
+	useCategories: vi.fn(() => ({
+		categories: ref([]),
+		loading: ref(false),
+		reload: vi.fn(),
+	})),
 }));
 
 import { useExpenses } from "@/composables/useExpenses";
@@ -84,5 +94,27 @@ describe("Feed page", () => {
 		]);
 		const wrapper = mount(Feed);
 		expect(wrapper.text()).toContain(new Intl.NumberFormat().format(30));
+	});
+
+	// F12
+	it("opens the ExpenseSheet in add mode on FAB click", async () => {
+		mockExpenses([]);
+		const wrapper = mount(Feed);
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
+		await wrapper.find('[data-test="fab"]').trigger("click");
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
+		expect(wrapper.text()).toContain("Add Expense");
+	});
+
+	// F17
+	it("opens the ExpenseSheet in edit mode with fields pre-filled on row tap", async () => {
+		mockExpenses([
+			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
+		]);
+		const wrapper = mount(Feed);
+		await wrapper.find('[data-test="expense-row"]').trigger("click");
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
+		expect(wrapper.text()).toContain("Edit Expense");
+		expect(wrapper.find('[data-test="amount-input"]').element.value).toBe("10");
 	});
 });

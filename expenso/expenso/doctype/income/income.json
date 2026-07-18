@@ -1,0 +1,50 @@
+{
+    "doctype": "DocType",
+    "name": "Income",
+    "module": "Expenso",
+    "engine": "InnoDB",
+    "autoname": "hash",
+    "fields": [
+        {
+            "fieldname": "amount",
+            "fieldtype": "Float",
+            "label": "Amount",
+            "reqd": 1
+        },
+        {
+            "fieldname": "date",
+            "fieldtype": "Date",
+            "label": "Date",
+            "default": "Today"
+        },
+        {
+            "fieldname": "source",
+            "fieldtype": "Link",
+            "label": "Source",
+            "options": "Source"
+        },
+        {
+            "fieldname": "family",
+            "fieldtype": "Link",
+            "label": "Family",
+            "options": "Family",
+            "reqd": 1
+        }
+    ],
+    "permissions": [
+        {
+            "role": "System Manager",
+            "read": 1,
+            "write": 1,
+            "create": 1,
+            "delete": 1
+        },
+        {
+            "role": "Family Member",
+            "read": 1,
+            "write": 1,
+            "create": 1,
+            "delete": 1
+        }
+    ]
+}

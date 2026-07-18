@@ -62,6 +62,22 @@ class TestPermissions(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 
+		self.income_a = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 500.0,
+				"family": self.family_a.name,
+			}
+		).insert(ignore_permissions=True)
+
+		self.income_b = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 800.0,
+				"family": self.family_b.name,
+			}
+		).insert(ignore_permissions=True)
+
 	def tearDown(self):
 		frappe.set_user("Administrator")
 
@@ -125,3 +141,22 @@ class TestPermissions(FrappeTestCase):
 			self.assertIn(name, names)
 		for name in other_categories:
 			self.assertNotIn(name, names)
+
+	# I59
+	def test_member_reads_only_own_family_income(self):
+		frappe.set_user(self.member_a)
+		try:
+			names = frappe.get_list("Income", pluck="name")
+		finally:
+			frappe.set_user("Administrator")
+		self.assertIn(self.income_a.name, names)
+		self.assertNotIn(self.income_b.name, names)
+
+	# I60
+	def test_member_fetching_other_family_income_raises_permission_error(self):
+		frappe.set_user(self.member_a)
+		try:
+			with self.assertRaises(frappe.PermissionError):
+				frappe.get_doc("Income", self.income_b.name).check_permission("read")
+		finally:
+			frappe.set_user("Administrator")

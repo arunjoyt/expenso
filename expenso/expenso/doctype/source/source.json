@@ -1,0 +1,36 @@
+{
+    "doctype": "DocType",
+    "name": "Source",
+    "module": "Expenso",
+    "engine": "InnoDB",
+    "autoname": "format:SRC-{####}",
+    "naming_rule": "Expression",
+    "fields": [
+        {
+            "fieldname": "source_name",
+            "fieldtype": "Data",
+            "label": "Source Name",
+            "reqd": 1
+        },
+        {
+            "fieldname": "family",
+            "fieldtype": "Link",
+            "label": "Family",
+            "options": "Family",
+            "reqd": 1
+        }
+    ],
+    "permissions": [
+        {
+            "role": "System Manager",
+            "read": 1,
+            "write": 1,
+            "create": 1,
+            "delete": 1
+        },
+        {
+            "role": "Family Member",
+            "read": 1
+        }
+    ]
+}

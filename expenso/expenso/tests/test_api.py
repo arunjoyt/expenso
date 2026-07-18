@@ -5,6 +5,7 @@ from expenso.expenso.api import (
 	_aggregate_categories,
 	_compute_savings,
 	add_category,
+	add_source,
 	create_expense,
 	create_income,
 	delete_expense,
@@ -13,6 +14,7 @@ from expenso.expenso.api import (
 	get_app_version,
 	get_expenses,
 	rename_category,
+	rename_source,
 	update_expense,
 	update_income,
 )
@@ -549,3 +551,44 @@ class TestIncomeCrudApi(FrappeTestCase):
 		frappe.set_user(self.member_a)
 		with self.assertRaises(frappe.PermissionError):
 			delete_income(name=self.income_b.name)
+
+
+class TestSourceSettingsApi(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("sourcesettings.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Source Settings Test Family",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I70
+	def test_add_source_creates_source_for_users_family(self):
+		frappe.set_user(self.member)
+		doc = add_source(name="Bonus")
+
+		self.assertTrue(frappe.db.exists("Source", doc.name))
+		self.assertEqual(doc.source_name, "Bonus")
+		self.assertEqual(doc.family, self.family.name)
+
+	# I71
+	def test_rename_source_updates_source_name(self):
+		frappe.set_user(self.member)
+		doc = add_source(name="Bonus")
+
+		rename_source(name=doc.name, new_name="Annual Bonus")
+
+		self.assertEqual(
+			frappe.db.get_value("Source", doc.name, "source_name"),
+			"Annual Bonus",
+		)

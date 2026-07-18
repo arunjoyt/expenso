@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { createAppRouter } from "@/router";
 import { useMonthStore } from "@/stores/month";
 import Feed from "@/pages/Feed.vue";
 
@@ -29,6 +30,11 @@ function mockExpenses(expenses, loading = false) {
 	});
 }
 
+function mountFeed() {
+	const router = createAppRouter();
+	return mount(Feed, { global: { plugins: [router] } });
+}
+
 beforeEach(() => {
 	setActivePinia(createPinia());
 });
@@ -40,7 +46,7 @@ describe("Feed page", () => {
 			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
 			{ name: "EXP-2", amount: 20, date: "2025-06-12", category_name: "Dining" },
 		]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		expect(wrapper.text()).toContain("Groceries");
 		expect(wrapper.text()).toContain("Dining");
 		// Two distinct date groups means two group headers rendered.
@@ -53,7 +59,7 @@ describe("Feed page", () => {
 		monthStore.month = 6;
 		monthStore.year = 2025;
 		mockExpenses([]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		expect(wrapper.find("h1").text()).toBe("June 2025");
 	});
 
@@ -63,7 +69,7 @@ describe("Feed page", () => {
 		monthStore.month = 6;
 		monthStore.year = 2025;
 		mockExpenses([]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		await wrapper.find('[aria-label="Previous month"]').trigger("click");
 		expect(monthStore.month).toBe(5);
 	});
@@ -74,7 +80,7 @@ describe("Feed page", () => {
 		monthStore.month = 6;
 		monthStore.year = 2025;
 		mockExpenses([]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		await wrapper.find('[aria-label="Next month"]').trigger("click");
 		expect(monthStore.month).toBe(7);
 	});
@@ -82,7 +88,7 @@ describe("Feed page", () => {
 	// F10
 	it("shows an empty state for a month with no expenses", () => {
 		mockExpenses([]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		expect(wrapper.text()).toContain("No expenses this month");
 	});
 
@@ -92,14 +98,14 @@ describe("Feed page", () => {
 			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
 			{ name: "EXP-2", amount: 20, date: "2025-06-12", category_name: "Dining" },
 		]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		expect(wrapper.text()).toContain(new Intl.NumberFormat().format(30));
 	});
 
 	// F12
 	it("opens the ExpenseSheet in add mode on FAB click", async () => {
 		mockExpenses([]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
 		await wrapper.find('[data-test="fab"]').trigger("click");
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
@@ -111,7 +117,7 @@ describe("Feed page", () => {
 		mockExpenses([
 			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
 		]);
-		const wrapper = mount(Feed);
+		const wrapper = mountFeed();
 		await wrapper.find('[data-test="expense-row"]').trigger("click");
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
 		expect(wrapper.text()).toContain("Edit Expense");

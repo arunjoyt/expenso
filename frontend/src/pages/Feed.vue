@@ -1,5 +1,9 @@
 <template>
 	<div class="p-4">
+		<div class="mb-2 flex justify-end">
+			<router-link to="/settings" aria-label="Settings" class="text-xl">⚙</router-link>
+		</div>
+
 		<div class="mb-4 flex items-center justify-between">
 			<button type="button" aria-label="Previous month" @click="monthStore.prevMonth()">
 				‹

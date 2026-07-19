@@ -16,6 +16,24 @@ A family expense tracker where multiple household members share and record expen
 |---|
 | ![Settings](docs/images/settings.png) |
 
+### Admin: setting up a Family
+
+New households are set up from Frappe Desk — there's no self-service signup.
+
+1. **Create a User** for each household member: `Desk → User → New`. Uncheck "Send Welcome Email" if the address is a placeholder.
+2. On each User's **Roles & Permissions** tab, check the **Family Member** role — without it, the Member can't log in to the app or access their Family's data.
+3. **Create a Family**: `Desk → Expenso → Family → New`. Set a Family Name and Currency, then add each User under Members.
+4. **Save.** Default Categories (Groceries, Dining, Transport, Utilities, Health, Entertainment, Shopping, Other) and Sources (Salary, Freelance, Rental, Other) are seeded automatically — visible under Connections on the Family.
+5. Members can now log in at the site URL and land on their shared Feed.
+
+| New User | Assign "Family Member" role |
+|---|---|
+| ![New User](docs/images/admin-new-user.png) | ![Assign Role](docs/images/admin-assign-role.png) |
+
+| New Family | Family created — defaults seeded |
+|---|---|
+| ![New Family](docs/images/admin-new-family.png) | ![Family Created](docs/images/admin-family-created.png) |
+
 ### Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:

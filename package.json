@@ -1,0 +1,7 @@
+{
+	"name": "expenso",
+	"private": true,
+	"scripts": {
+		"build": "cd frontend && yarn build"
+	}
+}

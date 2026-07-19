@@ -51,8 +51,9 @@ bench --site <site-name> install-app expenso
 # Run migrations
 bench --site <site-name> migrate
 
-# Build frontend for production
-cd apps/expenso/frontend && npm run build
+# Build assets — a root-level package.json cascades this into the
+# frontend's `yarn build`, so this one command is enough
+bench build --app expenso
 
 # Restart after config changes
 bench restart

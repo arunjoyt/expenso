@@ -1,7 +1,6 @@
 <template>
 	<div class="min-h-screen pb-32">
 		<div class="px-4 pt-5">
-			<p class="text-xs font-semibold text-gray-400">Hey there 👋</p>
 			<div class="flex items-center justify-between">
 				<p class="text-base font-extrabold text-gray-900">Expenso</p>
 				<p v-if="familyName" class="text-base font-extrabold text-gray-900">

@@ -132,12 +132,7 @@ def _compute_savings(income_total, expense_total):
 	return income_total - expense_total
 
 
-@frappe.whitelist()
-def get_analytics(month: int, year: int):
-	family = get_user_family(frappe.session.user)
-	if not family:
-		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
-
+def compute_analytics(family: str, month: int, year: int):
 	month = cint(month)
 	year = cint(year)
 	period_start = get_first_day(f"{year}-{month:02d}-01")
@@ -171,6 +166,15 @@ def get_analytics(month: int, year: int):
 		"income_total": income_total,
 		"savings": _compute_savings(income_total, expense_total),
 	}
+
+
+@frappe.whitelist()
+def get_analytics(month: int, year: int):
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	return compute_analytics(family, month, year)
 
 
 @frappe.whitelist()

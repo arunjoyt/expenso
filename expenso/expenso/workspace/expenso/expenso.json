@@ -1,9 +1,8 @@
 {
  "charts": [],
- "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Expenso</b></span>\",\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Overview</b></span>\",\"col\":12}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Families\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Categories\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Expenses\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Income\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Sources\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Budgets\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Members\",\"col\":3}}]",
+ "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Expenso</b></span>\",\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Overview</b></span>\",\"col\":12}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Families\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Categories\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Expenses\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Income\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Sources\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Budgets\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Members\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Analytics\",\"col\":3}}]",
  "creation": "2026-07-18 11:16:03.715152",
  "custom_blocks": [],
- "modified": "2026-07-19 18:00:00.000000",
  "docstatus": 0,
  "doctype": "Workspace",
  "hide_custom": 0,
@@ -13,6 +12,7 @@
  "is_hidden": 0,
  "label": "Expenso",
  "links": [],
+ "modified": "2026-07-19 20:00:00.000000",
  "modified_by": "Administrator",
  "module": "Expenso",
  "name": "Expenso",
@@ -90,6 +90,14 @@
    "label": "Family Members",
    "link_to": "Family Members",
    "report_ref_doctype": "Family",
+   "type": "Report"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Family Analytics",
+   "link_to": "Family Analytics",
+   "report_ref_doctype": "Expense",
    "type": "Report"
   }
  ],

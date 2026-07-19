@@ -19,8 +19,16 @@ vi.mock("@/composables/useCategories", () => ({
 		reload: vi.fn(),
 	})),
 }));
+vi.mock("@/composables/useFamily", () => ({
+	useFamily: vi.fn(() => ({
+		familyName: ref(""),
+		loading: ref(false),
+		reload: vi.fn(),
+	})),
+}));
 
 import { useExpenses } from "@/composables/useExpenses";
+import { useFamily } from "@/composables/useFamily";
 
 function mockExpenses(expenses, loading = false) {
 	useExpenses.mockReturnValue({
@@ -61,6 +69,18 @@ describe("Feed page", () => {
 		mockExpenses([]);
 		const wrapper = mountFeed();
 		expect(wrapper.find("h1").text()).toBe("June 2025");
+	});
+
+	it("shows the app name and the family name in the header", () => {
+		useFamily.mockReturnValue({
+			familyName: ref("The Testers"),
+			loading: ref(false),
+			reload: vi.fn(),
+		});
+		mockExpenses([]);
+		const wrapper = mountFeed();
+		expect(wrapper.text()).toContain("Expenso");
+		expect(wrapper.text()).toContain("The Testers");
 	});
 
 	// F8

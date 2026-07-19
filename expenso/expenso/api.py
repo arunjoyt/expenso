@@ -208,6 +208,15 @@ def get_app_version():
 
 
 @frappe.whitelist()
+def get_family_name():
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	return frappe.db.get_value("Family", family, "family_name")
+
+
+@frappe.whitelist()
 def create_income(amount: float, date: str | None = None, source: str | None = None):
 	family = get_user_family(frappe.session.user)
 	if not family:

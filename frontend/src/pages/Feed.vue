@@ -1,8 +1,12 @@
 <template>
 	<div class="min-h-screen pb-32">
 		<div class="px-4 pt-5">
-			<p class="text-xs font-semibold text-gray-400">Hey there 👋</p>
-			<p class="text-base font-extrabold text-gray-900">Family Ledger</p>
+			<div class="flex items-center justify-between">
+				<p class="text-base font-extrabold text-gray-900">Expenso</p>
+				<p v-if="familyName" class="text-base font-extrabold text-gray-900">
+					{{ familyName }}
+				</p>
+			</div>
 		</div>
 
 		<div
@@ -94,12 +98,14 @@
 import { computed, ref } from "vue";
 import { useMonthStore } from "@/stores/month";
 import { useExpenses } from "@/composables/useExpenses";
+import { useFamily } from "@/composables/useFamily";
 import { dateGroupLabel } from "@/utils/dateGroup";
 import { getCategoryVisual } from "@/utils/categoryStyle";
 import ExpenseSheet from "@/components/ExpenseSheet.vue";
 
 const monthStore = useMonthStore();
 const { expenses, loading } = useExpenses(monthStore);
+const { familyName } = useFamily();
 
 const sheetOpen = ref(false);
 const editingExpense = ref(null);

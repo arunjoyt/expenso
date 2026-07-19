@@ -14,6 +14,7 @@ from expenso.expenso.api import (
 	get_app_version,
 	get_categories_with_budgets,
 	get_expenses,
+	get_family_name,
 	rename_category,
 	rename_source,
 	set_budget,
@@ -566,6 +567,36 @@ class TestCategorySettingsApi(FrappeTestCase):
 
 		self.assertEqual(doc.family, self.family.name)
 		self.assertNotEqual(doc.family, other_family.name)
+
+
+class TestGetFamilyNameApi(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("familyname.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "The Testers",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	def test_get_family_name_returns_callers_family_name(self):
+		frappe.set_user(self.member)
+		self.assertEqual(get_family_name(), "The Testers")
+
+	def test_get_family_name_raises_permission_error_without_a_family(self):
+		outsider = _ensure_test_user("familyname.outsider@expenso.test")
+		frappe.set_user(outsider)
+		with self.assertRaises(frappe.PermissionError):
+			get_family_name()
 
 
 class TestIncomeCrudApi(FrappeTestCase):

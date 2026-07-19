@@ -1,0 +1,8 @@
+{
+	"name": "expenso",
+	"private": true,
+	"workspaces": ["frontend"],
+	"scripts": {
+		"build": "cd frontend && yarn build"
+	}
+}

@@ -10,3 +10,6 @@ expenso/public/frontend
 expenso/www/expenso.html
 frontend/auto-imports.d.ts
 frontend/components.d.ts
+frontend/test-results
+frontend/playwright-report
+frontend/blob-report

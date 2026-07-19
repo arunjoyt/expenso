@@ -7,13 +7,14 @@
 		></div>
 		<div
 			data-test="expense-sheet"
-			class="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white p-4 pb-6"
+			class="fixed inset-x-0 bottom-0 z-50 animate-sheet-up rounded-t-3xl bg-white p-4 pb-6 shadow-2xl"
 			@touchstart="onTouchStart"
 			@touchmove="onTouchMove"
 			@touchend="onTouchEnd"
 		>
-			<h2 class="mb-4 text-lg font-semibold text-gray-900">
-				{{ isEdit ? "Edit Expense" : "Add Expense" }}
+			<div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true"></div>
+			<h2 class="mb-4 text-lg font-extrabold text-gray-900">
+				{{ isEdit ? "✏️ Edit Expense" : "💸 Add Expense" }}
 			</h2>
 
 			<form class="flex flex-col gap-4" @submit.prevent="submit">
@@ -50,7 +51,7 @@
 					:loading="saving"
 					:disabled="!canSubmit"
 				>
-					{{ isEdit ? "Save" : "Add" }}
+					{{ isEdit ? "✅ Save" : "✨ Add" }}
 				</Button>
 
 				<template v-if="isEdit && !confirmingDelete">
@@ -59,7 +60,7 @@
 						variant="ghost"
 						@click="confirmingDelete = true"
 					>
-						Delete
+						🗑️ Delete
 					</Button>
 				</template>
 
@@ -94,6 +95,7 @@ import { computed, ref } from "vue";
 import { Input, Button, ErrorMessage } from "frappe-ui";
 import { useCategories } from "@/composables/useCategories";
 import { createExpense, updateExpense, deleteExpense } from "@/composables/useExpenses";
+import { getCategoryVisual } from "@/utils/categoryStyle";
 
 const props = defineProps({
 	expense: {
@@ -116,8 +118,11 @@ const category = ref(props.expense?.category ?? "");
 
 const { categories } = useCategories();
 const categoryOptions = computed(() => [
-	{ label: "Uncategorized", value: "" },
-	...categories.value.map((c) => ({ label: c.category_name, value: c.name })),
+	{ label: `${getCategoryVisual().emoji} Uncategorized`, value: "" },
+	...categories.value.map((c) => ({
+		label: `${getCategoryVisual(c.category_name).emoji} ${c.category_name}`,
+		value: c.name,
+	})),
 ]);
 
 const canSubmit = computed(() => Number(amount.value) > 0);

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "serve": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots"
   },
   "dependencies": {
     "frappe-ui": "^0.1.278",
@@ -17,6 +19,7 @@
     "vue-router": "^4.4.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@vitejs/plugin-vue": "^4.2.3",
     "@vue/test-utils": "^2.4.6",
     "autoprefixer": "^10.4.14",

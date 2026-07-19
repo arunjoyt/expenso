@@ -1,9 +1,17 @@
 <template>
-	<div class="flex h-screen w-screen flex-col justify-center bg-white px-6">
-		<div class="mx-auto w-full max-w-sm">
-			<h1 class="mb-8 text-center text-2xl font-semibold text-gray-900">
-				Log in to Expenso
-			</h1>
+	<div
+		class="flex h-screen w-screen flex-col justify-center bg-gradient-to-br from-cyan-100 via-blue-200 to-violet-200 px-6"
+	>
+		<div class="mx-auto w-full max-w-sm rounded-3xl bg-white p-8 shadow-xl">
+			<div class="mb-6 text-center">
+				<div
+					class="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-accent-500 to-purple-600 text-3xl shadow-lg shadow-blue-200"
+				>
+					🧾
+				</div>
+				<h1 class="text-2xl font-extrabold text-gray-900">Welcome back!</h1>
+				<p class="mt-1 text-sm text-gray-400">Log in to your family ledger</p>
+			</div>
 			<form class="flex flex-col gap-4" @submit.prevent="submit">
 				<Input
 					label="Email"
@@ -23,7 +31,7 @@
 				/>
 				<ErrorMessage :message="errorMessage" />
 				<Button variant="solid" theme="blue" :loading="loading" type="submit">
-					Login
+					Log In
 				</Button>
 			</form>
 		</div>

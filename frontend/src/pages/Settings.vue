@@ -1,45 +1,55 @@
 <template>
-	<div class="p-4">
-		<h1 class="mb-4 text-lg font-semibold text-gray-900">Settings</h1>
+	<div class="min-h-screen p-4 pb-24">
+		<h1 class="mb-4 text-lg font-extrabold text-gray-900">⚙️ Settings</h1>
 
-		<h2 class="mb-2 text-sm font-medium text-gray-500">Categories</h2>
-		<div
-			v-for="category in categories"
-			:key="category.name"
-			data-test="category-row"
-			class="flex items-center justify-between gap-2 border-b border-gray-100 py-2"
-		>
-			<Input
-				v-if="editingCategoryName === category.name"
-				data-test="rename-input"
-				type="text"
-				:model-value="editingCategoryValue"
-				@input="editingCategoryValue = $event"
-				@blur="saveCategoryRename(category)"
-				@keyup.enter="$event.target.blur()"
-			/>
-			<span
-				v-else
-				data-test="category-name"
-				class="cursor-pointer"
-				@click="startCategoryRename(category)"
+		<h2 class="mb-2 flex items-center gap-1 text-sm font-bold text-gray-500">🏷️ Categories</h2>
+		<div class="mb-4 flex flex-col gap-2">
+			<div
+				v-for="category in categories"
+				:key="category.name"
+				data-test="category-row"
+				class="flex items-center justify-between gap-2 rounded-2xl bg-white p-3 shadow-sm"
 			>
-				{{ category.category_name }}
-			</span>
+				<div class="flex min-w-0 items-center gap-2">
+					<span
+						class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm"
+						:class="getCategoryVisual(category.category_name).bg"
+					>
+						{{ getCategoryVisual(category.category_name).emoji }}
+					</span>
+					<Input
+						v-if="editingCategoryName === category.name"
+						data-test="rename-input"
+						type="text"
+						:model-value="editingCategoryValue"
+						@input="editingCategoryValue = $event"
+						@blur="saveCategoryRename(category)"
+						@keyup.enter="$event.target.blur()"
+					/>
+					<span
+						v-else
+						data-test="category-name"
+						class="cursor-pointer truncate font-medium"
+						@click="startCategoryRename(category)"
+					>
+						{{ category.category_name }}
+					</span>
+				</div>
 
-			<Input
-				data-test="budget-amount-input"
-				type="number"
-				placeholder="Budget"
-				inputClass="w-24"
-				:model-value="budgetValue(category)"
-				@input="budgetDrafts[category.name] = $event"
-				@blur="saveBudget(category)"
-				@keyup.enter="$event.target.blur()"
-			/>
+				<Input
+					data-test="budget-amount-input"
+					type="number"
+					placeholder="Budget"
+					inputClass="w-24"
+					:model-value="budgetValue(category)"
+					@input="budgetDrafts[category.name] = $event"
+					@blur="saveBudget(category)"
+					@keyup.enter="$event.target.blur()"
+				/>
+			</div>
 		</div>
 
-		<form class="mb-8 mt-4 flex gap-2" @submit.prevent="submitAddCategory">
+		<form class="mb-8 flex gap-2" @submit.prevent="submitAddCategory">
 			<Input
 				data-test="add-category-input"
 				placeholder="New category"
@@ -47,34 +57,36 @@
 				@input="newCategoryName = $event"
 			/>
 			<Button data-test="add-category-button" type="submit" variant="solid" theme="blue"
-				>Add</Button
+				>➕ Add</Button
 			>
 		</form>
 
-		<h2 class="mb-2 text-sm font-medium text-gray-500">Sources</h2>
-		<div
-			v-for="source in sources"
-			:key="source.name"
-			data-test="source-row"
-			class="flex items-center border-b border-gray-100 py-2"
-		>
-			<Input
-				v-if="editingSourceName === source.name"
-				data-test="source-rename-input"
-				type="text"
-				:model-value="editingSourceValue"
-				@input="editingSourceValue = $event"
-				@blur="saveSourceRename(source)"
-				@keyup.enter="$event.target.blur()"
-			/>
-			<span
-				v-else
-				data-test="source-name"
-				class="cursor-pointer"
-				@click="startSourceRename(source)"
+		<h2 class="mb-2 flex items-center gap-1 text-sm font-bold text-gray-500">💳 Sources</h2>
+		<div class="mb-4 flex flex-col gap-2">
+			<div
+				v-for="source in sources"
+				:key="source.name"
+				data-test="source-row"
+				class="flex items-center rounded-2xl bg-white p-3 shadow-sm"
 			>
-				{{ source.source_name }}
-			</span>
+				<Input
+					v-if="editingSourceName === source.name"
+					data-test="source-rename-input"
+					type="text"
+					:model-value="editingSourceValue"
+					@input="editingSourceValue = $event"
+					@blur="saveSourceRename(source)"
+					@keyup.enter="$event.target.blur()"
+				/>
+				<span
+					v-else
+					data-test="source-name"
+					class="cursor-pointer font-medium"
+					@click="startSourceRename(source)"
+				>
+					💵 {{ source.source_name }}
+				</span>
+			</div>
 		</div>
 
 		<form class="mt-4 flex gap-2" @submit.prevent="submitAddSource">
@@ -85,11 +97,14 @@
 				@input="newSourceName = $event"
 			/>
 			<Button data-test="add-source-button" type="submit" variant="solid" theme="blue"
-				>Add</Button
+				>➕ Add</Button
 			>
 		</form>
 
-		<div class="mt-8 text-center text-xs text-gray-400" data-test="app-version">
+		<div
+			class="mx-auto mt-8 w-fit rounded-full bg-white px-3 py-1 text-center text-xs font-semibold text-gray-400 shadow-sm"
+			data-test="app-version"
+		>
 			v{{ appVersion }}
 		</div>
 	</div>
@@ -101,6 +116,7 @@ import { call, Input, Button } from "frappe-ui";
 import { addCategory, renameCategory } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
 import { setBudget, useBudgets } from "@/composables/useBudgets";
+import { getCategoryVisual } from "@/utils/categoryStyle";
 
 const { categories, reload: reloadCategories } = useBudgets();
 const { sources, reload: reloadSources } = useSources();

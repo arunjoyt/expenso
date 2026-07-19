@@ -42,6 +42,33 @@ Pre-commit is configured to use the following tools for checking and formatting 
 - prettier
 - pyupgrade
 
+### Testing
+
+Frontend unit tests ([Vitest](https://vitest.dev)) run in jsdom and cover component logic, but never actually render CSS — they won't catch a color or layout regression.
+
+```bash
+cd frontend
+yarn test
+```
+
+Visual regression tests ([Playwright](https://playwright.dev)) fill that gap by screenshotting the Login, Feed, Analytics, and Settings screens and diffing them against committed baselines. They run against a real, already-running bench site (the app needs live Frappe auth/API responses), so build the frontend and clear the cache first:
+
+```bash
+# from apps/expenso/frontend
+yarn build
+
+# from the bench root, with $SITE already running
+bench --site $SITE clear-cache
+
+# back in apps/expenso/frontend
+yarn test:visual        # compare against the committed baselines
+yarn test:visual:update # regenerate baselines after an intentional UI change
+```
+
+By default it targets `http://127.0.0.1:8005/expenso/`; point it elsewhere with `EXPENSO_TEST_URL=http://host:port/expenso/ yarn test:visual`.
+
+These are a **local dev tool only** — not run in CI. Baseline filenames are OS-specific (e.g. `-darwin`), and the screenshots bake in this site's current seed data, so they'd need a per-platform baseline set and consistent fixture data to run safely in CI.
+
 ### CI
 
 This app can use GitHub Actions for CI. The following workflows are configured:

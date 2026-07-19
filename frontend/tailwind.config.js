@@ -10,6 +10,23 @@ export default {
 	],
 	theme: {
 		extend: {
+			fontFamily: {
+				sans: ["Nunito", "ui-sans-serif", "system-ui", "sans-serif"],
+			},
+			keyframes: {
+				"pop-in": {
+					"0%": { opacity: "0", transform: "scale(0.92) translateY(4px)" },
+					"100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+				},
+				"sheet-up": {
+					"0%": { transform: "translateY(100%)" },
+					"100%": { transform: "translateY(0)" },
+				},
+			},
+			animation: {
+				"pop-in": "pop-in 0.2s ease-out",
+				"sheet-up": "sheet-up 0.25s cubic-bezier(0.32, 0.72, 0, 1)",
+			},
 			colors: {
 				accent: {
 					500: "#6366F1",

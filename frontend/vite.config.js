@@ -64,6 +64,10 @@ export default defineConfig(async () => {
 		test: {
 			environment: "jsdom",
 			globals: true,
+			// Scoped to the unit-test directory so Playwright specs under e2e/
+			// (visual regression, run via `yarn test:visual`) never get picked
+			// up here — they need a real bench site, not jsdom.
+			include: ["tests/**/*.test.js"],
 			server: {
 				deps: {
 					inline: ["frappe-ui"],

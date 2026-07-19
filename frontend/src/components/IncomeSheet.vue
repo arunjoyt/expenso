@@ -7,13 +7,14 @@
 		></div>
 		<div
 			data-test="income-sheet"
-			class="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white p-4 pb-6"
+			class="fixed inset-x-0 bottom-0 z-50 animate-sheet-up rounded-t-3xl bg-white p-4 pb-6 shadow-2xl"
 			@touchstart="onTouchStart"
 			@touchmove="onTouchMove"
 			@touchend="onTouchEnd"
 		>
-			<h2 class="mb-4 text-lg font-semibold text-gray-900">
-				{{ isEdit ? "Edit Income" : "Add Income" }}
+			<div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true"></div>
+			<h2 class="mb-4 text-lg font-extrabold text-gray-900">
+				{{ isEdit ? "✏️ Edit Income" : "💰 Add Income" }}
 			</h2>
 
 			<form class="flex flex-col gap-4" @submit.prevent="submit">
@@ -50,7 +51,7 @@
 					:loading="saving"
 					:disabled="!canSubmit"
 				>
-					{{ isEdit ? "Save" : "Add" }}
+					{{ isEdit ? "✅ Save" : "✨ Add" }}
 				</Button>
 
 				<template v-if="isEdit && !confirmingDelete">
@@ -59,7 +60,7 @@
 						variant="ghost"
 						@click="confirmingDelete = true"
 					>
-						Delete
+						🗑️ Delete
 					</Button>
 				</template>
 
@@ -117,7 +118,7 @@ const source = ref(props.income?.source ?? "");
 const { sources } = useSources();
 const sourceOptions = computed(() => [
 	{ label: "None", value: "" },
-	...sources.value.map((s) => ({ label: s.source_name, value: s.name })),
+	...sources.value.map((s) => ({ label: `💵 ${s.source_name}`, value: s.name })),
 ]);
 
 const canSubmit = computed(() => Number(amount.value) > 0);

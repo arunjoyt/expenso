@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import Settings from "@/pages/Settings.vue";
+import { createAppRouter } from "@/router";
 
 vi.mock("@/composables/useCategories", () => ({
 	addCategory: vi.fn(),
@@ -22,6 +23,7 @@ vi.mock("frappe-ui", async (importOriginal) => {
 });
 
 import { call } from "frappe-ui";
+import { session } from "@/data/session";
 import { addCategory, renameCategory } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
 import { setBudget, useBudgets } from "@/composables/useBudgets";
@@ -51,6 +53,7 @@ beforeEach(() => {
 	renameSource.mockResolvedValue({});
 	setBudget.mockResolvedValue({});
 	mockSources([]);
+	session.user = "administrator";
 });
 
 describe("Settings page", () => {
@@ -227,5 +230,22 @@ describe("Settings page", () => {
 		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 }]);
 		const wrapper = mount(Settings);
 		expect(wrapper.find('[data-test="budget-amount-input"]').element.value).toBe("500");
+	});
+
+	it("logs out and navigates to Login when Log out is clicked", async () => {
+		mockCategories([]);
+		const router = createAppRouter();
+		await router.push("/settings");
+		const wrapper = mount(Settings, { global: { plugins: [router] } });
+
+		await wrapper.find('[data-test="logout-button"]').trigger("click");
+		await flushPromises();
+
+		expect(session.user).toBeNull();
+		// router.replace() resolves the lazy Login.vue import asynchronously,
+		// so poll instead of guessing how long that import takes.
+		await vi.waitFor(() => {
+			expect(router.currentRoute.value.name).toBe("Login");
+		});
 	});
 });

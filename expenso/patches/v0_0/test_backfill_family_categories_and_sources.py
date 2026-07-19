@@ -23,9 +23,9 @@ class TestBackfillFamilyCategoriesAndSources(FrappeTestCase):
 		self.assertEqual(frappe.db.count("Source", {"family": name}), 4)
 
 	def test_does_not_touch_family_that_already_has_categories_and_sources(self):
-		family = frappe.get_doc({"doctype": "Family", "family_name": "Seeded Family", "currency": "USD"}).insert(
-			ignore_permissions=True
-		)
+		family = frappe.get_doc(
+			{"doctype": "Family", "family_name": "Seeded Family", "currency": "USD"}
+		).insert(ignore_permissions=True)
 		self.assertEqual(frappe.db.count("Category", {"family": family.name}), 8)
 		self.assertEqual(frappe.db.count("Source", {"family": family.name}), 4)
 

@@ -1,6 +1,6 @@
 {
  "charts": [],
- "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Expenso</b></span>\",\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Overview</b></span>\",\"col\":12}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Families\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Categories\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Expenses\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Income\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Sources\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Budgets\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Members\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Analytics\",\"col\":3}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Help</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Help\",\"col\":3}}]",
+ "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Expenso</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Open Expenso App\",\"col\":3}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Overview</b></span>\",\"col\":12}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Families\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Categories\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Expenses\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Income\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Sources\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Budgets\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Members\",\"col\":3}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Analytics\",\"col\":3}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Help</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Help\",\"col\":3}}]",
  "creation": "2026-07-18 11:16:03.715152",
  "custom_blocks": [],
  "docstatus": 0,
@@ -12,7 +12,7 @@
  "is_hidden": 0,
  "label": "Expenso",
  "links": [],
- "modified": "2026-07-19 21:00:00.000000",
+ "modified": "2026-07-19 21:05:00.000000",
  "modified_by": "Administrator",
  "module": "Expenso",
  "name": "Expenso",
@@ -48,6 +48,13 @@
  "roles": [],
  "sequence_id": 0.5,
  "shortcuts": [
+  {
+   "color": "Blue",
+   "doc_view": "",
+   "label": "Open Expenso App",
+   "type": "URL",
+   "url": "/expenso"
+  },
   {
    "doc_view": "",
    "label": "Family",

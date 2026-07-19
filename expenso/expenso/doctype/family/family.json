@@ -4,6 +4,8 @@
     "module": "Expenso",
     "engine": "InnoDB",
     "autoname": "hash",
+    "title_field": "family_name",
+    "show_title_field_in_link": 1,
     "fields": [
         {
             "fieldname": "family_name",
@@ -16,7 +18,9 @@
             "fieldtype": "Link",
             "label": "Currency",
             "options": "Currency",
-            "reqd": 1
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
         },
         {
             "fieldname": "members",
@@ -32,6 +36,33 @@
             "write": 1,
             "create": 1,
             "delete": 1
+        }
+    ],
+    "links": [
+        {
+            "group": "Setup",
+            "link_doctype": "Category",
+            "link_fieldname": "family"
+        },
+        {
+            "group": "Setup",
+            "link_doctype": "Source",
+            "link_fieldname": "family"
+        },
+        {
+            "group": "Transactions",
+            "link_doctype": "Expense",
+            "link_fieldname": "family"
+        },
+        {
+            "group": "Transactions",
+            "link_doctype": "Income",
+            "link_fieldname": "family"
+        },
+        {
+            "group": "Transactions",
+            "link_doctype": "Budget",
+            "link_fieldname": "family"
         }
     ]
 }

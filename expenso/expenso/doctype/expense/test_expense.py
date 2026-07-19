@@ -99,3 +99,11 @@ class TestExpenseIntegration(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 		self.assertEqual(doc.category, cat.name)
+
+	# I88
+	def test_list_view_shows_amount_date_category(self):
+		meta = frappe.get_meta("Expense")
+		in_list = {f.fieldname for f in meta.fields if f.in_list_view}
+		in_filter = {f.fieldname for f in meta.fields if f.in_standard_filter}
+		self.assertEqual(in_list, {"amount", "date", "category", "family"})
+		self.assertEqual(in_filter, {"date", "category", "family"})

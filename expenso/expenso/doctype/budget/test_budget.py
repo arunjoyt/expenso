@@ -160,3 +160,11 @@ class TestBudgetIntegration(FrappeTestCase):
 					"amount": -50,
 				}
 			).insert(ignore_permissions=True)
+
+	# I90
+	def test_list_view_shows_category_amount_family(self):
+		meta = frappe.get_meta("Budget")
+		in_list = {f.fieldname for f in meta.fields if f.in_list_view}
+		in_filter = {f.fieldname for f in meta.fields if f.in_standard_filter}
+		self.assertEqual(in_list, {"category", "amount", "family"})
+		self.assertEqual(in_filter, {"category", "family"})

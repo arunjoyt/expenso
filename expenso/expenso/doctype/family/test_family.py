@@ -122,3 +122,19 @@ class TestFamilyIntegration(FrappeTestCase):
 		family.family_name = "Renamed Test Family"
 		family.save(ignore_permissions=True)
 		self.assertEqual(frappe.db.count("Source", {"family": family.name}), 4)
+
+	# I87
+	def test_family_form_links_to_related_doctypes(self):
+		# Connections shown on the Family form (via meta.links, distinct from
+		# the Workspace's own links/Number Cards) — every doctype that has a
+		# "family" field should be reachable from here.
+		meta = frappe.get_meta("Family")
+		by_doctype = {link.link_doctype: link for link in meta.links}
+		self.assertCountEqual(by_doctype.keys(), ["Category", "Source", "Expense", "Income", "Budget"])
+		for link in by_doctype.values():
+			self.assertEqual(link.link_fieldname, "family")
+		self.assertEqual(by_doctype["Category"].group, "Setup")
+		self.assertEqual(by_doctype["Source"].group, "Setup")
+		self.assertEqual(by_doctype["Expense"].group, "Transactions")
+		self.assertEqual(by_doctype["Income"].group, "Transactions")
+		self.assertEqual(by_doctype["Budget"].group, "Transactions")

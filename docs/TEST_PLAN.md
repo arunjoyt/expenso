@@ -37,6 +37,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I3 | Create Family without `currency` | raises `MandatoryError` |
 | I4 | Create Family with two `FamilyMember` child rows | both rows present after fetch |
 | I5 | Add `FamilyMember` child row without `user` | raises `MandatoryError` |
+| I87 | Family form's Connections (`meta.links`) | links to Category, Source (group "Setup") and Expense, Income, Budget (group "Transactions"), each via the `family` field |
 
 *Category*
 
@@ -57,6 +58,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I13 | Create Expense without `date` | inserts; `date` equals today |
 | I14 | Create Expense without `category` | inserts (category is optional) |
 | I15 | Create Expense with valid `category` belonging to same Family | inserts successfully |
+| I88 | Expense list view fields/filters | `in_list_view`: `amount`, `date`, `category`, `family`; `in_standard_filter`: `date`, `category`, `family` |
 
 ---
 
@@ -226,7 +228,10 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | # | Test | Assertion |
 |---|------|-----------|
 | I48 | `Expenso` Workspace exists in the database | `frappe.db.exists("Workspace", "Expenso")` |
-| I49 | Workspace links | contains links to `Family`, `Category`, `Expense` (no link for `FamilyMember`, a child table) |
+| I49 | Workspace has no plain Workspace Link entries | `Workspace Link` rows for `Expenso` is empty — navigation is via the Number Cards (I50), not a redundant link list |
+| I50 | Workspace number cards | one `Count` Number Card per top-level DocType (`Families`, `Categories`, `Expenses`, `Income`, `Sources`, `Budgets`), each pointed at its matching `document_type`, clicking through to that DocType's list view |
+| I51 | `Family Members` Script Report resolves a User to their Family | System Manager-only; joining `tabFamily Member`/`tabFamily` returns the correct `family` and `family_name` for a known user with no filters applied at all (the exact call the report page makes on first load) — `Family Member` is a child table with no list view of its own, so this is the lookup path. Built as a Script Report rather than a plain SQL Query Report because the latter can't survive a missing filter key without crashing |
+| I52 | `Family Members` report filters by User and by Family | filtering by either narrows the result to just that user's row, and the two filters are linked to a workspace shortcut (Report type) for discoverability |
 
 ---
 
@@ -250,6 +255,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I48 | Create Source with `source_name` + `family` | inserts; `name` matches `SRC-\d+` |
 | I49 | Create Source without `source_name` | raises `MandatoryError` |
 | I50 | Create Source without `family` | raises `MandatoryError` |
+| I91 | Source shows its name wherever linked | `title_field` = `source_name`, `show_title_field_in_link` = 1 — otherwise Income's list view (and any Link field) shows the raw `SRC-\d+` name |
 
 *Income*
 
@@ -260,6 +266,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I53 | Create Income without `family` | raises `MandatoryError` |
 | I54 | Create Income without `date` | inserts; `date` equals today |
 | I55 | Create Income without `source` | inserts (source is optional) |
+| I89 | Income list view fields/filters | `in_list_view`: `amount`, `date`, `source`, `family`; `in_standard_filter`: `date`, `source`, `family` |
 
 *Lifecycle*
 
@@ -379,6 +386,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I76 | Create Budget without `family` | raises `MandatoryError` |
 | I77 | Create Budget with `amount = 0` | raises `ValidationError` |
 | I78 | Create Budget with `amount < 0` | raises `ValidationError` |
+| I90 | Budget list view fields/filters | `in_list_view`: `category`, `amount`, `family`; `in_standard_filter`: `category`, `family` |
 
 ---
 

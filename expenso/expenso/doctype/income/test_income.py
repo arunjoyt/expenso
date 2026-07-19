@@ -79,3 +79,11 @@ class TestIncomeIntegration(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 		self.assertIsNone(doc.source)
+
+	# I89
+	def test_list_view_shows_amount_date_source(self):
+		meta = frappe.get_meta("Income")
+		in_list = {f.fieldname for f in meta.fields if f.in_list_view}
+		in_filter = {f.fieldname for f in meta.fields if f.in_standard_filter}
+		self.assertEqual(in_list, {"amount", "date", "source", "family"})
+		self.assertEqual(in_filter, {"date", "source", "family"})

@@ -42,3 +42,11 @@ class TestSourceIntegration(FrappeTestCase):
 					"source_name": "Orphan",
 				}
 			).insert(ignore_permissions=True)
+
+	# I91
+	def test_source_shows_title_wherever_linked(self):
+		# Without this, any list/link column showing a Source (e.g. Income's
+		# list view) displays the raw "SRC-0001" name instead of "Salary".
+		meta = frappe.get_meta("Source")
+		self.assertEqual(meta.title_field, "source_name")
+		self.assertTrue(meta.show_title_field_in_link)

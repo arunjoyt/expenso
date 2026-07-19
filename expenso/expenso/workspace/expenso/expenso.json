@@ -1,8 +1,9 @@
 {
  "charts": [],
- "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Expenso</b></span>\",\"col\":12}},{\"type\":\"card\",\"data\":{\"card_name\":\"Expenso\",\"col\":4}}]",
+ "content": "[{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h4\\\"><b>Expenso</b></span>\",\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Overview</b></span>\",\"col\":12}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Families\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Categories\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Expenses\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Income\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Sources\",\"col\":4}},{\"type\":\"number_card\",\"data\":{\"number_card_name\":\"Budgets\",\"col\":4}},{\"type\":\"spacer\",\"data\":{\"col\":12}},{\"type\":\"header\",\"data\":{\"text\":\"<span class=\\\"h5\\\"><b>Reports</b></span>\",\"col\":12}},{\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Family Members\",\"col\":3}}]",
  "creation": "2026-07-18 11:16:03.715152",
  "custom_blocks": [],
+ "modified": "2026-07-19 18:00:00.000000",
  "docstatus": 0,
  "doctype": "Workspace",
  "hide_custom": 0,
@@ -11,52 +12,36 @@
  "indicator_color": "green",
  "is_hidden": 0,
  "label": "Expenso",
- "links": [
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Expenso",
-   "link_count": 3,
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Card Break"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Family",
-   "link_count": 0,
-   "link_to": "Family",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Category",
-   "link_count": 0,
-   "link_to": "Category",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  },
-  {
-   "hidden": 0,
-   "is_query_report": 0,
-   "label": "Expense",
-   "link_count": 0,
-   "link_to": "Expense",
-   "link_type": "DocType",
-   "onboard": 0,
-   "type": "Link"
-  }
- ],
- "modified": "2026-07-18 11:16:03.715152",
+ "links": [],
  "modified_by": "Administrator",
  "module": "Expenso",
  "name": "Expenso",
- "number_cards": [],
+ "number_cards": [
+  {
+   "label": "Families",
+   "number_card_name": "Families"
+  },
+  {
+   "label": "Categories",
+   "number_card_name": "Categories"
+  },
+  {
+   "label": "Expenses",
+   "number_card_name": "Expenses"
+  },
+  {
+   "label": "Income",
+   "number_card_name": "Income"
+  },
+  {
+   "label": "Sources",
+   "number_card_name": "Sources"
+  },
+  {
+   "label": "Budgets",
+   "number_card_name": "Budgets"
+  }
+ ],
  "owner": "Administrator",
  "public": 1,
  "quick_lists": [],
@@ -80,6 +65,32 @@
    "label": "Expense",
    "link_to": "Expense",
    "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Income",
+   "link_to": "Income",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Source",
+   "link_to": "Source",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "",
+   "label": "Budget",
+   "link_to": "Budget",
+   "type": "DocType"
+  },
+  {
+   "color": "Grey",
+   "doc_view": "List",
+   "label": "Family Members",
+   "link_to": "Family Members",
+   "report_ref_doctype": "Family",
+   "type": "Report"
   }
  ],
  "title": "Expenso"

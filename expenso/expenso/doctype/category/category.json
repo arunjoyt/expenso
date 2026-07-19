@@ -5,6 +5,8 @@
     "engine": "InnoDB",
     "autoname": "format:CAT-{####}",
     "naming_rule": "Expression",
+    "title_field": "category_name",
+    "show_title_field_in_link": 1,
     "fields": [
         {
             "fieldname": "category_name",
@@ -17,7 +19,9 @@
             "fieldtype": "Link",
             "label": "Family",
             "options": "Family",
-            "reqd": 1
+            "reqd": 1,
+            "in_list_view": 1,
+            "in_standard_filter": 1
         }
     ],
     "permissions": [

@@ -101,8 +101,17 @@
 			>
 		</form>
 
+		<button
+			type="button"
+			data-test="logout-button"
+			class="mx-auto mt-8 block w-fit rounded-full bg-white px-4 py-2 text-center text-sm font-semibold text-red-500 shadow-sm transition active:scale-95"
+			@click="logout"
+		>
+			🚪 Log out
+		</button>
+
 		<div
-			class="mx-auto mt-8 w-fit rounded-full bg-white px-3 py-1 text-center text-xs font-semibold text-gray-400 shadow-sm"
+			class="mx-auto mt-3 w-fit rounded-full bg-white px-3 py-1 text-center text-xs font-semibold text-gray-400 shadow-sm"
 			data-test="app-version"
 		>
 			v{{ appVersion }}
@@ -112,11 +121,15 @@
 
 <script setup>
 import { onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
 import { call, Input, Button } from "frappe-ui";
+import { session } from "@/data/session";
 import { addCategory, renameCategory } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
 import { setBudget, useBudgets } from "@/composables/useBudgets";
 import { getCategoryVisual } from "@/utils/categoryStyle";
+
+const router = useRouter();
 
 const { categories, reload: reloadCategories } = useBudgets();
 const { sources, reload: reloadSources } = useSources();
@@ -197,4 +210,9 @@ const appVersion = ref("");
 onMounted(async () => {
 	appVersion.value = await call("expenso.expenso.api.get_app_version");
 });
+
+async function logout() {
+	await session.logout();
+	await router.replace({ name: "Login" });
+}
 </script>

@@ -58,7 +58,9 @@ describe("RenameSheet", () => {
 	it("disables the save button when the input is cleared", async () => {
 		const wrapper = mountSheet();
 		await inputEl(wrapper).setValue("");
-		expect(wrapper.find('[data-test="rename-sheet-save-button"]').attributes("disabled")).toBeDefined();
+		expect(
+			wrapper.find('[data-test="rename-sheet-save-button"]').attributes("disabled")
+		).toBeDefined();
 	});
 
 	it("closes without saving when the backdrop is clicked", async () => {

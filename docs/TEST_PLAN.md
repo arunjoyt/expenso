@@ -216,7 +216,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 |---|------|-----------|
 | F24 | Settings lists all Categories for the Family | all names visible |
 | F25 | Add Category form | new Category appears in list after submit |
-| F26 | Rename inline edit | tapping name shows input; saving updates displayed name |
+| F26 | Rename via `RenameSheet` | tapping name opens sheet; submitting updates displayed name |
 | F27 | App version in footer | matches value from API |
 
 ---
@@ -355,7 +355,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 |---|------|-----------|
 | F38 | Settings shows Sources section | all Source names visible |
 | F39 | Add Source form | new Source appears in list after submit |
-| F40 | Rename Source inline edit | saving updates displayed name |
+| F40 | Rename Source via `RenameSheet` | tapping name opens sheet; submitting updates displayed name |
 
 ---
 
@@ -405,10 +405,24 @@ Complete unit and integration test plan across all three phases. Backend tests u
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F41 | Settings shows budget amount input next to each Category | inputs present |
-| F42 | Entering amount and saving | Budget persisted; input shows saved value |
-| F43 | Clearing amount and saving | Budget removed; input shows empty |
-| F44 | Category with existing Budget | input pre-filled with current amount |
+| F41 | Settings shows a budget button next to each Category | buttons present |
+| F42 | Tapping a Category's budget button | opens `BudgetSheet` for that Category |
+| F43 | `BudgetSheet` submit with an amount | Budget persisted via `setBudget`; sheet closes |
+| F44 | `BudgetSheet` for a Category with an existing Budget | amount input pre-filled with current amount |
+| F52 | Category with no Budget | budget button reads "Set Budget" |
+| F53 | Category with an existing Budget | budget button reads the formatted amount |
+| F54 | `BudgetSheet` closes (save or backdrop) | Settings reloads Categories |
+| F55 | `BudgetSheet` opened for a Category | sheet title includes the Category name |
+| F56 | `BudgetSheet` for a Category with no existing Budget | amount input starts empty |
+| F57 | `BudgetSheet` for a Category with no existing Budget | no "Remove Budget" button shown |
+| F58 | `BudgetSheet` "Remove Budget" clicked | Budget removed via `setBudget(category, null)`; sheet closes |
+| F59 | `BudgetSheet` backdrop clicked | sheet closes without calling `setBudget` |
+| F60 | `RenameSheet` mounted with a `title` prop | title shown in the sheet |
+| F61 | `RenameSheet` mounted with an `initialValue` | amount input pre-filled with that value |
+| F62 | `RenameSheet` submit with a changed value | `renameFn` called with the new value; sheet closes |
+| F63 | `RenameSheet` submit with an unchanged value | `renameFn` not called; sheet still closes |
+| F64 | `RenameSheet` input cleared | Save button disabled |
+| F65 | `RenameSheet` backdrop clicked | sheet closes without calling `renameFn` |
 
 ---
 
@@ -444,5 +458,5 @@ Complete unit and integration test plan across all three phases. Backend tests u
 |---|---|
 | Backend unit tests | 21 |
 | Backend integration tests | 87 |
-| Frontend unit tests | 51 |
-| **Total** | **159** |
+| Frontend unit tests | 65 |
+| **Total** | **173** |

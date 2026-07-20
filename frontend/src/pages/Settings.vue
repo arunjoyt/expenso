@@ -17,37 +17,43 @@
 					>
 						{{ getCategoryVisual(category.category_name).emoji }}
 					</span>
-					<Input
-						v-if="editingCategoryName === category.name"
-						data-test="rename-input"
-						type="text"
-						:model-value="editingCategoryValue"
-						@input="editingCategoryValue = $event"
-						@blur="saveCategoryRename(category)"
-						@keyup.enter="$event.target.blur()"
-					/>
 					<span
-						v-else
 						data-test="category-name"
 						class="cursor-pointer truncate font-medium"
-						@click="startCategoryRename(category)"
+						@click="renameCategoryTarget = category"
 					>
 						{{ category.category_name }}
 					</span>
 				</div>
 
-				<Input
-					data-test="budget-amount-input"
-					type="number"
-					placeholder="Budget"
-					inputClass="w-24"
-					:model-value="budgetValue(category)"
-					@input="budgetDrafts[category.name] = $event"
-					@blur="saveBudget(category)"
-					@keyup.enter="$event.target.blur()"
-				/>
+				<button
+					type="button"
+					data-test="budget-open-button"
+					class="shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition active:scale-95"
+					@click="budgetSheetCategory = category"
+				>
+					{{
+						category.budget_amount != null
+							? formatAmount(category.budget_amount)
+							: "Set Budget"
+					}}
+				</button>
 			</div>
 		</div>
+
+		<BudgetSheet
+			v-if="budgetSheetCategory"
+			:category="budgetSheetCategory"
+			@close="closeBudgetSheet"
+		/>
+
+		<RenameSheet
+			v-if="renameCategoryTarget"
+			title="✏️ Rename Category"
+			:initial-value="renameCategoryTarget.category_name"
+			:rename-fn="(newName) => renameCategory(renameCategoryTarget.name, newName)"
+			@close="closeCategoryRenameSheet"
+		/>
 
 		<form class="mb-8 flex gap-2" @submit.prevent="submitAddCategory">
 			<Input
@@ -69,25 +75,23 @@
 				data-test="source-row"
 				class="flex items-center rounded-2xl bg-white p-3 shadow-sm"
 			>
-				<Input
-					v-if="editingSourceName === source.name"
-					data-test="source-rename-input"
-					type="text"
-					:model-value="editingSourceValue"
-					@input="editingSourceValue = $event"
-					@blur="saveSourceRename(source)"
-					@keyup.enter="$event.target.blur()"
-				/>
 				<span
-					v-else
 					data-test="source-name"
 					class="cursor-pointer font-medium"
-					@click="startSourceRename(source)"
+					@click="renameSourceTarget = source"
 				>
 					💵 {{ source.source_name }}
 				</span>
 			</div>
 		</div>
+
+		<RenameSheet
+			v-if="renameSourceTarget"
+			title="✏️ Rename Source"
+			:initial-value="renameSourceTarget.source_name"
+			:rename-fn="(newName) => renameSource(renameSourceTarget.name, newName)"
+			@close="closeSourceRenameSheet"
+		/>
 
 		<form class="mt-4 flex gap-2" @submit.prevent="submitAddSource">
 			<Input
@@ -120,14 +124,16 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { call, Input, Button } from "frappe-ui";
 import { session } from "@/data/session";
 import { addCategory, renameCategory } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
-import { setBudget, useBudgets } from "@/composables/useBudgets";
+import { useBudgets } from "@/composables/useBudgets";
 import { getCategoryVisual } from "@/utils/categoryStyle";
+import BudgetSheet from "@/components/BudgetSheet.vue";
+import RenameSheet from "@/components/RenameSheet.vue";
 
 const router = useRouter();
 
@@ -143,37 +149,21 @@ async function submitAddCategory() {
 	await reloadCategories();
 }
 
-const editingCategoryName = ref(null);
-const editingCategoryValue = ref("");
+const renameCategoryTarget = ref(null);
 
-function startCategoryRename(category) {
-	editingCategoryName.value = category.name;
-	editingCategoryValue.value = category.category_name;
+async function closeCategoryRenameSheet() {
+	renameCategoryTarget.value = null;
+	await reloadCategories();
 }
 
-async function saveCategoryRename(category) {
-	if (editingCategoryName.value !== category.name) return;
-	editingCategoryName.value = null;
-
-	const newName = editingCategoryValue.value;
-	if (newName && newName !== category.category_name) {
-		await renameCategory(category.name, newName);
-		await reloadCategories();
-	}
+function formatAmount(amount) {
+	return new Intl.NumberFormat().format(amount);
 }
 
-const budgetDrafts = reactive({});
+const budgetSheetCategory = ref(null);
 
-function budgetValue(category) {
-	if (category.name in budgetDrafts) return budgetDrafts[category.name];
-	return category.budget_amount ?? "";
-}
-
-async function saveBudget(category) {
-	const raw = budgetValue(category);
-	const amount = raw === "" || raw === null ? null : Number(raw);
-	delete budgetDrafts[category.name];
-	await setBudget(category.name, amount);
+async function closeBudgetSheet() {
+	budgetSheetCategory.value = null;
 	await reloadCategories();
 }
 
@@ -186,23 +176,11 @@ async function submitAddSource() {
 	await reloadSources();
 }
 
-const editingSourceName = ref(null);
-const editingSourceValue = ref("");
+const renameSourceTarget = ref(null);
 
-function startSourceRename(source) {
-	editingSourceName.value = source.name;
-	editingSourceValue.value = source.source_name;
-}
-
-async function saveSourceRename(source) {
-	if (editingSourceName.value !== source.name) return;
-	editingSourceName.value = null;
-
-	const newName = editingSourceValue.value;
-	if (newName && newName !== source.source_name) {
-		await renameSource(source.name, newName);
-		await reloadSources();
-	}
+async function closeSourceRenameSheet() {
+	renameSourceTarget.value = null;
+	await reloadSources();
 }
 
 const appVersion = ref("");

@@ -91,7 +91,9 @@
 						>Budget {{ formatAmount(category.budget) }} · Balance
 						{{ formatAmount(category.budget - category.amount) }}</span
 					>
-					<span class="shrink-0 font-semibold text-gray-800">{{ budgetPercent(category) }}%</span>
+					<span class="shrink-0 font-semibold text-gray-800"
+						>{{ budgetPercent(category) }}%</span
+					>
 				</div>
 				<div v-else data-test="budget-summary-none" class="mt-1.5 text-xs text-gray-400">
 					No budget set

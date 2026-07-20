@@ -137,6 +137,7 @@ def _attach_budget_status(categories, expenses, family):
 	for category in categories:
 		category_id = category_id_by_label.get(category["name"])
 		budget_amount = budget_amount_by_category_id.get(category_id) if category_id else None
+		category["budget"] = budget_amount
 		category["budget_status"] = (
 			compute_budget_status(spent_by_category_id.get(category_id, 0), budget_amount)
 			if category_id

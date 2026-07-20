@@ -1,4 +1,3 @@
-import datetime
 import unittest
 
 import frappe
@@ -67,7 +66,7 @@ class TestIncomeIntegration(FrappeTestCase):
 				"family": self.family.name,
 			}
 		).insert(ignore_permissions=True)
-		self.assertEqual(str(doc.date), str(datetime.date.today()))
+		self.assertEqual(str(doc.date), frappe.utils.today())
 
 	# I55
 	def test_create_income_without_source_succeeds(self):

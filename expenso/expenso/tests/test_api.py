@@ -318,8 +318,8 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		self.assertEqual(
 			result["categories"],
 			[
-				{"name": "Groceries", "amount": 30.0, "budget_status": None},
-				{"name": "Uncategorized", "amount": 20.0, "budget_status": None},
+				{"name": "Groceries", "amount": 30.0, "budget": None, "budget_status": None},
+				{"name": "Uncategorized", "amount": 20.0, "budget": None, "budget_status": None},
 			],
 		)
 
@@ -379,7 +379,8 @@ class TestGetAnalyticsApi(FrappeTestCase):
 
 		self.assertEqual(result["total"], 15.0)
 		self.assertEqual(
-			result["categories"], [{"name": "Uncategorized", "amount": 15.0, "budget_status": None}]
+			result["categories"],
+			[{"name": "Uncategorized", "amount": 15.0, "budget": None, "budget_status": None}],
 		)
 
 	# I61 / I62
@@ -449,7 +450,9 @@ class TestGetAnalyticsApi(FrappeTestCase):
 
 		frappe.set_user(self.member)
 		result = get_analytics(month=6, year=2025)
-		self.assertEqual(self._category_row(result, "Groceries")["budget_status"], "Normal")
+		row = self._category_row(result, "Groceries")
+		self.assertEqual(row["budget_status"], "Normal")
+		self.assertEqual(row["budget"], 100.0)
 
 	# I84
 	def test_budget_status_warning_when_spent_at_least_eighty_percent(self):

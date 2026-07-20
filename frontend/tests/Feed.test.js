@@ -5,6 +5,7 @@ import { createPinia, setActivePinia } from "pinia";
 import { createAppRouter } from "@/router";
 import { useMonthStore } from "@/stores/month";
 import Feed from "@/pages/Feed.vue";
+import ExpenseSheet from "@/components/ExpenseSheet.vue";
 
 vi.mock("@/composables/useExpenses", () => ({
 	useExpenses: vi.fn(),
@@ -31,11 +32,13 @@ import { useExpenses } from "@/composables/useExpenses";
 import { useFamily } from "@/composables/useFamily";
 
 function mockExpenses(expenses, loading = false) {
+	const reload = vi.fn();
 	useExpenses.mockReturnValue({
 		expenses: ref(expenses),
 		loading: ref(loading),
-		reload: vi.fn(),
+		reload,
 	});
+	return reload;
 }
 
 function mountFeed() {
@@ -142,5 +145,18 @@ describe("Feed page", () => {
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
 		expect(wrapper.text()).toContain("Edit Expense");
 		expect(wrapper.find('[data-test="amount-input"]').element.value).toBe("10");
+	});
+
+	// F16
+	it("reloads the Expense list once the ExpenseSheet closes after a save", async () => {
+		const reload = mockExpenses([]);
+		const wrapper = mountFeed();
+		await wrapper.find('[data-test="fab"]').trigger("click");
+		reload.mockClear();
+
+		await wrapper.findComponent(ExpenseSheet).vm.$emit("close");
+
+		expect(reload).toHaveBeenCalled();
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
 	});
 });

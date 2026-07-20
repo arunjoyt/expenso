@@ -6,6 +6,7 @@ import { FrappeUI, setConfig, frappeRequest } from "frappe-ui";
 
 import App from "./App.vue";
 import router from "./router";
+import { session } from "./data/session";
 
 setConfig("resourceFetcher", frappeRequest);
 
@@ -15,4 +16,4 @@ app.use(FrappeUI, { socketio: false });
 app.use(createPinia());
 app.use(router);
 
-app.mount("#app");
+session.restore().then(() => app.mount("#app"));

@@ -40,6 +40,13 @@
 					v-model="source"
 					:options="sourceOptions"
 				/>
+				<Input
+					data-test="income-notes-input"
+					label="Notes"
+					type="textarea"
+					:model-value="notes"
+					@input="notes = $event"
+				/>
 
 				<ErrorMessage :message="errorMessage" />
 
@@ -114,6 +121,7 @@ function today() {
 const amount = ref(props.income?.amount ?? "");
 const date = ref(props.income?.date ?? today());
 const source = ref(props.income?.source ?? "");
+const notes = ref(props.income?.notes ?? "");
 
 const { sources } = useSources();
 const sourceOptions = computed(() => [
@@ -137,6 +145,7 @@ async function submit() {
 			amount: Number(amount.value),
 			date: date.value,
 			source: source.value || null,
+			notes: notes.value || null,
 		};
 		if (isEdit.value) {
 			await updateIncome({ name: props.income.name, ...payload });

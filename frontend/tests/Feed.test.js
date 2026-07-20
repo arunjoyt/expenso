@@ -135,6 +135,23 @@ describe("Feed page", () => {
 		expect(wrapper.text()).toContain("Add Expense");
 	});
 
+	it("shows a notes preview under the category when present", () => {
+		mockExpenses([
+			{
+				name: "EXP-1",
+				amount: 10,
+				date: "2025-06-15",
+				category_name: "Groceries",
+				notes: "Weekly shop",
+			},
+			{ name: "EXP-2", amount: 20, date: "2025-06-12", category_name: "Dining" },
+		]);
+		const wrapper = mountFeed();
+		const notes = wrapper.findAll('[data-test="expense-notes"]');
+		expect(notes.length).toBe(1);
+		expect(notes[0].text()).toBe("Weekly shop");
+	});
+
 	// F17
 	it("opens the ExpenseSheet in edit mode with fields pre-filled on row tap", async () => {
 		mockExpenses([

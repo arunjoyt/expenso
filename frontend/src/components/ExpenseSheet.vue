@@ -40,6 +40,13 @@
 					v-model="category"
 					:options="categoryOptions"
 				/>
+				<Input
+					data-test="notes-input"
+					label="Notes"
+					type="textarea"
+					:model-value="notes"
+					@input="notes = $event"
+				/>
 
 				<ErrorMessage :message="errorMessage" />
 
@@ -115,6 +122,7 @@ function today() {
 const amount = ref(props.expense?.amount ?? "");
 const date = ref(props.expense?.date ?? today());
 const category = ref(props.expense?.category ?? "");
+const notes = ref(props.expense?.notes ?? "");
 
 const { categories } = useCategories();
 const categoryOptions = computed(() => [
@@ -141,6 +149,7 @@ async function submit() {
 			amount: Number(amount.value),
 			date: date.value,
 			category: category.value || null,
+			notes: notes.value || null,
 		};
 		if (isEdit.value) {
 			await updateExpense({ name: props.expense.name, ...payload });

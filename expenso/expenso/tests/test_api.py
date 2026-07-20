@@ -70,6 +70,16 @@ class TestGetExpenses(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 
+		self.expense_with_notes = frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 20.0,
+				"date": "2025-06-05",
+				"family": self.family.name,
+				"notes": "Dinner with the Smiths",
+			}
+		).insert(ignore_permissions=True)
+
 	def tearDown(self):
 		frappe.set_user("Administrator")
 
@@ -108,6 +118,12 @@ class TestGetExpenses(FrappeTestCase):
 		result = get_expenses(month=6, year=2025)
 		dates = [str(r.date) for r in result]
 		self.assertEqual(dates, sorted(dates, reverse=True))
+
+	def test_get_expenses_includes_notes(self):
+		frappe.set_user(self.member)
+		result = get_expenses(month=6, year=2025)
+		row = next(r for r in result if r.name == self.expense_with_notes.name)
+		self.assertEqual(row.notes, "Dinner with the Smiths")
 
 
 class TestExpenseCrudApi(FrappeTestCase):
@@ -173,6 +189,18 @@ class TestExpenseCrudApi(FrappeTestCase):
 		updated = update_expense(name=doc.name, amount=99.0)
 		self.assertEqual(updated.amount, 99.0)
 		self.assertEqual(frappe.db.get_value("Expense", doc.name, "amount"), 99.0)
+
+	def test_create_expense_persists_notes(self):
+		frappe.set_user(self.member_a)
+		doc = create_expense(amount=25.0, notes="Dinner with the Smiths")
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "notes"), "Dinner with the Smiths")
+
+	def test_update_expense_persists_changed_notes(self):
+		frappe.set_user(self.member_a)
+		doc = create_expense(amount=25.0, notes="Original note")
+		updated = update_expense(name=doc.name, notes="Updated note")
+		self.assertEqual(updated.notes, "Updated note")
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "notes"), "Updated note")
 
 	# I34
 	def test_delete_expense_removes_from_db(self):
@@ -652,6 +680,18 @@ class TestIncomeCrudApi(FrappeTestCase):
 		updated = update_income(name=doc.name, amount=300.0)
 		self.assertEqual(updated.amount, 300.0)
 		self.assertEqual(frappe.db.get_value("Income", doc.name, "amount"), 300.0)
+
+	def test_create_income_persists_notes(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0, notes="Year-end bonus")
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "notes"), "Year-end bonus")
+
+	def test_update_income_persists_changed_notes(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0, notes="Original note")
+		updated = update_income(name=doc.name, notes="Updated note")
+		self.assertEqual(updated.notes, "Updated note")
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "notes"), "Updated note")
 
 	# I66
 	def test_delete_income_removes_from_db(self):

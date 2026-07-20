@@ -53,6 +53,7 @@ Browser (PWA)
 | `amount` | Float | required |
 | `date` | Date | defaults to today |
 | `category` | Link → Category | optional; `get_query` scopes to Family |
+| `notes` | Small Text | optional; free text on what the Expense was for |
 | `family` | Link → Family | required |
 
 No `split_among` — there is no split or debt tracking.
@@ -79,6 +80,7 @@ Amounts displayed via `Intl.NumberFormat` with the Family's currency code.
 | `amount` | Float | required |
 | `date` | Date | defaults to today |
 | `source` | Link → Source | optional; `get_query` scopes to Family |
+| `notes` | Small Text | optional; free text on what the Income was for |
 | `family` | Link → Family | required |
 
 #### `Source`

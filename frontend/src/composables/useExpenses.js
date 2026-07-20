@@ -37,12 +37,12 @@ export function useExpenses(monthStore) {
 	return { expenses, loading, reload };
 }
 
-export async function createExpense({ amount, date, category }) {
-	return call("expenso.expenso.api.create_expense", { amount, date, category });
+export async function createExpense({ amount, date, category, notes }) {
+	return call("expenso.expenso.api.create_expense", { amount, date, category, notes });
 }
 
-export async function updateExpense({ name, amount, date, category }) {
-	return call("expenso.expenso.api.update_expense", { name, amount, date, category });
+export async function updateExpense({ name, amount, date, category, notes }) {
+	return call("expenso.expenso.api.update_expense", { name, amount, date, category, notes });
 }
 
 export async function deleteExpense(name) {

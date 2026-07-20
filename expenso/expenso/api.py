@@ -24,7 +24,14 @@ def get_expenses(month: int, year: int):
 			"family": family,
 			"date": ["between", [period_start, period_end]],
 		},
-		fields=["name", "amount", "date", "category", "category.category_name as category_name"],
+		fields=[
+			"name",
+			"amount",
+			"date",
+			"category",
+			"category.category_name as category_name",
+			"notes",
+		],
 		order_by="date desc, `tabExpense`.creation desc",
 	)
 
@@ -40,7 +47,12 @@ def _publish_expense_event(event: str, family: str, expense_name: str):
 
 
 @frappe.whitelist()
-def create_expense(amount: float, date: str | None = None, category: str | None = None):
+def create_expense(
+	amount: float,
+	date: str | None = None,
+	category: str | None = None,
+	notes: str | None = None,
+):
 	family = get_user_family(frappe.session.user)
 	if not family:
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
@@ -51,6 +63,7 @@ def create_expense(amount: float, date: str | None = None, category: str | None 
 			"amount": amount,
 			"date": date,
 			"category": category,
+			"notes": notes,
 			"family": family,
 		}
 	).insert(ignore_permissions=True)
@@ -61,7 +74,11 @@ def create_expense(amount: float, date: str | None = None, category: str | None 
 
 @frappe.whitelist()
 def update_expense(
-	name: str, amount: float | None = None, date: str | None = None, category: str | None = None
+	name: str,
+	amount: float | None = None,
+	date: str | None = None,
+	category: str | None = None,
+	notes: str | None = None,
 ):
 	doc = frappe.get_doc("Expense", name)
 	doc.check_permission("write")
@@ -71,6 +88,7 @@ def update_expense(
 	if date is not None:
 		doc.date = date
 	doc.category = category
+	doc.notes = notes
 
 	doc.save(ignore_permissions=True)
 
@@ -217,7 +235,12 @@ def get_family_name():
 
 
 @frappe.whitelist()
-def create_income(amount: float, date: str | None = None, source: str | None = None):
+def create_income(
+	amount: float,
+	date: str | None = None,
+	source: str | None = None,
+	notes: str | None = None,
+):
 	family = get_user_family(frappe.session.user)
 	if not family:
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
@@ -228,13 +251,20 @@ def create_income(amount: float, date: str | None = None, source: str | None = N
 			"amount": amount,
 			"date": date,
 			"source": source,
+			"notes": notes,
 			"family": family,
 		}
 	).insert(ignore_permissions=True)
 
 
 @frappe.whitelist()
-def update_income(name: str, amount: float | None = None, date: str | None = None, source: str | None = None):
+def update_income(
+	name: str,
+	amount: float | None = None,
+	date: str | None = None,
+	source: str | None = None,
+	notes: str | None = None,
+):
 	doc = frappe.get_doc("Income", name)
 	doc.check_permission("write")
 
@@ -243,6 +273,7 @@ def update_income(name: str, amount: float | None = None, date: str | None = Non
 	if date is not None:
 		doc.date = date
 	doc.source = source
+	doc.notes = notes
 
 	doc.save(ignore_permissions=True)
 	return doc

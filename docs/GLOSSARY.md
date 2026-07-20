@@ -20,8 +20,11 @@ _Avoid_: Group, household, account
 
 ## Expenses
 
-**Expense**: A single spending record entered by a Member. `amount` and `date` are required (`date` defaults to today). `category` is optional. The app is a shared ledger: both Members can see all Expenses in their Family.
+**Expense**: A single spending record entered by a Member. `amount` and `date` are required (`date` defaults to today). `category` and `notes` are optional. The app is a shared ledger: both Members can see all Expenses in their Family.
 _Avoid_: Transaction, entry, payment
+
+**Notes**: An optional free-text field on an Expense or Income capturing what it was specifically for, beyond its Category/Source (e.g. "Dinner with the Smiths"). Shown as a preview line under the Category on the Feed.
+_Avoid_: Description, memo, comment
 
 ---
 
@@ -43,7 +46,7 @@ _Avoid_: Profile, preferences, configuration
 
 ## Income
 
-**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` is optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income does not appear on the Feed; it is recorded and reviewed from the Analytics screen.
+**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` and `notes` are optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income does not appear on the Feed; it is recorded and reviewed from the Analytics screen.
 _Avoid_: Revenue, credit, earning
 
 **Source**: A Member-defined label that classifies an Income record (e.g. Salary, Freelance, Rental). Sources belong to a Family — each Family manages its own list. Any Member may add or rename Sources; Sources cannot be deleted.

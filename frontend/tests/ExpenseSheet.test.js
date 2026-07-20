@@ -55,20 +55,41 @@ describe("ExpenseSheet", () => {
 		await flushPromises();
 
 		expect(createExpense).toHaveBeenCalledWith(
-			expect.objectContaining({ amount: 25, category: null })
+			expect.objectContaining({ amount: 25, category: null, notes: null })
 		);
 		expect(wrapper.emitted("close")).toBeTruthy();
+	});
+
+	it("submits an add with notes", async () => {
+		const wrapper = mount(ExpenseSheet);
+		await amountInput(wrapper).setValue("25");
+		await wrapper.find('[data-test="notes-input"]').setValue("Dinner with the Smiths");
+		await wrapper.find("form").trigger("submit.prevent");
+		await flushPromises();
+
+		expect(createExpense).toHaveBeenCalledWith(
+			expect.objectContaining({ amount: 25, notes: "Dinner with the Smiths" })
+		);
 	});
 
 	// F17
 	it("pre-fills fields in edit mode", () => {
 		const wrapper = mount(ExpenseSheet, {
 			props: {
-				expense: { name: "EXP-1", amount: 40, date: "2025-06-10", category: "CAT-1" },
+				expense: {
+					name: "EXP-1",
+					amount: 40,
+					date: "2025-06-10",
+					category: "CAT-1",
+					notes: "Dinner with the Smiths",
+				},
 			},
 		});
 		expect(amountInput(wrapper).element.value).toBe("40");
 		expect(wrapper.find('[data-test="date-input"]').element.value).toBe("2025-06-10");
+		expect(wrapper.find('[data-test="notes-input"]').element.value).toBe(
+			"Dinner with the Smiths"
+		);
 		expect(wrapper.text()).toContain("Edit Expense");
 	});
 

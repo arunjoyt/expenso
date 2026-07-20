@@ -59,18 +59,39 @@ describe("IncomeSheet", () => {
 		await flushPromises();
 
 		expect(createIncome).toHaveBeenCalledWith(
-			expect.objectContaining({ amount: 100, source: null })
+			expect.objectContaining({ amount: 100, source: null, notes: null })
 		);
 		expect(wrapper.emitted("close")).toBeTruthy();
+	});
+
+	it("submits an add with notes", async () => {
+		const wrapper = mount(IncomeSheet);
+		await amountInput(wrapper).setValue("100");
+		await wrapper.find('[data-test="income-notes-input"]').setValue("Year-end bonus");
+		await wrapper.find("form").trigger("submit.prevent");
+		await flushPromises();
+
+		expect(createIncome).toHaveBeenCalledWith(
+			expect.objectContaining({ amount: 100, notes: "Year-end bonus" })
+		);
 	});
 
 	it("pre-fills fields in edit mode and submits an update", async () => {
 		const wrapper = mount(IncomeSheet, {
 			props: {
-				income: { name: "INC-1", amount: 200, date: "2025-06-10", source: "SRC-1" },
+				income: {
+					name: "INC-1",
+					amount: 200,
+					date: "2025-06-10",
+					source: "SRC-1",
+					notes: "Year-end bonus",
+				},
 			},
 		});
 		expect(amountInput(wrapper).element.value).toBe("200");
+		expect(wrapper.find('[data-test="income-notes-input"]').element.value).toBe(
+			"Year-end bonus"
+		);
 		expect(wrapper.text()).toContain("Edit Income");
 
 		await amountInput(wrapper).setValue("250");

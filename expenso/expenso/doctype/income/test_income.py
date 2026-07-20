@@ -87,3 +87,24 @@ class TestIncomeIntegration(FrappeTestCase):
 		in_filter = {f.fieldname for f in meta.fields if f.in_standard_filter}
 		self.assertEqual(in_list, {"amount", "date", "source", "family"})
 		self.assertEqual(in_filter, {"date", "source", "family"})
+
+	def test_create_income_without_notes_succeeds(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 75.0,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+		self.assertIsNone(doc.notes)
+
+	def test_create_income_with_notes(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 75.0,
+				"family": self.family.name,
+				"notes": "Year-end bonus",
+			}
+		).insert(ignore_permissions=True)
+		self.assertEqual(doc.notes, "Year-end bonus")

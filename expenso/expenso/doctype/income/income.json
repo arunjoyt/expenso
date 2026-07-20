@@ -29,6 +29,11 @@
             "in_standard_filter": 1
         },
         {
+            "fieldname": "notes",
+            "fieldtype": "Small Text",
+            "label": "Notes"
+        },
+        {
             "fieldname": "family",
             "fieldtype": "Link",
             "label": "Family",

@@ -69,9 +69,18 @@
 						>
 							{{ getCategoryVisual(expense.category_name).emoji }}
 						</span>
-						<span class="flex-1 font-medium text-gray-800">{{
-							expense.category_name || "Uncategorized"
-						}}</span>
+						<span class="flex min-w-0 flex-1 flex-col">
+							<span class="font-medium text-gray-800">{{
+								expense.category_name || "Uncategorized"
+							}}</span>
+							<span
+								v-if="expense.notes"
+								data-test="expense-notes"
+								class="truncate text-sm text-gray-400"
+							>
+								{{ expense.notes }}
+							</span>
+						</span>
 						<span class="font-bold text-gray-900">{{
 							formatAmount(expense.amount)
 						}}</span>

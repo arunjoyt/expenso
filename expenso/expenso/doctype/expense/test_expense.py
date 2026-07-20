@@ -107,3 +107,24 @@ class TestExpenseIntegration(FrappeTestCase):
 		in_filter = {f.fieldname for f in meta.fields if f.in_standard_filter}
 		self.assertEqual(in_list, {"amount", "date", "category", "family"})
 		self.assertEqual(in_filter, {"date", "category", "family"})
+
+	def test_create_expense_without_notes_succeeds(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 25.0,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+		self.assertIsNone(doc.notes)
+
+	def test_create_expense_with_notes(self):
+		doc = frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 25.0,
+				"family": self.family.name,
+				"notes": "Dinner with the Smiths",
+			}
+		).insert(ignore_permissions=True)
+		self.assertEqual(doc.notes, "Dinner with the Smiths")

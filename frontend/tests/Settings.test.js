@@ -86,7 +86,7 @@ describe("Settings page", () => {
 	});
 
 	// F26
-	it("shows an input on tapping a Category name and saves the rename on blur", async () => {
+	it("opens a RenameSheet on tapping a Category name and saves the rename on submit", async () => {
 		const categoriesRef = ref([{ name: "CAT-1", category_name: "Groceries" }]);
 		const reload = vi.fn(() => {
 			categoriesRef.value = [{ name: "CAT-1", category_name: "Groceries & Household" }];
@@ -94,14 +94,14 @@ describe("Settings page", () => {
 		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
 
 		const wrapper = mount(Settings);
-		expect(wrapper.find('[data-test="rename-input"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="rename-sheet"]').exists()).toBe(false);
 
 		await wrapper.find('[data-test="category-name"]').trigger("click");
-		expect(wrapper.find('[data-test="rename-input"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="rename-sheet"]').exists()).toBe(true);
 
-		const input = wrapper.find('[data-test="rename-input"]');
+		const input = wrapper.find('[data-test="rename-sheet-input"]');
 		await input.setValue("Groceries & Household");
-		await input.trigger("blur");
+		await wrapper.find('[data-test="rename-sheet"] form').trigger("submit.prevent");
 		await flushPromises();
 
 		expect(renameCategory).toHaveBeenCalledWith("CAT-1", "Groceries & Household");
@@ -148,7 +148,7 @@ describe("Settings page", () => {
 	});
 
 	// F40
-	it("shows an input on tapping a Source name and saves the rename on blur", async () => {
+	it("opens a RenameSheet on tapping a Source name and saves the rename on submit", async () => {
 		mockCategories([]);
 		const sourcesRef = ref([{ name: "SRC-1", source_name: "Salary" }]);
 		const reload = vi.fn(() => {
@@ -157,14 +157,14 @@ describe("Settings page", () => {
 		useSources.mockReturnValue({ sources: sourcesRef, loading: ref(false), reload });
 
 		const wrapper = mount(Settings);
-		expect(wrapper.find('[data-test="source-rename-input"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="rename-sheet"]').exists()).toBe(false);
 
 		await wrapper.find('[data-test="source-name"]').trigger("click");
-		expect(wrapper.find('[data-test="source-rename-input"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="rename-sheet"]').exists()).toBe(true);
 
-		const input = wrapper.find('[data-test="source-rename-input"]');
+		const input = wrapper.find('[data-test="rename-sheet-input"]');
 		await input.setValue("Monthly Salary");
-		await input.trigger("blur");
+		await wrapper.find('[data-test="rename-sheet"] form').trigger("submit.prevent");
 		await flushPromises();
 
 		expect(renameSource).toHaveBeenCalledWith("SRC-1", "Monthly Salary");
@@ -172,64 +172,55 @@ describe("Settings page", () => {
 	});
 
 	// F41
-	it("shows a budget amount input next to each Category", () => {
+	it("shows a budget button next to each Category", () => {
 		mockCategories([
 			{ name: "CAT-1", category_name: "Groceries", budget_amount: null },
 			{ name: "CAT-2", category_name: "Dining", budget_amount: null },
 		]);
 		const wrapper = mount(Settings);
-		expect(wrapper.findAll('[data-test="budget-amount-input"]')).toHaveLength(2);
+		expect(wrapper.findAll('[data-test="budget-open-button"]')).toHaveLength(2);
+	});
+
+	// F52
+	it('shows "Set Budget" on the button when the Category has no Budget', () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: null }]);
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="budget-open-button"]').text()).toBe("Set Budget");
+	});
+
+	// F53
+	it("shows the Budget amount on the button when the Category has a Budget", () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 }]);
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="budget-open-button"]').text()).toBe(
+			new Intl.NumberFormat().format(500)
+		);
 	});
 
 	// F42
-	it("persists the budget amount on save and reflects it in the input", async () => {
-		const categoriesRef = ref([
-			{ name: "CAT-1", category_name: "Groceries", budget_amount: null },
-		]);
-		const reload = vi.fn(() => {
-			categoriesRef.value = [
-				{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 },
-			];
-		});
-		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
-
+	it("opens the BudgetSheet for a Category when its budget button is clicked", async () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: null }]);
 		const wrapper = mount(Settings);
-		const input = wrapper.find('[data-test="budget-amount-input"]');
-		await input.setValue("500");
-		await input.trigger("blur");
-		await flushPromises();
+		expect(wrapper.find('[data-test="budget-sheet"]').exists()).toBe(false);
 
-		expect(setBudget).toHaveBeenCalledWith("CAT-1", 500);
-		expect(wrapper.find('[data-test="budget-amount-input"]').element.value).toBe("500");
+		await wrapper.find('[data-test="budget-open-button"]').trigger("click");
+		expect(wrapper.find('[data-test="budget-sheet"]').exists()).toBe(true);
 	});
 
-	// F43
-	it("removes the budget when the amount is cleared and saved", async () => {
-		const categoriesRef = ref([
-			{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 },
-		]);
-		const reload = vi.fn(() => {
-			categoriesRef.value = [
-				{ name: "CAT-1", category_name: "Groceries", budget_amount: null },
-			];
-		});
-		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
-
+	// F54
+	it("reloads Categories after the BudgetSheet closes", async () => {
+		const reload = vi.fn();
+		mockCategories(
+			[{ name: "CAT-1", category_name: "Groceries", budget_amount: null }],
+			reload
+		);
 		const wrapper = mount(Settings);
-		const input = wrapper.find('[data-test="budget-amount-input"]');
-		await input.setValue("");
-		await input.trigger("blur");
-		await flushPromises();
 
-		expect(setBudget).toHaveBeenCalledWith("CAT-1", null);
-		expect(wrapper.find('[data-test="budget-amount-input"]').element.value).toBe("");
-	});
+		await wrapper.find('[data-test="budget-open-button"]').trigger("click");
+		await wrapper.find('[data-test="budget-sheet-backdrop"]').trigger("click");
 
-	// F44
-	it("pre-fills the budget input with the existing amount", () => {
-		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 }]);
-		const wrapper = mount(Settings);
-		expect(wrapper.find('[data-test="budget-amount-input"]').element.value).toBe("500");
+		expect(wrapper.find('[data-test="budget-sheet"]').exists()).toBe(false);
+		expect(reload).toHaveBeenCalled();
 	});
 
 	it("logs out and navigates to Login when Log out is clicked", async () => {

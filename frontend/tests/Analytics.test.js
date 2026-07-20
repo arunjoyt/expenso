@@ -153,4 +153,47 @@ describe("Analytics page", () => {
 		expect(wrapper.find('[data-test="budget-status-warning"]').exists()).toBe(false);
 		expect(wrapper.find('[data-test="budget-status-exceeded"]').exists()).toBe(false);
 	});
+
+	// F49
+	it("sizes the progress bar as percent-of-budget, not relative to the top spender", () => {
+		mockAnalytics(34.48, [
+			{ name: "Groceries", amount: 24.48, budget: 240 },
+			{ name: "Utilities", amount: 10, budget: null },
+		]);
+		const wrapper = mount(Analytics);
+		const fills = wrapper.findAll('[data-test="budget-bar-fill"]');
+		const groceriesWidth = parseFloat(
+			fills[0].attributes("style").match(/width:\s*([\d.]+)%/)[1]
+		);
+		expect(groceriesWidth).toBeCloseTo((24.48 / 240) * 100, 5);
+	});
+
+	// F50
+	it("shows the budget, balance, and percent-used for a category with a budget", () => {
+		mockAnalytics(24.48, [{ name: "Groceries", amount: 24.48, budget: 240 }]);
+		const wrapper = mount(Analytics);
+		const summary = wrapper.find('[data-test="budget-summary"]');
+		expect(summary.text()).toContain(new Intl.NumberFormat().format(240));
+		expect(summary.text()).toContain(new Intl.NumberFormat().format(240 - 24.48));
+		expect(summary.text()).toContain("10%");
+	});
+
+	// F51
+	it("falls back to relative-to-max-spend sizing and shows no budget set when Category has no Budget", () => {
+		mockAnalytics(34.48, [
+			{ name: "Groceries", amount: 24.48, budget: null },
+			{ name: "Utilities", amount: 10, budget: null },
+		]);
+		const wrapper = mount(Analytics);
+		const fills = wrapper.findAll('[data-test="budget-bar-fill"]');
+		const groceriesWidth = parseFloat(
+			fills[0].attributes("style").match(/width:\s*([\d.]+)%/)[1]
+		);
+		const utilitiesWidth = parseFloat(
+			fills[1].attributes("style").match(/width:\s*([\d.]+)%/)[1]
+		);
+		expect(groceriesWidth).toBe(100);
+		expect(utilitiesWidth).toBeCloseTo((10 / 24.48) * 100, 5);
+		expect(wrapper.findAll('[data-test="budget-summary-none"]')).toHaveLength(2);
+	});
 });

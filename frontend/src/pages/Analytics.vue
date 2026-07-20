@@ -77,10 +77,24 @@
 				</div>
 				<div class="h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
 					<div
-						class="h-full rounded-full transition-all duration-500"
-						:class="getCategoryVisual(category.name).ring"
+						data-test="budget-bar-fill"
+						class="h-full rounded-full bg-accent-500 transition-all duration-500"
 						:style="{ width: barWidth(category) + '%' }"
 					></div>
+				</div>
+				<div
+					v-if="category.budget"
+					data-test="budget-summary"
+					class="mt-1.5 flex items-center justify-between gap-2 text-xs text-gray-600"
+				>
+					<span
+						>Budget {{ formatAmount(category.budget) }} · Balance
+						{{ formatAmount(category.budget - category.amount) }}</span
+					>
+					<span class="shrink-0 font-semibold text-gray-800">{{ budgetPercent(category) }}%</span>
+				</div>
+				<div v-else data-test="budget-summary-none" class="mt-1.5 text-xs text-gray-400">
+					No budget set
 				</div>
 			</div>
 		</div>
@@ -119,7 +133,14 @@ const maxCategoryAmount = computed(() =>
 );
 
 function barWidth(category) {
+	if (category.budget) {
+		return Math.min(100, (category.amount / category.budget) * 100);
+	}
 	if (!maxCategoryAmount.value) return 0;
 	return Math.min(100, (category.amount / maxCategoryAmount.value) * 100);
+}
+
+function budgetPercent(category) {
+	return Math.round((category.amount / category.budget) * 100);
 }
 </script>

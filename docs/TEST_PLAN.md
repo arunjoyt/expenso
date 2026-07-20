@@ -183,7 +183,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I39 | `get_analytics(family, month, year)` | returns `{ total, categories: [{ name, amount }] }` |
+| I39 | `get_analytics(family, month, year)` | returns `{ total, categories: [{ name, amount, budget, budget_status }] }` |
 | I40 | `total` value | equals sum of all Expenses for the month |
 | I41 | Category list ordering | sorted by `amount` descending |
 | I42 | No Expenses for month | returns `{ total: 0, categories: [] }` |
@@ -422,6 +422,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I84 | `get_analytics` with Budget set and spent ≥ 80% | `budget_status: "Warning"` |
 | I85 | `get_analytics` with Budget set and spent ≥ 100% | `budget_status: "Exceeded"` |
 | I86 | `get_analytics` for Category with no Budget | `budget_status: null` |
+| I87 | `get_analytics` with Budget set | category row includes `budget: <amount>` |
 
 **Frontend unit tests**
 
@@ -431,6 +432,9 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | F46 | Category row with `budget_status: "Warning"` | yellow indicator present |
 | F47 | Category row with `budget_status: "Exceeded"` | red indicator present |
 | F48 | Category row with `budget_status: "Normal"` | no threshold indicator |
+| F49 | Category row with `budget: 240, amount: 24.48` | progress bar width ≈ 10% (percent-of-budget, not relative-to-max) |
+| F50 | Category row with `budget: 240, amount: 24.48` | shows `Budget 240 · Balance 215.52` and `10%` |
+| F51 | Category row with `budget: null` | shows "No budget set"; bar width falls back to relative-to-max-spend |
 
 ---
 
@@ -439,6 +443,6 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | Layer | Count |
 |---|---|
 | Backend unit tests | 21 |
-| Backend integration tests | 86 |
-| Frontend unit tests | 48 |
-| **Total** | **155** |
+| Backend integration tests | 87 |
+| Frontend unit tests | 51 |
+| **Total** | **159** |

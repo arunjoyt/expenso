@@ -104,7 +104,7 @@ import { getCategoryVisual } from "@/utils/categoryStyle";
 import ExpenseSheet from "@/components/ExpenseSheet.vue";
 
 const monthStore = useMonthStore();
-const { expenses, loading } = useExpenses(monthStore);
+const { expenses, loading, reload } = useExpenses(monthStore);
 const { familyName } = useFamily();
 
 const sheetOpen = ref(false);
@@ -123,6 +123,7 @@ function openEdit(expense) {
 function closeSheet() {
 	sheetOpen.value = false;
 	editingExpense.value = null;
+	reload();
 }
 
 function formatAmount(amount) {

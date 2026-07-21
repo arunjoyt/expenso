@@ -25,27 +25,8 @@
 						{{ category.category_name }}
 					</span>
 				</div>
-
-				<button
-					type="button"
-					data-test="budget-open-button"
-					class="shrink-0 rounded-full bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition active:scale-95"
-					@click="budgetSheetCategory = category"
-				>
-					{{
-						category.budget_amount != null
-							? formatAmount(category.budget_amount)
-							: "Set Budget"
-					}}
-				</button>
 			</div>
 		</div>
-
-		<BudgetSheet
-			v-if="budgetSheetCategory"
-			:category="budgetSheetCategory"
-			@close="closeBudgetSheet"
-		/>
 
 		<RenameSheet
 			v-if="renameCategoryTarget"
@@ -128,16 +109,14 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { call, Input, Button } from "frappe-ui";
 import { session } from "@/data/session";
-import { addCategory, renameCategory } from "@/composables/useCategories";
+import { addCategory, renameCategory, useCategories } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
-import { useBudgets } from "@/composables/useBudgets";
 import { getCategoryVisual } from "@/utils/categoryStyle";
-import BudgetSheet from "@/components/BudgetSheet.vue";
 import RenameSheet from "@/components/RenameSheet.vue";
 
 const router = useRouter();
 
-const { categories, reload: reloadCategories } = useBudgets();
+const { categories, reload: reloadCategories } = useCategories();
 const { sources, reload: reloadSources } = useSources();
 
 const newCategoryName = ref("");
@@ -153,17 +132,6 @@ const renameCategoryTarget = ref(null);
 
 async function closeCategoryRenameSheet() {
 	renameCategoryTarget.value = null;
-	await reloadCategories();
-}
-
-function formatAmount(amount) {
-	return new Intl.NumberFormat().format(amount);
-}
-
-const budgetSheetCategory = ref(null);
-
-async function closeBudgetSheet() {
-	budgetSheetCategory.value = null;
 	await reloadCategories();
 }
 

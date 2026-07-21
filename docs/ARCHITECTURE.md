@@ -102,11 +102,20 @@ Defaults seeded via `Family.after_insert`: `Salary, Freelance, Rental, Other`.
 | Field | Type | Notes |
 |---|---|---|
 | `category` | Link → Category | required; `get_query` scopes to Family |
-| `amount` | Float | required; fixed monthly cap |
+| `amount` | Float | required; spending cap for this Category, for this month only |
+| `month` | Int | required; 1–12 |
+| `year` | Int | required |
 | `family` | Link → Family | required |
 
-One Budget per Category per Family — enforced in `validate`.
-Budget is a standing rule: persists across months until explicitly changed. Independent of Income.
+One Budget per Category per Family per (month, year) — enforced in `validate`.
+Budget is scoped to a single month. When a month has no Budget row for a Category, the
+backend resolves the effective amount by carrying forward the most recent earlier month
+that has one (`_resolve_budget_amount` in `api.py`) — no forward-looking carry, and gaps
+are not backfilled. `get_analytics` uses this resolution read-only. The Budget screen's
+`get_budgets` additionally materializes a real row for the requested month the first time
+it's viewed (copying the carried-forward amount), so it becomes editable independently of
+other months. Deleting a month's Budget only removes that month's row — carry-forward for
+later months resumes from whatever row precedes it. Independent of Income.
 
 **Budget Status** (computed on read, never stored):
 
@@ -132,9 +141,11 @@ Pattern is identical for `Expense`, `Income`, and `Budget`:
 
 ## Navigation (mobile)
 
-Bottom navigation bar with 2 tabs + FAB:
+Bottom navigation bar with 4 tabs + FAB:
 - **Feed tab** — home screen, monthly expense list
-- **Analytics tab** — monthly financial summary
+- **Analytics tab** — monthly financial summary, including Budget Status per Category
+- **Budget tab** — set each Category's Budget amount for the selected month (editing only)
+- **Settings tab** — Category/Source list management, logout, version
 - **FAB** — always visible on Feed and Analytics; opens Add Expense bottom sheet
 
 No Family Switcher — a Member belongs to exactly one Family.
@@ -148,14 +159,15 @@ No Family Switcher — a Member belongs to exactly one Family.
 - Grouped by date (headers: "Today", "Yesterday", "Jun 12"); within each group, sorted newest-first
 - Each row: amount + category; date is the group header
 - Compact monthly total at the top
-- Prev / next month navigation; month state shared with Analytics
+- Prev / next month navigation; month state shared with Analytics and Budget
 - Silently refreshes via Frappe WebSocket on any add / edit / delete in the Family
 
 ### Analytics
 - **Phase 1:** total spent + Category breakdown (name + amount, no charts)
 - **Phase 2 additions:** Income total, Savings line (Income − Expenses), Add Income button
-- **Phase 3 additions:** Budget Status indicator per Category row
-- Scoped to the Member's Family and the selected month (shared with Feed)
+- **Phase 3 additions:** Budget Status indicator per Category row, budget amount shown alongside spend
+- Prev / next month navigation; month state shared with Feed and Budget
+- Editing a Budget happens on the Budget screen, not here — Analytics is read-only
 
 ### Add / Edit Expense (bottom sheet)
 - Slides up from FAB (add) or tapping an Expense row (edit)
@@ -168,11 +180,20 @@ No Family Switcher — a Member belongs to exactly one Family.
 - Fields: `amount` (required), `date` (defaults to today), `source` (optional)
 - Triggered from Analytics screen "Add Income" button
 
+### Budget
+- Bottom nav tab, alongside Feed and Analytics
+- Lists every Category in the Family with a button showing its Budget amount for the
+  selected month (or "Set Budget" if none) — tapping opens the same `BudgetSheet` used
+  previously from Settings, now scoped to the selected month
+- Prev / next month navigation; month state shared with Feed and Analytics
+- Spend and Budget Status are not shown here — see Analytics
+- Category list itself (add, rename) is managed on Settings; this screen only reads it
+
 ### Settings
 - Reachable via gear icon in app header (not a tab)
 - **Phase 1:** Category list — add, rename (no delete)
 - **Phase 2:** Source list — add, rename (no delete)
-- **Phase 3:** Budget amount field on each Category row (inline edit; blank removes Budget)
+- Budget amounts are managed on the Budget tab, not here
 - App version displayed in footer (read from a whitelisted API method at runtime)
 
 ---
@@ -180,7 +201,7 @@ No Family Switcher — a Member belongs to exactly one Family.
 ## Frontend State
 
 - Selected month lives in a Pinia store; resets to current month on page refresh
-- Feed and Analytics both read from the same `month` store key
+- Feed, Analytics, and Budget all read from the same `month` store key
 - `useExpenses`, `useCategories`, `useIncome`, `useBudgets` composables own their respective API calls
 
 ---
@@ -216,10 +237,13 @@ expenso/                            ← Frappe app root (git repo)
     │   │   ├── Login.vue
     │   │   ├── Feed.vue
     │   │   ├── Analytics.vue
+    │   │   ├── Budget.vue
     │   │   └── Settings.vue
     │   ├── components/
     │   │   ├── ExpenseSheet.vue    ← bottom sheet add/edit Expense
-    │   │   └── IncomeSheet.vue     ← Phase 2
+    │   │   ├── IncomeSheet.vue     ← Phase 2
+    │   │   ├── BudgetSheet.vue     ← bottom sheet set/remove monthly Budget
+    │   │   └── MonthNav.vue        ← shared month nav header (Feed, Analytics, Budget)
     │   ├── stores/
     │   │   └── month.js            ← Pinia store for selected month
     │   ├── composables/

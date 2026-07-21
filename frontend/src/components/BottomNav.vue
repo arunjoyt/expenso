@@ -24,6 +24,7 @@ const route = useRoute();
 const tabs = [
 	{ name: "Feed", icon: "🧾", label: "Feed" },
 	{ name: "Analytics", icon: "📊", label: "Analytics" },
+	{ name: "Budget", icon: "💰", label: "Budget" },
 	{ name: "Settings", icon: "⚙️", label: "Settings" },
 ];
 

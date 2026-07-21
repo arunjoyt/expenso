@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { useMonthStore } from "@/stores/month";
 import Analytics from "@/pages/Analytics.vue";
 
 vi.mock("@/composables/useAnalytics", () => ({
@@ -195,5 +196,37 @@ describe("Analytics page", () => {
 		expect(groceriesWidth).toBe(100);
 		expect(utilitiesWidth).toBeCloseTo((10 / 24.48) * 100, 5);
 		expect(wrapper.findAll('[data-test="budget-summary-none"]')).toHaveLength(2);
+	});
+
+	// F67
+	it("shows the month label from the store", () => {
+		const monthStore = useMonthStore();
+		monthStore.month = 6;
+		monthStore.year = 2025;
+		mockAnalytics(0, []);
+		const wrapper = mount(Analytics);
+		expect(wrapper.text()).toContain("June 2025");
+	});
+
+	// F68
+	it("decrements the month store on prev month click", async () => {
+		const monthStore = useMonthStore();
+		monthStore.month = 6;
+		monthStore.year = 2025;
+		mockAnalytics(0, []);
+		const wrapper = mount(Analytics);
+		await wrapper.find('[aria-label="Previous month"]').trigger("click");
+		expect(monthStore.month).toBe(5);
+	});
+
+	// F69
+	it("increments the month store on next month click", async () => {
+		const monthStore = useMonthStore();
+		monthStore.month = 6;
+		monthStore.year = 2025;
+		mockAnalytics(0, []);
+		const wrapper = mount(Analytics);
+		await wrapper.find('[aria-label="Next month"]').trigger("click");
+		expect(monthStore.month).toBe(7);
 	});
 });

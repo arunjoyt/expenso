@@ -12,7 +12,7 @@ from expenso.expenso.api import (
 	delete_income,
 	get_analytics,
 	get_app_version,
-	get_categories_with_budgets,
+	get_budgets,
 	get_expenses,
 	get_family_name,
 	rename_category,
@@ -436,6 +436,8 @@ class TestGetAnalyticsApi(FrappeTestCase):
 				"category": self.groceries.name,
 				"family": self.family.name,
 				"amount": 100.0,
+				"month": 6,
+				"year": 2025,
 			}
 		).insert(ignore_permissions=True)
 		frappe.get_doc(
@@ -462,6 +464,8 @@ class TestGetAnalyticsApi(FrappeTestCase):
 				"category": self.groceries.name,
 				"family": self.family.name,
 				"amount": 100.0,
+				"month": 6,
+				"year": 2025,
 			}
 		).insert(ignore_permissions=True)
 		frappe.get_doc(
@@ -486,6 +490,8 @@ class TestGetAnalyticsApi(FrappeTestCase):
 				"category": self.groceries.name,
 				"family": self.family.name,
 				"amount": 100.0,
+				"month": 6,
+				"year": 2025,
 			}
 		).insert(ignore_permissions=True)
 		frappe.get_doc(
@@ -793,33 +799,39 @@ class TestBudgetSettingsApi(FrappeTestCase):
 	# I79
 	def test_set_budget_creates_budget_when_none_exists(self):
 		frappe.set_user(self.member)
-		set_budget(category=self.groceries.name, amount=500)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
 
-		amount = frappe.db.get_value("Budget", {"category": self.groceries.name}, "amount")
+		amount = frappe.db.get_value(
+			"Budget", {"category": self.groceries.name, "month": 6, "year": 2025}, "amount"
+		)
 		self.assertEqual(amount, 500)
 
 	# I80
 	def test_set_budget_updates_existing_budget(self):
 		frappe.set_user(self.member)
-		set_budget(category=self.groceries.name, amount=500)
-		set_budget(category=self.groceries.name, amount=800)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=800)
 
-		amount = frappe.db.get_value("Budget", {"category": self.groceries.name}, "amount")
+		amount = frappe.db.get_value(
+			"Budget", {"category": self.groceries.name, "month": 6, "year": 2025}, "amount"
+		)
 		self.assertEqual(amount, 800)
 		self.assertEqual(frappe.db.count("Budget", {"category": self.groceries.name}), 1)
 
 	# I81
 	def test_set_budget_with_none_amount_deletes_existing_budget(self):
 		frappe.set_user(self.member)
-		set_budget(category=self.groceries.name, amount=500)
-		set_budget(category=self.groceries.name, amount=None)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=None)
 
-		self.assertFalse(frappe.db.exists("Budget", {"category": self.groceries.name}))
+		self.assertFalse(
+			frappe.db.exists("Budget", {"category": self.groceries.name, "month": 6, "year": 2025})
+		)
 
 	# I82
-	def test_get_categories_with_budgets_includes_budget_amount(self):
+	def test_get_budgets_includes_budget_amount_for_requested_month(self):
 		frappe.set_user(self.member)
-		set_budget(category=self.groceries.name, amount=500)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
 		dining = frappe.get_doc(
 			{
 				"doctype": "Category",
@@ -828,8 +840,153 @@ class TestBudgetSettingsApi(FrappeTestCase):
 			}
 		).insert(ignore_permissions=True)
 
-		result = get_categories_with_budgets()
+		result = get_budgets(month=6, year=2025)
 		by_name = {c["name"]: c["budget_amount"] for c in result}
 
 		self.assertEqual(by_name[self.groceries.name], 500)
 		self.assertIsNone(by_name[dining.name])
+
+	# I98
+	def test_set_budget_only_affects_the_exact_period(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
+		set_budget(category=self.groceries.name, month=7, year=2025, amount=650)
+
+		june = frappe.db.get_value(
+			"Budget", {"category": self.groceries.name, "month": 6, "year": 2025}, "amount"
+		)
+		july = frappe.db.get_value(
+			"Budget", {"category": self.groceries.name, "month": 7, "year": 2025}, "amount"
+		)
+		self.assertEqual(june, 500)
+		self.assertEqual(july, 650)
+
+	# I100
+	def test_deleting_one_periods_budget_does_not_break_carry_forward_from_before_it(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, month=5, year=2025, amount=400)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=None)
+
+		result = get_budgets(month=7, year=2025)
+		by_name = {c["name"]: c["budget_amount"] for c in result}
+		self.assertEqual(by_name[self.groceries.name], 400)
+
+
+class TestBudgetCarryForward(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("budgetcarryforward.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Budget Carry Forward Test Family",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+		self.groceries = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Groceries",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I104
+	def test_get_budgets_with_no_prior_budget_ever_returns_none_and_creates_no_row(self):
+		frappe.set_user(self.member)
+		result = get_budgets(month=6, year=2025)
+		by_name = {c["name"]: c["budget_amount"] for c in result}
+
+		self.assertIsNone(by_name[self.groceries.name])
+		self.assertEqual(frappe.db.count("Budget", {"category": self.groceries.name}), 0)
+
+	# I101
+	def test_get_budgets_materializes_a_row_carrying_forward_the_prior_periods_amount(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
+
+		result = get_budgets(month=7, year=2025)
+		by_name = {c["name"]: c["budget_amount"] for c in result}
+
+		self.assertEqual(by_name[self.groceries.name], 500)
+		self.assertTrue(
+			frappe.db.exists("Budget", {"category": self.groceries.name, "month": 7, "year": 2025})
+		)
+
+	# I99
+	def test_get_budgets_with_an_exact_period_match_creates_no_duplicate_row(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=500)
+
+		get_budgets(month=6, year=2025)
+
+		self.assertEqual(frappe.db.count("Budget", {"category": self.groceries.name}), 1)
+
+	# I102
+	def test_get_budgets_carries_forward_from_the_nearest_prior_period_across_a_gap(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, month=3, year=2025, amount=300)
+		set_budget(category=self.groceries.name, month=6, year=2025, amount=600)
+
+		# September has no row; nothing was ever set for July or August either.
+		result = get_budgets(month=9, year=2025)
+		by_name = {c["name"]: c["budget_amount"] for c in result}
+
+		self.assertEqual(by_name[self.groceries.name], 600)
+		self.assertFalse(
+			frappe.db.exists("Budget", {"category": self.groceries.name, "month": 7, "year": 2025})
+		)
+		self.assertFalse(
+			frappe.db.exists("Budget", {"category": self.groceries.name, "month": 8, "year": 2025})
+		)
+
+	# I103
+	def test_get_budgets_does_not_carry_forward_from_a_future_period(self):
+		frappe.set_user(self.member)
+		set_budget(category=self.groceries.name, month=12, year=2025, amount=900)
+
+		result = get_budgets(month=6, year=2025)
+		by_name = {c["name"]: c["budget_amount"] for c in result}
+
+		self.assertIsNone(by_name[self.groceries.name])
+
+	# I97
+	def test_get_analytics_resolves_budget_via_carry_forward_without_writing_a_row(self):
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 200.0,
+				"month": 6,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 180.0,
+				"date": "2025-07-15",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=7, year=2025)
+		row = next(c for c in result["categories"] if c["name"] == "Groceries")
+
+		self.assertEqual(row["budget"], 200.0)
+		self.assertEqual(row["budget_status"], "Warning")
+		self.assertFalse(
+			frappe.db.exists("Budget", {"category": self.groceries.name, "month": 7, "year": 2025})
+		)

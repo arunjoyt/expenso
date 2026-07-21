@@ -63,6 +63,14 @@ const props = defineProps({
 		type: Object,
 		required: true,
 	},
+	month: {
+		type: Number,
+		required: true,
+	},
+	year: {
+		type: Number,
+		required: true,
+	},
 });
 
 const emit = defineEmits(["close"]);
@@ -80,7 +88,7 @@ async function submit() {
 	try {
 		const raw = amount.value;
 		const value = raw === "" || raw === null ? null : Number(raw);
-		await setBudget(props.category.name, value);
+		await setBudget(props.category.name, props.month, props.year, value);
 		emit("close");
 	} catch (error) {
 		errorMessage.value = error?.messages?.join("\n") || error?.message || "Failed to save";
@@ -93,7 +101,7 @@ async function remove() {
 	errorMessage.value = "";
 	removing.value = true;
 	try {
-		await setBudget(props.category.name, null);
+		await setBudget(props.category.name, props.month, props.year, null);
 		emit("close");
 	} catch (error) {
 		errorMessage.value = error?.messages?.join("\n") || error?.message || "Failed to remove";

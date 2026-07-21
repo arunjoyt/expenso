@@ -6,6 +6,7 @@ import { createAppRouter } from "@/router";
 import { useMonthStore } from "@/stores/month";
 import Feed from "@/pages/Feed.vue";
 import ExpenseSheet from "@/components/ExpenseSheet.vue";
+import IncomeSheet from "@/components/IncomeSheet.vue";
 
 vi.mock("@/composables/useExpenses", () => ({
 	useExpenses: vi.fn(),
@@ -26,6 +27,18 @@ vi.mock("@/composables/useFamily", () => ({
 		loading: ref(false),
 		reload: vi.fn(),
 	})),
+}));
+vi.mock("@/composables/useSources", () => ({
+	useSources: vi.fn(() => ({
+		sources: ref([]),
+		loading: ref(false),
+		reload: vi.fn(),
+	})),
+}));
+vi.mock("@/composables/useIncome", () => ({
+	createIncome: vi.fn(),
+	updateIncome: vi.fn(),
+	deleteIncome: vi.fn(),
 }));
 
 import { useExpenses } from "@/composables/useExpenses";
@@ -126,13 +139,47 @@ describe("Feed page", () => {
 	});
 
 	// F12
-	it("opens the ExpenseSheet in add mode on FAB click", async () => {
+	it("shows the Add Expense / Add Income menu on FAB click", async () => {
 		mockExpenses([]);
 		const wrapper = mountFeed();
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="fab-add-income"]').exists()).toBe(false);
 		await wrapper.find('[data-test="fab"]').trigger("click");
+		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="fab-add-income"]').exists()).toBe(true);
+	});
+
+	// F79
+	it("opens the ExpenseSheet in add mode on Add Expense menu click", async () => {
+		mockExpenses([]);
+		const wrapper = mountFeed();
+		await wrapper.find('[data-test="fab"]').trigger("click");
+		await wrapper.find('[data-test="fab-add-expense"]').trigger("click");
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
 		expect(wrapper.text()).toContain("Add Expense");
+		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(false);
+	});
+
+	// F30
+	it("opens the IncomeSheet on Add Income menu click", async () => {
+		mockExpenses([]);
+		const wrapper = mountFeed();
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
+		await wrapper.find('[data-test="fab"]').trigger("click");
+		await wrapper.find('[data-test="fab-add-income"]').trigger("click");
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="fab-add-income"]').exists()).toBe(false);
+	});
+
+	// F80
+	it("closes the FAB menu without opening a sheet when the backdrop is tapped", async () => {
+		mockExpenses([]);
+		const wrapper = mountFeed();
+		await wrapper.find('[data-test="fab"]').trigger("click");
+		await wrapper.find('[data-test="fab-menu-backdrop"]').trigger("click");
+		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
 	});
 
 	it("shows a notes preview under the category when present", () => {
@@ -169,11 +216,26 @@ describe("Feed page", () => {
 		const reload = mockExpenses([]);
 		const wrapper = mountFeed();
 		await wrapper.find('[data-test="fab"]').trigger("click");
+		await wrapper.find('[data-test="fab-add-expense"]').trigger("click");
 		reload.mockClear();
 
 		await wrapper.findComponent(ExpenseSheet).vm.$emit("close");
 
 		expect(reload).toHaveBeenCalled();
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
+	});
+
+	// F81
+	it("closes the IncomeSheet without reloading Expenses", async () => {
+		const reload = mockExpenses([]);
+		const wrapper = mountFeed();
+		await wrapper.find('[data-test="fab"]').trigger("click");
+		await wrapper.find('[data-test="fab-add-income"]').trigger("click");
+		reload.mockClear();
+
+		await wrapper.findComponent(IncomeSheet).vm.$emit("close");
+
+		expect(reload).not.toHaveBeenCalled();
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
 	});
 });

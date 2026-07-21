@@ -158,7 +158,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F12 | FAB click | ExpenseSheet slides up |
+| F12 | FAB click, then "Add Expense" menu item click | ExpenseSheet slides up |
 | F13 | ExpenseSheet — `amount` field is required | submit disabled without amount |
 | F14 | ExpenseSheet — `date` defaults to today | date field pre-filled |
 | F15 | ExpenseSheet — `category` is optional | can submit without it |
@@ -309,8 +309,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 |---|------|-----------|
 | F28 | Analytics shows income_total row | correct amount |
 | F29 | Analytics shows Savings row | correct (can be negative) |
-| F30 | "Add Income" button visible on Analytics | present in DOM |
-| F31 | "Add Income" button click | IncomeSheet slides up |
+| F30 | Feed FAB click, then "Add Income" menu item click | IncomeSheet slides up |
 
 ---
 
@@ -334,9 +333,9 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | F32 | IncomeSheet `amount` is required | submit disabled without amount |
 | F33 | IncomeSheet `date` defaults to today | pre-filled |
 | F34 | IncomeSheet `source` is optional | can submit without it |
-| F35 | Successful add submit | sheet closes; Analytics totals updated |
+| F35 | Successful add submit | sheet closes; `createIncome` called |
 | F36 | Delete action | confirmation prompt shown |
-| F37 | Confirmed delete | Income removed; Analytics recalculates |
+| F37 | Confirmed delete | `deleteIncome` called; sheet closes |
 
 ---
 
@@ -478,11 +477,30 @@ read of a new month (see `docs/adr/0001-monthly-budget-carry-forward.md`).
 
 ---
 
+### Feed FAB: Add Expense / Add Income menu (issue #53)
+
+"Add Income" moved off Analytics (which is read-only) onto the Feed screen: the FAB now
+opens a small menu with "Add Expense" and "Add Income", each opening its respective bottom
+sheet. `IncomeSheet` closing does not reload the Expense list — Income doesn't affect what
+Feed displays.
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F12 | FAB click | menu with "Add Expense" / "Add Income" shown |
+| F30 | FAB click, then "Add Income" menu item click | IncomeSheet slides up |
+| F79 | FAB click, then "Add Expense" menu item click | ExpenseSheet slides up |
+| F80 | FAB click, then menu backdrop tap | menu closes; no sheet opens |
+| F81 | IncomeSheet closes | Expense list is not reloaded |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
 | Backend unit tests | 21 |
 | Backend integration tests | 101 |
-| Frontend unit tests | 73 |
-| **Total** | **195** |
+| Frontend unit tests | 76 |
+| **Total** | **198** |

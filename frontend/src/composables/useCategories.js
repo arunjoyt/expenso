@@ -31,3 +31,7 @@ export async function addCategory(name) {
 export async function renameCategory(name, newName) {
 	return call("expenso.expenso.api.rename_category", { name, new_name: newName });
 }
+
+export async function deleteCategory(name) {
+	return call("expenso.expenso.api.delete_category", { name });
+}

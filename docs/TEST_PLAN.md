@@ -500,11 +500,49 @@ Feed displays.
 
 ---
 
+### Settings: delete Category / Source (issue #52)
+
+Category and Source were previously add/rename-only by design. Both now support delete from
+Settings, behind a confirmation prompt. `delete_category`/`delete_source` rely on Frappe's
+built-in link-existence check (`frappe.delete_doc` without `force`) to block deletion while
+any Expense/Income still references the record — no manual "is it in use" query needed.
+Deleting a Category also deletes its Budget rows for every month first (Budget links to
+Category too, so it would otherwise block the delete on its own link).
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I105 | `delete_category(name)` with no linked Expense | Category no longer in DB |
+| I106 | `delete_category(name)` with a linked Expense | raises `LinkExistsError`; Category still in DB |
+| I107 | `delete_category(name)` for a Category with Budgets set | its Budget rows are deleted along with it |
+| I108 | `delete_category` by Member of a different Family | raises `PermissionError` |
+| I109 | `delete_source(name)` with no linked Income | Source no longer in DB |
+| I110 | `delete_source(name)` with a linked Income | raises `LinkExistsError`; Source still in DB |
+| I111 | `delete_source` by Member of a different Family | raises `PermissionError` |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F82 | Category row | shows a delete button |
+| F83 | Category delete button click | confirmation prompt shown; `deleteCategory` not yet called |
+| F84 | Category delete confirmation Cancel | prompt dismissed; `deleteCategory` not called |
+| F85 | Category delete confirmed | `deleteCategory` called; list reloads; Category gone |
+| F86 | Category delete rejected (in use) | error message shown; Category still in the list |
+| F87 | Source row | shows a delete button |
+| F88 | Source delete button click | confirmation prompt shown; `deleteSource` not yet called |
+| F89 | Source delete confirmation Cancel | prompt dismissed; `deleteSource` not called |
+| F90 | Source delete confirmed | `deleteSource` called; list reloads; Source gone |
+| F91 | Source delete rejected (in use) | error message shown; Source still in the list |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
 | Backend unit tests | 21 |
-| Backend integration tests | 101 |
-| Frontend unit tests | 98 |
-| **Total** | **220** |
+| Backend integration tests | 108 |
+| Frontend unit tests | 108 |
+| **Total** | **237** |

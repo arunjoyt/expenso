@@ -3,6 +3,7 @@
 		<h1 class="mb-4 text-lg font-extrabold text-gray-900">⚙️ Settings</h1>
 
 		<h2 class="mb-2 flex items-center gap-1 text-sm font-bold text-gray-500">🏷️ Categories</h2>
+		<ErrorMessage class="mb-2" :message="categoryDeleteError" />
 		<div class="mb-4 flex flex-col gap-2">
 			<div
 				v-for="category in categories"
@@ -25,6 +26,38 @@
 						{{ category.category_name }}
 					</span>
 				</div>
+
+				<div
+					v-if="confirmingDeleteCategory === category.name"
+					class="flex shrink-0 items-center gap-1"
+				>
+					<Button
+						data-test="category-confirm-delete-button"
+						variant="solid"
+						theme="red"
+						:loading="deletingCategory"
+						@click="confirmDeleteCategory(category)"
+					>
+						Confirm
+					</Button>
+					<Button
+						data-test="category-cancel-delete-button"
+						variant="ghost"
+						@click="confirmingDeleteCategory = null"
+					>
+						Cancel
+					</Button>
+				</div>
+				<button
+					v-else
+					type="button"
+					data-test="category-delete-button"
+					aria-label="Delete category"
+					class="shrink-0 text-gray-400 transition active:scale-95"
+					@click="startDeleteCategory(category)"
+				>
+					🗑️
+				</button>
 			</div>
 		</div>
 
@@ -49,12 +82,13 @@
 		</form>
 
 		<h2 class="mb-2 flex items-center gap-1 text-sm font-bold text-gray-500">💳 Sources</h2>
+		<ErrorMessage class="mb-2" :message="sourceDeleteError" />
 		<div class="mb-4 flex flex-col gap-2">
 			<div
 				v-for="source in sources"
 				:key="source.name"
 				data-test="source-row"
-				class="flex items-center rounded-2xl bg-white p-3 shadow-sm"
+				class="flex items-center justify-between gap-2 rounded-2xl bg-white p-3 shadow-sm"
 			>
 				<span
 					data-test="source-name"
@@ -63,6 +97,38 @@
 				>
 					💵 {{ source.source_name }}
 				</span>
+
+				<div
+					v-if="confirmingDeleteSource === source.name"
+					class="flex shrink-0 items-center gap-1"
+				>
+					<Button
+						data-test="source-confirm-delete-button"
+						variant="solid"
+						theme="red"
+						:loading="deletingSource"
+						@click="confirmDeleteSource(source)"
+					>
+						Confirm
+					</Button>
+					<Button
+						data-test="source-cancel-delete-button"
+						variant="ghost"
+						@click="confirmingDeleteSource = null"
+					>
+						Cancel
+					</Button>
+				</div>
+				<button
+					v-else
+					type="button"
+					data-test="source-delete-button"
+					aria-label="Delete source"
+					class="shrink-0 text-gray-400 transition active:scale-95"
+					@click="startDeleteSource(source)"
+				>
+					🗑️
+				</button>
 			</div>
 		</div>
 
@@ -107,10 +173,15 @@
 <script setup>
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { call, Input, Button } from "frappe-ui";
+import { call, Input, Button, ErrorMessage } from "frappe-ui";
 import { session } from "@/data/session";
-import { addCategory, renameCategory, useCategories } from "@/composables/useCategories";
-import { addSource, renameSource, useSources } from "@/composables/useSources";
+import {
+	addCategory,
+	deleteCategory,
+	renameCategory,
+	useCategories,
+} from "@/composables/useCategories";
+import { addSource, deleteSource, renameSource, useSources } from "@/composables/useSources";
 import { getCategoryVisual } from "@/utils/categoryStyle";
 import RenameSheet from "@/components/RenameSheet.vue";
 
@@ -135,6 +206,30 @@ async function closeCategoryRenameSheet() {
 	await reloadCategories();
 }
 
+const confirmingDeleteCategory = ref(null);
+const deletingCategory = ref(false);
+const categoryDeleteError = ref("");
+
+function startDeleteCategory(category) {
+	categoryDeleteError.value = "";
+	confirmingDeleteCategory.value = category.name;
+}
+
+async function confirmDeleteCategory(category) {
+	deletingCategory.value = true;
+	categoryDeleteError.value = "";
+	try {
+		await deleteCategory(category.name);
+		confirmingDeleteCategory.value = null;
+		await reloadCategories();
+	} catch (error) {
+		categoryDeleteError.value =
+			error?.messages?.join("\n") || error?.message || "Failed to delete";
+	} finally {
+		deletingCategory.value = false;
+	}
+}
+
 const newSourceName = ref("");
 
 async function submitAddSource() {
@@ -145,6 +240,30 @@ async function submitAddSource() {
 }
 
 const renameSourceTarget = ref(null);
+
+const confirmingDeleteSource = ref(null);
+const deletingSource = ref(false);
+const sourceDeleteError = ref("");
+
+function startDeleteSource(source) {
+	sourceDeleteError.value = "";
+	confirmingDeleteSource.value = source.name;
+}
+
+async function confirmDeleteSource(source) {
+	deletingSource.value = true;
+	sourceDeleteError.value = "";
+	try {
+		await deleteSource(source.name);
+		confirmingDeleteSource.value = null;
+		await reloadSources();
+	} catch (error) {
+		sourceDeleteError.value =
+			error?.messages?.join("\n") || error?.message || "Failed to delete";
+	} finally {
+		deletingSource.value = false;
+	}
+}
 
 async function closeSourceRenameSheet() {
 	renameSourceTarget.value = null;

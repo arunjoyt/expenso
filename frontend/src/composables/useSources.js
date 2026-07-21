@@ -31,3 +31,7 @@ export async function addSource(name) {
 export async function renameSource(name, newName) {
 	return call("expenso.expenso.api.rename_source", { name, new_name: newName });
 }
+
+export async function deleteSource(name) {
+	return call("expenso.expenso.api.delete_source", { name });
+}

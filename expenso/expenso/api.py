@@ -249,6 +249,19 @@ def rename_category(name: str, new_name: str):
 
 
 @frappe.whitelist()
+def delete_category(name: str):
+	doc = frappe.get_doc("Category", name)
+	doc.check_permission("delete")
+
+	for budget_name in frappe.get_all(
+		"Budget", filters={"category": name, "family": doc.family}, pluck="name"
+	):
+		frappe.delete_doc("Budget", budget_name, ignore_permissions=True)
+
+	frappe.delete_doc("Category", name, ignore_permissions=True)
+
+
+@frappe.whitelist()
 def get_app_version():
 	return __version__
 
@@ -337,6 +350,14 @@ def rename_source(name: str, new_name: str):
 	doc.source_name = new_name
 	doc.save(ignore_permissions=True)
 	return doc
+
+
+@frappe.whitelist()
+def delete_source(name: str):
+	doc = frappe.get_doc("Source", name)
+	doc.check_permission("delete")
+
+	frappe.delete_doc("Source", name, ignore_permissions=True)
 
 
 @frappe.whitelist()

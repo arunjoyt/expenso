@@ -29,15 +29,6 @@
 			</div>
 		</div>
 
-		<button
-			type="button"
-			data-test="add-income-button"
-			class="mb-5 flex items-center gap-2 rounded-full bg-gradient-to-br from-accent-500 to-purple-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-95"
-			@click="sheetOpen = true"
-		>
-			<span>➕</span> Add Income
-		</button>
-
 		<div v-if="!loading && categories.length === 0" class="py-12 text-center text-gray-500">
 			No expenses this month
 		</div>
@@ -102,28 +93,18 @@
 				</div>
 			</div>
 		</div>
-
-		<IncomeSheet v-if="sheetOpen" @close="closeSheet" />
 	</div>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useMonthStore } from "@/stores/month";
 import { useAnalytics } from "@/composables/useAnalytics";
 import { getCategoryVisual } from "@/utils/categoryStyle";
-import IncomeSheet from "@/components/IncomeSheet.vue";
 import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
-const { total, categories, incomeTotal, savings, loading, reload } = useAnalytics(monthStore);
-
-const sheetOpen = ref(false);
-
-function closeSheet() {
-	sheetOpen.value = false;
-	reload();
-}
+const { total, categories, incomeTotal, savings, loading } = useAnalytics(monthStore);
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);

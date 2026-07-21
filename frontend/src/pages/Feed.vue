@@ -70,17 +70,45 @@
 		</div>
 	</div>
 
-	<button
-		type="button"
-		data-test="fab"
-		aria-label="Add expense"
-		class="fixed bottom-20 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-purple-600 text-2xl text-white shadow-lg shadow-blue-300 transition hover:scale-105 active:scale-90"
-		@click="openAdd"
-	>
-		+
-	</button>
+	<div
+		v-if="menuOpen"
+		data-test="fab-menu-backdrop"
+		class="fixed inset-0 z-30"
+		@click="menuOpen = false"
+	></div>
 
-	<ExpenseSheet v-if="sheetOpen" :expense="editingExpense" @close="closeSheet" />
+	<div class="fixed bottom-20 right-6 z-40 flex flex-col items-end gap-3">
+		<template v-if="menuOpen">
+			<button
+				type="button"
+				data-test="fab-add-income"
+				class="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-lg transition active:scale-95"
+				@click="openAddIncome"
+			>
+				💰 Add Income
+			</button>
+			<button
+				type="button"
+				data-test="fab-add-expense"
+				class="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-lg transition active:scale-95"
+				@click="openAddExpense"
+			>
+				💸 Add Expense
+			</button>
+		</template>
+		<button
+			type="button"
+			data-test="fab"
+			aria-label="Add"
+			class="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-purple-600 text-2xl text-white shadow-lg shadow-blue-300 transition hover:scale-105 active:scale-90"
+			@click="menuOpen = !menuOpen"
+		>
+			+
+		</button>
+	</div>
+
+	<ExpenseSheet v-if="expenseSheetOpen" :expense="editingExpense" @close="closeExpenseSheet" />
+	<IncomeSheet v-if="incomeSheetOpen" @close="closeIncomeSheet" />
 </template>
 
 <script setup>
@@ -91,29 +119,42 @@ import { useFamily } from "@/composables/useFamily";
 import { dateGroupLabel } from "@/utils/dateGroup";
 import { getCategoryVisual } from "@/utils/categoryStyle";
 import ExpenseSheet from "@/components/ExpenseSheet.vue";
+import IncomeSheet from "@/components/IncomeSheet.vue";
 import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
 const { expenses, loading, reload } = useExpenses(monthStore);
 const { familyName } = useFamily();
 
-const sheetOpen = ref(false);
+const menuOpen = ref(false);
+const expenseSheetOpen = ref(false);
+const incomeSheetOpen = ref(false);
 const editingExpense = ref(null);
 
-function openAdd() {
+function openAddExpense() {
+	menuOpen.value = false;
 	editingExpense.value = null;
-	sheetOpen.value = true;
+	expenseSheetOpen.value = true;
+}
+
+function openAddIncome() {
+	menuOpen.value = false;
+	incomeSheetOpen.value = true;
 }
 
 function openEdit(expense) {
 	editingExpense.value = expense;
-	sheetOpen.value = true;
+	expenseSheetOpen.value = true;
 }
 
-function closeSheet() {
-	sheetOpen.value = false;
+function closeExpenseSheet() {
+	expenseSheetOpen.value = false;
 	editingExpense.value = null;
 	reload();
+}
+
+function closeIncomeSheet() {
+	incomeSheetOpen.value = false;
 }
 
 function formatAmount(amount) {

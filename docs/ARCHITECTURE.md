@@ -143,10 +143,10 @@ Pattern is identical for `Expense`, `Income`, and `Budget`:
 
 Bottom navigation bar with 4 tabs + FAB:
 - **Feed tab** — home screen, monthly expense list
-- **Analytics tab** — monthly financial summary, including Budget Status per Category
+- **Analytics tab** — monthly financial summary (read-only), including Budget Status per Category
 - **Budget tab** — set each Category's Budget amount for the selected month (editing only)
 - **Settings tab** — Category/Source list management, logout, version
-- **FAB** — always visible on Feed and Analytics; opens Add Expense bottom sheet
+- **FAB** — visible on Feed only; tapping it opens a small menu with "Add Expense" and "Add Income", each opening its respective bottom sheet
 
 No Family Switcher — a Member belongs to exactly one Family.
 
@@ -164,13 +164,13 @@ No Family Switcher — a Member belongs to exactly one Family.
 
 ### Analytics
 - **Phase 1:** total spent + Category breakdown (name + amount, no charts)
-- **Phase 2 additions:** Income total, Savings line (Income − Expenses), Add Income button
+- **Phase 2 additions:** Income total, Savings line (Income − Expenses)
 - **Phase 3 additions:** Budget Status indicator per Category row, budget amount shown alongside spend
 - Prev / next month navigation; month state shared with Feed and Budget
-- Editing a Budget happens on the Budget screen, not here — Analytics is read-only
+- Read-only — no add/edit entry points live here; editing a Budget happens on the Budget screen, adding Income/Expense happens via the Feed FAB
 
 ### Add / Edit Expense (bottom sheet)
-- Slides up from FAB (add) or tapping an Expense row (edit)
+- Slides up from the Feed FAB's "Add Expense" menu item (add) or tapping an Expense row (edit)
 - Fields: `amount` (required), `date` (defaults to today), `category` (optional)
 - Delete action behind a confirmation prompt
 - Dismissable by tapping outside or swiping down
@@ -178,7 +178,7 @@ No Family Switcher — a Member belongs to exactly one Family.
 ### Add / Edit Income (bottom sheet) — Phase 2
 - Same UX as Expense sheet
 - Fields: `amount` (required), `date` (defaults to today), `source` (optional)
-- Triggered from Analytics screen "Add Income" button
+- Triggered from the Feed FAB's "Add Income" menu item
 
 ### Budget
 - Bottom nav tab, alongside Feed and Analytics

@@ -8,6 +8,11 @@ def _validate_amount(amount):
 		frappe.throw(_("Amount must be greater than zero"), frappe.ValidationError)
 
 
+def _validate_month(month):
+	if month is None or month < 1 or month > 12:
+		frappe.throw(_("Month must be between 1 and 12"), frappe.ValidationError)
+
+
 def compute_budget_status(spent, budget):
 	if not budget:
 		return None
@@ -25,15 +30,21 @@ class Budget(Document):
 		if self.amount is not None:
 			_validate_amount(self.amount)
 
+		if self.month is not None:
+			_validate_month(self.month)
+
 		duplicate = frappe.db.exists(
 			"Budget",
 			{
 				"category": self.category,
 				"family": self.family,
+				"month": self.month,
+				"year": self.year,
 				"name": ["!=", self.name or ""],
 			},
 		)
 		if duplicate:
 			frappe.throw(
-				_("A Budget already exists for this Category in this Family"), frappe.ValidationError
+				_("A Budget already exists for this Category in this Family for this month"),
+				frappe.ValidationError,
 			)

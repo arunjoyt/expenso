@@ -33,13 +33,16 @@ _Avoid_: Description, memo, comment
 **Feed**: The home screen — Expenses in the Member's Family for the selected month, grouped by date with a compact monthly total at the top. Prev/next month navigation is available.
 _Avoid_: Dashboard, timeline, activity
 
-**Analytics**: A separate screen showing the month's financial summary — plain numbers, no charts. Phase 1: total Expenses and a breakdown by Category. Phase 2 adds: Income total, Savings (net), and an Add Income entry point. There is no per-Member breakdown.
+**Analytics**: A separate screen showing the selected month's financial summary — plain numbers, no charts. Phase 1: total Expenses and a breakdown by Category. Phase 2 adds: Income total, Savings (net), and an Add Income entry point. There is no per-Member breakdown. The Category breakdown shows each Category's spend alongside its Budget for the month and its Budget Status. Prev/next month navigation is available.
 _Avoid_: Dashboard, reports, insights
+
+**Budget** (screen): A bottom-nav screen, alongside Feed and Analytics, purely for setting each Category's Budget amount for the selected month — spend and Budget Status are not shown here, see Analytics. Prev/next month navigation is available, sharing the same selected month as Feed and Analytics. The Category list itself (adding/renaming) is managed on Settings, not here — this screen only uses it to render one row per Category.
+_Avoid_: Budgets, Spending, Caps
 
 **FAB (Floating Action Button)**: The persistent primary action button — always visible on the Feed and Analytics screens — that opens the Add Expense form.
 _Avoid_: Add button, create button
 
-**Settings**: A screen reachable via a gear icon in the app header. It is the single surface for all Family configuration: Phase 1 — Category list management; Phase 2 — Source list management; Phase 3 — per-Category Budget amounts.
+**Settings**: A screen reachable via a gear icon in the app header. It is the single surface for all Family configuration: Phase 1 — Category list management; Phase 2 — Source list management. Budget amounts are managed on the Budget screen, not here.
 _Avoid_: Profile, preferences, configuration
 
 ---
@@ -66,10 +69,10 @@ _Avoid_: Tag, type, label
 
 ## Budgeting
 
-**Budget**: A standing fixed-amount monthly spending cap set on an individual Category by any Member. Belongs to a Family. Optional — not every Category requires a Budget. Once set, a Budget persists until explicitly changed; it applies to every subsequent month without re-entry. Budgets are fixed amounts independent of Income.
+**Budget** (record): A fixed spending cap set on an individual Category for one specific month, belonging to a Family. Optional — not every Category requires a Budget in every month. Independent of Income. The first time a Member views a month on the Budget screen, any Category without a Budget for that month is auto-filled by carrying forward the amount from that Category's most recent earlier month that had one; editing or deleting a month's Budget affects only that month, and does not change the amount carried forward into other months.
 _Avoid_: Limit, target, goal
 
-**Budget Status**: The visual state of a Category row on the Analytics screen based on spending relative to its Budget. Two states: **Warning** (≥80% of Budget spent — yellow) and **Exceeded** (≥100% spent — red). Categories without a Budget show no threshold indicator.
+**Budget Status**: The visual state of a Category row on the Analytics screen based on spending relative to its Budget for the selected month. Two states: **Warning** (≥80% of Budget spent — yellow) and **Exceeded** (≥100% spent — red). Categories without a Budget for that month show no threshold indicator.
 _Avoid_: Alert, notification, flag
 
 ---

@@ -55,25 +55,29 @@ class TestBudgetIntegration(FrappeTestCase):
 		).insert(ignore_permissions=True)
 
 	# I72
-	def test_create_budget_with_category_family_and_amount(self):
+	def test_create_budget_with_category_family_amount_month_year(self):
 		doc = frappe.get_doc(
 			{
 				"doctype": "Budget",
 				"category": self.groceries.name,
 				"family": self.family.name,
 				"amount": 500.0,
+				"month": 6,
+				"year": 2025,
 			}
 		).insert(ignore_permissions=True)
 		self.assertTrue(frappe.db.exists("Budget", doc.name))
 
 	# I73
-	def test_second_budget_for_same_category_and_family_raises_validation_error(self):
+	def test_second_budget_for_same_category_family_and_month_raises_validation_error(self):
 		frappe.get_doc(
 			{
 				"doctype": "Budget",
 				"category": self.groceries.name,
 				"family": self.family.name,
 				"amount": 500.0,
+				"month": 6,
+				"year": 2025,
 			}
 		).insert(ignore_permissions=True)
 
@@ -84,6 +88,8 @@ class TestBudgetIntegration(FrappeTestCase):
 					"category": self.groceries.name,
 					"family": self.family.name,
 					"amount": 300.0,
+					"month": 6,
+					"year": 2025,
 				}
 			).insert(ignore_permissions=True)
 
@@ -103,6 +109,8 @@ class TestBudgetIntegration(FrappeTestCase):
 				"category": self.groceries.name,
 				"family": self.family.name,
 				"amount": 500.0,
+				"month": 6,
+				"year": 2025,
 			}
 		).insert(ignore_permissions=True)
 		second = frappe.get_doc(
@@ -111,6 +119,8 @@ class TestBudgetIntegration(FrappeTestCase):
 				"category": dining.name,
 				"family": self.family.name,
 				"amount": 200.0,
+				"month": 6,
+				"year": 2025,
 			}
 		).insert(ignore_permissions=True)
 		self.assertTrue(frappe.db.exists("Budget", second.name))
@@ -123,6 +133,8 @@ class TestBudgetIntegration(FrappeTestCase):
 					"doctype": "Budget",
 					"family": self.family.name,
 					"amount": 500.0,
+					"month": 6,
+					"year": 2025,
 				}
 			).insert(ignore_permissions=True)
 
@@ -134,6 +146,8 @@ class TestBudgetIntegration(FrappeTestCase):
 					"doctype": "Budget",
 					"category": self.groceries.name,
 					"amount": 500.0,
+					"month": 6,
+					"year": 2025,
 				}
 			).insert(ignore_permissions=True)
 
@@ -146,6 +160,8 @@ class TestBudgetIntegration(FrappeTestCase):
 					"category": self.groceries.name,
 					"family": self.family.name,
 					"amount": 0,
+					"month": 6,
+					"year": 2025,
 				}
 			).insert(ignore_permissions=True)
 
@@ -158,13 +174,117 @@ class TestBudgetIntegration(FrappeTestCase):
 					"category": self.groceries.name,
 					"family": self.family.name,
 					"amount": -50,
+					"month": 6,
+					"year": 2025,
 				}
 			).insert(ignore_permissions=True)
 
+	# I91
+	def test_create_budget_without_month_raises_mandatory(self):
+		with self.assertRaises(frappe.MandatoryError):
+			frappe.get_doc(
+				{
+					"doctype": "Budget",
+					"category": self.groceries.name,
+					"family": self.family.name,
+					"amount": 500.0,
+					"year": 2025,
+				}
+			).insert(ignore_permissions=True)
+
+	# I92
+	def test_create_budget_without_year_raises_mandatory(self):
+		with self.assertRaises(frappe.MandatoryError):
+			frappe.get_doc(
+				{
+					"doctype": "Budget",
+					"category": self.groceries.name,
+					"family": self.family.name,
+					"amount": 500.0,
+					"month": 6,
+				}
+			).insert(ignore_permissions=True)
+
+	# I93
+	def test_create_budget_with_month_zero_raises_validation_error(self):
+		with self.assertRaises(frappe.ValidationError):
+			frappe.get_doc(
+				{
+					"doctype": "Budget",
+					"category": self.groceries.name,
+					"family": self.family.name,
+					"amount": 500.0,
+					"month": 0,
+					"year": 2025,
+				}
+			).insert(ignore_permissions=True)
+
+	# I94
+	def test_create_budget_with_month_thirteen_raises_validation_error(self):
+		with self.assertRaises(frappe.ValidationError):
+			frappe.get_doc(
+				{
+					"doctype": "Budget",
+					"category": self.groceries.name,
+					"family": self.family.name,
+					"amount": 500.0,
+					"month": 13,
+					"year": 2025,
+				}
+			).insert(ignore_permissions=True)
+
+	# I95
+	def test_budget_for_same_category_in_different_month_is_allowed(self):
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 500.0,
+				"month": 6,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+		second = frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 600.0,
+				"month": 7,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+		self.assertTrue(frappe.db.exists("Budget", second.name))
+
+	# I96
+	def test_budget_for_same_category_and_month_in_different_year_is_allowed(self):
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 500.0,
+				"month": 6,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+		second = frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 550.0,
+				"month": 6,
+				"year": 2026,
+			}
+		).insert(ignore_permissions=True)
+		self.assertTrue(frappe.db.exists("Budget", second.name))
+
 	# I90
-	def test_list_view_shows_category_amount_family(self):
+	def test_list_view_shows_category_amount_month_year_family(self):
 		meta = frappe.get_meta("Budget")
 		in_list = {f.fieldname for f in meta.fields if f.in_list_view}
 		in_filter = {f.fieldname for f in meta.fields if f.in_standard_filter}
-		self.assertEqual(in_list, {"category", "amount", "family"})
-		self.assertEqual(in_filter, {"category", "family"})
+		self.assertEqual(in_list, {"category", "amount", "month", "year", "family"})
+		self.assertEqual(in_filter, {"category", "family", "month", "year"})

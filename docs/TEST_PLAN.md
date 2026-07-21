@@ -386,36 +386,48 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I76 | Create Budget without `family` | raises `MandatoryError` |
 | I77 | Create Budget with `amount = 0` | raises `ValidationError` |
 | I78 | Create Budget with `amount < 0` | raises `ValidationError` |
-| I90 | Budget list view fields/filters | `in_list_view`: `category`, `amount`, `family`; `in_standard_filter`: `category`, `family` |
+| I90 | Budget list view fields/filters | `in_list_view`: `category`, `amount`, `month`, `year`, `family`; `in_standard_filter`: `category`, `family`, `month`, `year` |
+| I91 | Create Budget without `month` | raises `MandatoryError` |
+| I92 | Create Budget without `year` | raises `MandatoryError` |
+| I93 | Create Budget with `month = 0` | raises `ValidationError` |
+| I94 | Create Budget with `month = 13` | raises `ValidationError` |
+| I95 | Create Budget for same Category + Family, different `month` | inserts successfully (allowed) |
+| I96 | Create Budget for same Category + Family + `month`, different `year` | inserts successfully (allowed) |
 
 ---
 
-### P3-S2 · Settings: Budget amount per Category
+### P3-S2 · Budget tab: monthly Budget per Category (issue #51)
+
+Budget moved off Settings into its own bottom-nav tab and became month-scoped: one Budget
+row per Category per Family per (month, year), with carry-forward materialization on first
+read of a new month (see `docs/adr/0001-monthly-budget-carry-forward.md`).
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I79 | `set_budget(category_id, amount=500)` — no prior Budget | Budget created; amount = 500 |
-| I80 | `set_budget(category_id, amount=800)` — Budget exists | Budget updated; amount = 800 |
-| I81 | `set_budget(category_id, amount=None)` — Budget exists | Budget deleted |
-| I82 | `get_categories_with_budgets()` | returns list with `budget_amount` (null if no Budget) |
+| I79 | `set_budget(category_id, month, year, amount=500)` — no prior Budget for that period | Budget created; amount = 500 |
+| I80 | `set_budget(...)` — Budget exists for that exact period | Budget updated; amount = 800 |
+| I81 | `set_budget(..., amount=None)` — Budget exists for that exact period | Budget deleted |
+| I82 | `get_budgets(month, year)` | returns list with `budget_amount` for the requested period (null if none, ever) |
+| I98 | `set_budget` for one period, then another period | each period's Budget is independent; unrelated periods untouched |
+| I99 | `get_budgets` called twice for a period with an exact-match row | no duplicate Budget row created |
+| I100 | Delete a month's Budget, then request a later month | carry-forward resumes from the last real row before the deleted one, not from the deleted month |
+| I101 | `get_budgets` for a period with no exact row but an earlier period has one | materializes a new row copying the earlier amount |
+| I102 | `get_budgets` with a gap of several unset months between two set ones | carries forward from the nearest prior period, not the earliest; gap months stay unmaterialized |
+| I103 | `get_budgets` with only a *future* period set | returns `budget_amount: null` (no forward-looking carry) |
+| I104 | `get_budgets` for a Category that has never had any Budget | returns `budget_amount: null`; creates no row |
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F41 | Settings shows a budget button next to each Category | buttons present |
-| F42 | Tapping a Category's budget button | opens `BudgetSheet` for that Category |
-| F43 | `BudgetSheet` submit with an amount | Budget persisted via `setBudget`; sheet closes |
+| F43 | `BudgetSheet` submit with an amount | Budget persisted via `setBudget(category, month, year, amount)`; sheet closes |
 | F44 | `BudgetSheet` for a Category with an existing Budget | amount input pre-filled with current amount |
-| F52 | Category with no Budget | budget button reads "Set Budget" |
-| F53 | Category with an existing Budget | budget button reads the formatted amount |
-| F54 | `BudgetSheet` closes (save or backdrop) | Settings reloads Categories |
 | F55 | `BudgetSheet` opened for a Category | sheet title includes the Category name |
 | F56 | `BudgetSheet` for a Category with no existing Budget | amount input starts empty |
 | F57 | `BudgetSheet` for a Category with no existing Budget | no "Remove Budget" button shown |
-| F58 | `BudgetSheet` "Remove Budget" clicked | Budget removed via `setBudget(category, null)`; sheet closes |
+| F58 | `BudgetSheet` "Remove Budget" clicked | Budget removed via `setBudget(category, month, year, null)`; sheet closes |
 | F59 | `BudgetSheet` backdrop clicked | sheet closes without calling `setBudget` |
 | F60 | `RenameSheet` mounted with a `title` prop | title shown in the sheet |
 | F61 | `RenameSheet` mounted with an `initialValue` | amount input pre-filled with that value |
@@ -423,6 +435,16 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | F63 | `RenameSheet` submit with an unchanged value | `renameFn` not called; sheet still closes |
 | F64 | `RenameSheet` input cleared | Save button disabled |
 | F65 | `RenameSheet` backdrop clicked | sheet closes without calling `renameFn` |
+| F66 | Settings Category row | no budget button rendered (moved to Budget tab) |
+| F70 | Budget page lists every Category with a budget button | buttons present |
+| F71 | Category with no Budget for the month | budget button reads "Set Budget" |
+| F72 | Category with a Budget for the month | budget button reads the formatted amount |
+| F73 | Tapping a Category's budget button | opens `BudgetSheet` for that Category |
+| F74 | `BudgetSheet` closes (save or backdrop) | Budget page reloads Categories |
+| F75 | Budget page header | shows the month label from the store |
+| F76 | Budget page prev month click | decrements the month store |
+| F77 | Budget page next month click | increments the month store |
+| F78 | Budget page with no Categories | shows an empty state |
 
 ---
 
@@ -437,6 +459,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | I85 | `get_analytics` with Budget set and spent ≥ 100% | `budget_status: "Exceeded"` |
 | I86 | `get_analytics` for Category with no Budget | `budget_status: null` |
 | I87 | `get_analytics` with Budget set | category row includes `budget: <amount>` |
+| I97 | `get_analytics` for a month with no exact Budget but an earlier month has one | resolves `budget`/`budget_status` via carry-forward; creates no Budget row (read-only) |
 
 **Frontend unit tests**
 
@@ -449,6 +472,9 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | F49 | Category row with `budget: 240, amount: 24.48` | progress bar width ≈ 10% (percent-of-budget, not relative-to-max) |
 | F50 | Category row with `budget: 240, amount: 24.48` | shows `Budget 240 · Balance 215.52` and `10%` |
 | F51 | Category row with `budget: null` | shows "No budget set"; bar width falls back to relative-to-max-spend |
+| F67 | Analytics page header | shows the month label from the store |
+| F68 | Analytics page prev month click | decrements the month store |
+| F69 | Analytics page next month click | increments the month store |
 
 ---
 
@@ -457,6 +483,6 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | Layer | Count |
 |---|---|
 | Backend unit tests | 21 |
-| Backend integration tests | 87 |
-| Frontend unit tests | 65 |
-| **Total** | **173** |
+| Backend integration tests | 101 |
+| Frontend unit tests | 73 |
+| **Total** | **195** |

@@ -9,27 +9,7 @@
 			</div>
 		</div>
 
-		<div
-			class="mx-4 mt-4 flex items-center justify-between rounded-full bg-white/80 px-2 py-1 shadow-sm backdrop-blur"
-		>
-			<button
-				type="button"
-				aria-label="Previous month"
-				class="flex h-9 w-9 items-center justify-center rounded-full text-lg text-gray-500 transition hover:bg-blue-50 active:scale-90"
-				@click="monthStore.prevMonth()"
-			>
-				‹
-			</button>
-			<h1 class="text-base font-extrabold text-gray-900">{{ monthStore.label }}</h1>
-			<button
-				type="button"
-				aria-label="Next month"
-				class="flex h-9 w-9 items-center justify-center rounded-full text-lg text-gray-500 transition hover:bg-blue-50 active:scale-90"
-				@click="monthStore.nextMonth()"
-			>
-				›
-			</button>
-		</div>
+		<MonthNav />
 
 		<div
 			class="mx-4 mb-6 mt-4 rounded-3xl bg-gradient-to-br from-accent-500 to-purple-600 p-5 text-white shadow-lg shadow-blue-200"
@@ -111,6 +91,7 @@ import { useFamily } from "@/composables/useFamily";
 import { dateGroupLabel } from "@/utils/dateGroup";
 import { getCategoryVisual } from "@/utils/categoryStyle";
 import ExpenseSheet from "@/components/ExpenseSheet.vue";
+import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
 const { expenses, loading, reload } = useExpenses(monthStore);

@@ -5,6 +5,7 @@ import Settings from "@/pages/Settings.vue";
 import { createAppRouter } from "@/router";
 
 vi.mock("@/composables/useCategories", () => ({
+	useCategories: vi.fn(),
 	addCategory: vi.fn(),
 	renameCategory: vi.fn(),
 }));
@@ -13,10 +14,6 @@ vi.mock("@/composables/useSources", () => ({
 	addSource: vi.fn(),
 	renameSource: vi.fn(),
 }));
-vi.mock("@/composables/useBudgets", () => ({
-	useBudgets: vi.fn(),
-	setBudget: vi.fn(),
-}));
 vi.mock("frappe-ui", async (importOriginal) => {
 	const actual = await importOriginal();
 	return { ...actual, call: vi.fn() };
@@ -24,12 +21,11 @@ vi.mock("frappe-ui", async (importOriginal) => {
 
 import { call } from "frappe-ui";
 import { session } from "@/data/session";
-import { addCategory, renameCategory } from "@/composables/useCategories";
+import { addCategory, renameCategory, useCategories } from "@/composables/useCategories";
 import { addSource, renameSource, useSources } from "@/composables/useSources";
-import { setBudget, useBudgets } from "@/composables/useBudgets";
 
 function mockCategories(categories, reload = vi.fn()) {
-	useBudgets.mockReturnValue({
+	useCategories.mockReturnValue({
 		categories: ref(categories),
 		loading: ref(false),
 		reload,
@@ -51,7 +47,6 @@ beforeEach(() => {
 	renameCategory.mockResolvedValue({});
 	addSource.mockResolvedValue({ name: "SRC-2" });
 	renameSource.mockResolvedValue({});
-	setBudget.mockResolvedValue({});
 	mockSources([]);
 	session.user = "administrator";
 });
@@ -74,7 +69,7 @@ describe("Settings page", () => {
 			categoriesRef.value = [{ name: "CAT-1", category_name: "Travel" }];
 		});
 		const categoriesRef = ref([]);
-		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
+		useCategories.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
 
 		const wrapper = mount(Settings);
 		await wrapper.find('[data-test="add-category-input"]').setValue("Travel");
@@ -91,7 +86,7 @@ describe("Settings page", () => {
 		const reload = vi.fn(() => {
 			categoriesRef.value = [{ name: "CAT-1", category_name: "Groceries & Household" }];
 		});
-		useBudgets.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
+		useCategories.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
 
 		const wrapper = mount(Settings);
 		expect(wrapper.find('[data-test="rename-sheet"]').exists()).toBe(false);
@@ -171,56 +166,11 @@ describe("Settings page", () => {
 		expect(wrapper.text()).toContain("Monthly Salary");
 	});
 
-	// F41
-	it("shows a budget button next to each Category", () => {
-		mockCategories([
-			{ name: "CAT-1", category_name: "Groceries", budget_amount: null },
-			{ name: "CAT-2", category_name: "Dining", budget_amount: null },
-		]);
+	// F66
+	it("does not show a budget button on Category rows", () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries" }]);
 		const wrapper = mount(Settings);
-		expect(wrapper.findAll('[data-test="budget-open-button"]')).toHaveLength(2);
-	});
-
-	// F52
-	it('shows "Set Budget" on the button when the Category has no Budget', () => {
-		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: null }]);
-		const wrapper = mount(Settings);
-		expect(wrapper.find('[data-test="budget-open-button"]').text()).toBe("Set Budget");
-	});
-
-	// F53
-	it("shows the Budget amount on the button when the Category has a Budget", () => {
-		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 }]);
-		const wrapper = mount(Settings);
-		expect(wrapper.find('[data-test="budget-open-button"]').text()).toBe(
-			new Intl.NumberFormat().format(500)
-		);
-	});
-
-	// F42
-	it("opens the BudgetSheet for a Category when its budget button is clicked", async () => {
-		mockCategories([{ name: "CAT-1", category_name: "Groceries", budget_amount: null }]);
-		const wrapper = mount(Settings);
-		expect(wrapper.find('[data-test="budget-sheet"]').exists()).toBe(false);
-
-		await wrapper.find('[data-test="budget-open-button"]').trigger("click");
-		expect(wrapper.find('[data-test="budget-sheet"]').exists()).toBe(true);
-	});
-
-	// F54
-	it("reloads Categories after the BudgetSheet closes", async () => {
-		const reload = vi.fn();
-		mockCategories(
-			[{ name: "CAT-1", category_name: "Groceries", budget_amount: null }],
-			reload
-		);
-		const wrapper = mount(Settings);
-
-		await wrapper.find('[data-test="budget-open-button"]').trigger("click");
-		await wrapper.find('[data-test="budget-sheet-backdrop"]').trigger("click");
-
-		expect(wrapper.find('[data-test="budget-sheet"]').exists()).toBe(false);
-		expect(reload).toHaveBeenCalled();
+		expect(wrapper.find('[data-test="budget-open-button"]').exists()).toBe(false);
 	});
 
 	it("logs out and navigates to Login when Log out is clicked", async () => {

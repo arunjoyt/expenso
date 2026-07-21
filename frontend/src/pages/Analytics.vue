@@ -2,7 +2,9 @@
 	<div class="min-h-screen px-4 pb-24 pt-5">
 		<h1 class="mb-4 text-lg font-extrabold text-gray-900">📊 Analytics</h1>
 
-		<div class="mb-5 grid grid-cols-3 gap-2">
+		<MonthNav />
+
+		<div class="mb-5 mt-4 grid grid-cols-3 gap-2">
 			<div class="rounded-2xl bg-white p-3 text-center shadow-sm">
 				<p class="text-lg">💸</p>
 				<p class="text-xs font-semibold text-gray-400">Spent</p>
@@ -111,6 +113,7 @@ import { useMonthStore } from "@/stores/month";
 import { useAnalytics } from "@/composables/useAnalytics";
 import { getCategoryVisual } from "@/utils/categoryStyle";
 import IncomeSheet from "@/components/IncomeSheet.vue";
+import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
 const { total, categories, incomeTotal, savings, loading, reload } = useAnalytics(monthStore);

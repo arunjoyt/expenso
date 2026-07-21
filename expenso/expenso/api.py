@@ -118,7 +118,37 @@ def _aggregate_categories(expenses):
 	return categories
 
 
-def _attach_budget_status(categories, expenses, family):
+def _period_key(month, year):
+	return cint(year) * 12 + cint(month)
+
+
+def _find_prior_budget(category, family, month, year):
+	rows = frappe.get_all(
+		"Budget",
+		filters={"category": category, "family": family},
+		fields=["name", "amount", "month", "year"],
+	)
+	requested_key = _period_key(month, year)
+	prior = [row for row in rows if _period_key(row.month, row.year) < requested_key]
+	if not prior:
+		return None
+	return max(prior, key=lambda row: _period_key(row.month, row.year))
+
+
+def _resolve_budget_amount(category, family, month, year):
+	exact = frappe.db.get_value(
+		"Budget",
+		{"category": category, "family": family, "month": month, "year": year},
+		"amount",
+	)
+	if exact is not None:
+		return exact
+
+	prior = _find_prior_budget(category, family, month, year)
+	return prior.amount if prior else None
+
+
+def _attach_budget_status(categories, expenses, family, month, year):
 	spent_by_category_id = {}
 	category_id_by_label = {}
 	for expense in expenses:
@@ -131,12 +161,9 @@ def _attach_budget_status(categories, expenses, family):
 			"amount", 0
 		)
 
-	budgets = frappe.get_all("Budget", filters={"family": family}, fields=["category", "amount"])
-	budget_amount_by_category_id = {budget.category: budget.amount for budget in budgets}
-
 	for category in categories:
 		category_id = category_id_by_label.get(category["name"])
-		budget_amount = budget_amount_by_category_id.get(category_id) if category_id else None
+		budget_amount = _resolve_budget_amount(category_id, family, month, year) if category_id else None
 		category["budget"] = budget_amount
 		category["budget_status"] = (
 			compute_budget_status(spent_by_category_id.get(category_id, 0), budget_amount)
@@ -177,7 +204,7 @@ def compute_analytics(family: str, month: int, year: int):
 	expense_total = sum(expense.amount for expense in expenses)
 	income_total = sum(income.amount for income in incomes)
 
-	categories = _attach_budget_status(_aggregate_categories(expenses), expenses, family)
+	categories = _attach_budget_status(_aggregate_categories(expenses), expenses, family, month, year)
 
 	return {
 		"total": expense_total,
@@ -313,10 +340,13 @@ def rename_source(name: str, new_name: str):
 
 
 @frappe.whitelist()
-def get_categories_with_budgets():
+def get_budgets(month: int, year: int):
 	family = get_user_family(frappe.session.user)
 	if not family:
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	month = cint(month)
+	year = cint(year)
 
 	categories = frappe.get_all(
 		"Category",
@@ -324,26 +354,48 @@ def get_categories_with_budgets():
 		fields=["name", "category_name"],
 		order_by="category_name asc",
 	)
-	budgets = frappe.get_all(
-		"Budget",
-		filters={"family": family},
-		fields=["category", "amount"],
-	)
-	budget_by_category = {budget.category: budget.amount for budget in budgets}
 
 	for category in categories:
-		category["budget_amount"] = budget_by_category.get(category.name)
+		exact_name = frappe.db.exists(
+			"Budget",
+			{"category": category.name, "family": family, "month": month, "year": year},
+		)
+		if exact_name:
+			category["budget_amount"] = frappe.db.get_value("Budget", exact_name, "amount")
+			continue
+
+		prior = _find_prior_budget(category.name, family, month, year)
+		if not prior:
+			category["budget_amount"] = None
+			continue
+
+		materialized = frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": category.name,
+				"family": family,
+				"month": month,
+				"year": year,
+				"amount": prior.amount,
+			}
+		).insert(ignore_permissions=True)
+		category["budget_amount"] = materialized.amount
 
 	return categories
 
 
 @frappe.whitelist()
-def set_budget(category: str, amount: float | None = None):
+def set_budget(category: str, month: int, year: int, amount: float | None = None):
 	family = get_user_family(frappe.session.user)
 	if not family:
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
 
-	existing_name = frappe.db.exists("Budget", {"category": category, "family": family})
+	month = cint(month)
+	year = cint(year)
+
+	existing_name = frappe.db.exists(
+		"Budget", {"category": category, "family": family, "month": month, "year": year}
+	)
 
 	if amount is None:
 		if existing_name:
@@ -361,6 +413,8 @@ def set_budget(category: str, amount: float | None = None):
 			"doctype": "Budget",
 			"category": category,
 			"family": family,
+			"month": month,
+			"year": year,
 			"amount": amount,
 		}
 	).insert(ignore_permissions=True)

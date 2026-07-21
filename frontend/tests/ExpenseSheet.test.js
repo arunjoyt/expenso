@@ -146,4 +146,28 @@ describe("ExpenseSheet", () => {
 		expect(wrapper.emitted("close")).toBeTruthy();
 		expect(createExpense).not.toHaveBeenCalled();
 	});
+
+	// F12
+	it("shows Expense / Income tabs in add mode", () => {
+		const wrapper = mount(ExpenseSheet);
+		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="tab-income"]').exists()).toBe(true);
+	});
+
+	// F30
+	it("emits switch-mode with 'income' on Income tab click", async () => {
+		const wrapper = mount(ExpenseSheet);
+		await wrapper.find('[data-test="tab-income"]').trigger("click");
+		expect(wrapper.emitted("switch-mode")).toEqual([["income"]]);
+	});
+
+	// F80
+	it("hides the tabs in edit mode", () => {
+		const wrapper = mount(ExpenseSheet, {
+			props: {
+				expense: { name: "EXP-1", amount: 40, date: "2025-06-10", category: "CAT-1" },
+			},
+		});
+		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(false);
+	});
 });

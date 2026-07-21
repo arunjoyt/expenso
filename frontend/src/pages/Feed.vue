@@ -70,45 +70,27 @@
 		</div>
 	</div>
 
-	<div
-		v-if="menuOpen"
-		data-test="fab-menu-backdrop"
-		class="fixed inset-0 z-30"
-		@click="menuOpen = false"
-	></div>
+	<button
+		type="button"
+		data-test="fab"
+		aria-label="Add"
+		class="fixed bottom-20 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-purple-600 text-2xl text-white shadow-lg shadow-blue-300 transition hover:scale-105 active:scale-90"
+		@click="openAdd"
+	>
+		+
+	</button>
 
-	<div class="fixed bottom-20 right-6 z-40 flex flex-col items-end gap-3">
-		<template v-if="menuOpen">
-			<button
-				type="button"
-				data-test="fab-add-income"
-				class="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-lg transition active:scale-95"
-				@click="openAddIncome"
-			>
-				💰 Add Income
-			</button>
-			<button
-				type="button"
-				data-test="fab-add-expense"
-				class="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-800 shadow-lg transition active:scale-95"
-				@click="openAddExpense"
-			>
-				💸 Add Expense
-			</button>
-		</template>
-		<button
-			type="button"
-			data-test="fab"
-			aria-label="Add"
-			class="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-purple-600 text-2xl text-white shadow-lg shadow-blue-300 transition hover:scale-105 active:scale-90"
-			@click="menuOpen = !menuOpen"
-		>
-			+
-		</button>
-	</div>
-
-	<ExpenseSheet v-if="expenseSheetOpen" :expense="editingExpense" @close="closeExpenseSheet" />
-	<IncomeSheet v-if="incomeSheetOpen" @close="closeIncomeSheet" />
+	<ExpenseSheet
+		v-if="sheetOpen && sheetType === 'expense'"
+		:expense="editingExpense"
+		@close="closeSheet"
+		@switch-mode="switchMode"
+	/>
+	<IncomeSheet
+		v-if="sheetOpen && sheetType === 'income'"
+		@close="closeSheet"
+		@switch-mode="switchMode"
+	/>
 </template>
 
 <script setup>
@@ -126,35 +108,31 @@ const monthStore = useMonthStore();
 const { expenses, loading, reload } = useExpenses(monthStore);
 const { familyName } = useFamily();
 
-const menuOpen = ref(false);
-const expenseSheetOpen = ref(false);
-const incomeSheetOpen = ref(false);
+const sheetOpen = ref(false);
+const sheetType = ref("expense");
 const editingExpense = ref(null);
 
-function openAddExpense() {
-	menuOpen.value = false;
+function openAdd() {
+	sheetType.value = "expense";
 	editingExpense.value = null;
-	expenseSheetOpen.value = true;
-}
-
-function openAddIncome() {
-	menuOpen.value = false;
-	incomeSheetOpen.value = true;
+	sheetOpen.value = true;
 }
 
 function openEdit(expense) {
+	sheetType.value = "expense";
 	editingExpense.value = expense;
-	expenseSheetOpen.value = true;
+	sheetOpen.value = true;
 }
 
-function closeExpenseSheet() {
-	expenseSheetOpen.value = false;
+function switchMode(mode) {
+	sheetType.value = mode;
+}
+
+function closeSheet() {
+	sheetOpen.value = false;
+	const wasExpense = sheetType.value === "expense";
 	editingExpense.value = null;
-	reload();
-}
-
-function closeIncomeSheet() {
-	incomeSheetOpen.value = false;
+	if (wasExpense) reload();
 }
 
 function formatAmount(amount) {

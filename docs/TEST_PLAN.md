@@ -158,7 +158,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F12 | FAB click, then "Add Expense" menu item click | ExpenseSheet slides up |
+| F12 | FAB click | ExpenseSheet slides up directly, defaulting to the Expense tab |
 | F13 | ExpenseSheet — `amount` field is required | submit disabled without amount |
 | F14 | ExpenseSheet — `date` defaults to today | date field pre-filled |
 | F15 | ExpenseSheet — `category` is optional | can submit without it |
@@ -309,7 +309,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 |---|------|-----------|
 | F28 | Analytics shows income_total row | correct amount |
 | F29 | Analytics shows Savings row | correct (can be negative) |
-| F30 | Feed FAB click, then "Add Income" menu item click | IncomeSheet slides up |
+| F30 | Feed FAB click, then Income tab click | IncomeSheet slides up in place of ExpenseSheet |
 
 ---
 
@@ -477,22 +477,26 @@ read of a new month (see `docs/adr/0001-monthly-budget-carry-forward.md`).
 
 ---
 
-### Feed FAB: Add Expense / Add Income menu (issue #53)
+### Feed FAB: Add Expense / Add Income tab switcher (issue #53)
 
-"Add Income" moved off Analytics (which is read-only) onto the Feed screen: the FAB now
-opens a small menu with "Add Expense" and "Add Income", each opening its respective bottom
-sheet. `IncomeSheet` closing does not reload the Expense list — Income doesn't affect what
+"Add Income" moved off Analytics (which is read-only) onto the Feed screen. The FAB opens
+the ExpenseSheet directly in add mode, defaulting to the Expense tab — no extra tap for the
+common case. An Expense/Income tab switcher inside the sheet (add mode only, hidden while
+editing) swaps `ExpenseSheet` for `IncomeSheet` in place via a `switch-mode` event, and back
+again. `IncomeSheet` closing does not reload the Expense list — Income doesn't affect what
 Feed displays.
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F12 | FAB click | menu with "Add Expense" / "Add Income" shown |
-| F30 | FAB click, then "Add Income" menu item click | IncomeSheet slides up |
-| F79 | FAB click, then "Add Expense" menu item click | ExpenseSheet slides up |
-| F80 | FAB click, then menu backdrop tap | menu closes; no sheet opens |
+| F12 | FAB click | ExpenseSheet slides up directly, Expense tab active, no IncomeSheet shown |
+| F30 | Income tab click while ExpenseSheet is open (add mode) | ExpenseSheet is replaced with IncomeSheet |
+| F79 | Expense tab click while IncomeSheet is open | IncomeSheet is replaced with ExpenseSheet |
+| F80 | Row tap to edit an existing Expense | tab switcher not shown |
 | F81 | IncomeSheet closes | Expense list is not reloaded |
+| — | `ExpenseSheet`/`IncomeSheet` in add mode | tab switcher rendered; clicking the other tab emits `switch-mode` with `'income'`/`'expense'` |
+| — | `ExpenseSheet`/`IncomeSheet` in edit mode | tab switcher not rendered |
 
 ---
 
@@ -502,5 +506,5 @@ Feed displays.
 |---|---|
 | Backend unit tests | 21 |
 | Backend integration tests | 101 |
-| Frontend unit tests | 76 |
-| **Total** | **198** |
+| Frontend unit tests | 98 |
+| **Total** | **220** |

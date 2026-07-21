@@ -13,9 +13,27 @@
 			@touchend="onTouchEnd"
 		>
 			<div class="mx-auto mb-3 h-1.5 w-10 rounded-full bg-gray-200" aria-hidden="true"></div>
-			<h2 class="mb-4 text-lg font-extrabold text-gray-900">
-				{{ isEdit ? "✏️ Edit Income" : "💰 Add Income" }}
-			</h2>
+
+			<div v-if="isEdit" class="mb-4">
+				<h2 class="text-lg font-extrabold text-gray-900">✏️ Edit Income</h2>
+			</div>
+			<div v-else class="mb-4 flex gap-2" data-test="add-entry-tabs">
+				<button
+					type="button"
+					data-test="tab-expense"
+					class="rounded-full bg-gray-100 px-4 py-1.5 text-sm font-semibold text-gray-500"
+					@click="$emit('switch-mode', 'expense')"
+				>
+					💸 Expense
+				</button>
+				<button
+					type="button"
+					data-test="tab-income"
+					class="rounded-full bg-gradient-to-br from-accent-500 to-purple-600 px-4 py-1.5 text-sm font-semibold text-white"
+				>
+					💰 Income
+				</button>
+			</div>
 
 			<form class="flex flex-col gap-4" @submit.prevent="submit">
 				<Input
@@ -110,7 +128,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["close"]);
+const emit = defineEmits(["close", "switch-mode"]);
 
 const isEdit = computed(() => !!props.income);
 

@@ -139,47 +139,50 @@ describe("Feed page", () => {
 	});
 
 	// F12
-	it("shows the Add Expense / Add Income menu on FAB click", async () => {
+	it("opens the ExpenseSheet directly in add mode on FAB click, defaulting to the Expense tab", async () => {
 		mockExpenses([]);
 		const wrapper = mountFeed();
-		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(false);
-		expect(wrapper.find('[data-test="fab-add-income"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
 		await wrapper.find('[data-test="fab"]').trigger("click");
-		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(true);
-		expect(wrapper.find('[data-test="fab-add-income"]').exists()).toBe(true);
-	});
-
-	// F79
-	it("opens the ExpenseSheet in add mode on Add Expense menu click", async () => {
-		mockExpenses([]);
-		const wrapper = mountFeed();
-		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper.find('[data-test="fab-add-expense"]').trigger("click");
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
-		expect(wrapper.text()).toContain("Add Expense");
-		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
 	});
 
 	// F30
-	it("opens the IncomeSheet on Add Income menu click", async () => {
+	it("switches to the IncomeSheet on the Income tab click, without an extra FAB tap", async () => {
 		mockExpenses([]);
 		const wrapper = mountFeed();
-		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
 		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper.find('[data-test="fab-add-income"]').trigger("click");
+		await wrapper
+			.find('[data-test="expense-sheet"] [data-test="tab-income"]')
+			.trigger("click");
 		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(true);
-		expect(wrapper.find('[data-test="fab-add-income"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
+	});
+
+	// F79
+	it("switches back to the ExpenseSheet on the Expense tab click", async () => {
+		mockExpenses([]);
+		const wrapper = mountFeed();
+		await wrapper.find('[data-test="fab"]').trigger("click");
+		await wrapper
+			.find('[data-test="expense-sheet"] [data-test="tab-income"]')
+			.trigger("click");
+		await wrapper
+			.find('[data-test="income-sheet"] [data-test="tab-expense"]')
+			.trigger("click");
+		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
 	});
 
 	// F80
-	it("closes the FAB menu without opening a sheet when the backdrop is tapped", async () => {
-		mockExpenses([]);
+	it("does not show tabs when editing an existing Expense", async () => {
+		mockExpenses([
+			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
+		]);
 		const wrapper = mountFeed();
-		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper.find('[data-test="fab-menu-backdrop"]').trigger("click");
-		expect(wrapper.find('[data-test="fab-add-expense"]').exists()).toBe(false);
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
-		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
+		await wrapper.find('[data-test="expense-row"]').trigger("click");
+		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(false);
 	});
 
 	it("shows a notes preview under the category when present", () => {
@@ -216,7 +219,6 @@ describe("Feed page", () => {
 		const reload = mockExpenses([]);
 		const wrapper = mountFeed();
 		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper.find('[data-test="fab-add-expense"]').trigger("click");
 		reload.mockClear();
 
 		await wrapper.findComponent(ExpenseSheet).vm.$emit("close");
@@ -230,7 +232,9 @@ describe("Feed page", () => {
 		const reload = mockExpenses([]);
 		const wrapper = mountFeed();
 		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper.find('[data-test="fab-add-income"]').trigger("click");
+		await wrapper
+			.find('[data-test="expense-sheet"] [data-test="tab-income"]')
+			.trigger("click");
 		reload.mockClear();
 
 		await wrapper.findComponent(IncomeSheet).vm.$emit("close");

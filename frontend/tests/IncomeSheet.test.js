@@ -140,4 +140,21 @@ describe("IncomeSheet", () => {
 		expect(wrapper.emitted("close")).toBeTruthy();
 		expect(createIncome).not.toHaveBeenCalled();
 	});
+
+	// F79
+	it("shows Expense / Income tabs in add mode and emits switch-mode with 'expense' on Expense tab click", async () => {
+		const wrapper = mount(IncomeSheet);
+		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(true);
+		await wrapper.find('[data-test="tab-expense"]').trigger("click");
+		expect(wrapper.emitted("switch-mode")).toEqual([["expense"]]);
+	});
+
+	it("hides the tabs in edit mode", () => {
+		const wrapper = mount(IncomeSheet, {
+			props: {
+				income: { name: "INC-1", amount: 200, date: "2025-06-10", source: "SRC-1" },
+			},
+		});
+		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(false);
+	});
 });

@@ -48,6 +48,9 @@ _Avoid_: Profile, preferences, configuration
 **Chat**: A bottom-nav tab where a Member asks questions in plain language about their Family's stored data (Expenses, Income, Categories, Sources, Budgets, Savings) and gets answers grounded in that data. Strictly scoped — declines questions it cannot ground in the Family's own data (general financial advice, small talk, unrelated topics).
 _Avoid_: Assistant, Bot, Chatbot, Copilot
 
+**Expenso Desk Settings**: A Desk-only Single DocType, editable only by a System Manager, holding the LLM provider/model string and API key that power Chat. One instance-wide key shared by every Family — never surfaced in the SPA, and distinct from the Member-facing "Settings" screen.
+_Avoid_: Settings, Configuration, Preferences
+
 ---
 
 ## Income

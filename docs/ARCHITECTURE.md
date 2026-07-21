@@ -146,7 +146,7 @@ Bottom navigation bar with 4 tabs + FAB:
 - **Analytics tab** — monthly financial summary (read-only), including Budget Status per Category
 - **Budget tab** — set each Category's Budget amount for the selected month (editing only)
 - **Settings tab** — Category/Source list management, logout, version
-- **FAB** — visible on Feed only; tapping it opens a small menu with "Add Expense" and "Add Income", each opening its respective bottom sheet
+- **FAB** — visible on Feed only; tapping it opens the Add Expense bottom sheet directly (default tab); an Expense/Income tab switcher inside the sheet swaps it for the Add Income sheet without an extra tap on the FAB
 
 No Family Switcher — a Member belongs to exactly one Family.
 
@@ -170,15 +170,16 @@ No Family Switcher — a Member belongs to exactly one Family.
 - Read-only — no add/edit entry points live here; editing a Budget happens on the Budget screen, adding Income/Expense happens via the Feed FAB
 
 ### Add / Edit Expense (bottom sheet)
-- Slides up from the Feed FAB's "Add Expense" menu item (add) or tapping an Expense row (edit)
+- Slides up from the Feed FAB (add, defaults to the Expense tab) or tapping an Expense row (edit)
+- In add mode, an Expense/Income tab switcher sits at the top of the sheet; tapping "Income" swaps in the Add Income sheet in place. Not shown in edit mode.
 - Fields: `amount` (required), `date` (defaults to today), `category` (optional)
 - Delete action behind a confirmation prompt
 - Dismissable by tapping outside or swiping down
 
 ### Add / Edit Income (bottom sheet) — Phase 2
-- Same UX as Expense sheet
+- Same UX as Expense sheet, including the Expense/Income tab switcher in add mode
 - Fields: `amount` (required), `date` (defaults to today), `source` (optional)
-- Triggered from the Feed FAB's "Add Income" menu item
+- Reached from the Feed FAB by switching to the Income tab (no dedicated entry point of its own)
 
 ### Budget
 - Bottom nav tab, alongside Feed and Analytics

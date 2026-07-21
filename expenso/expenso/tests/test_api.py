@@ -8,8 +8,10 @@ from expenso.expenso.api import (
 	add_source,
 	create_expense,
 	create_income,
+	delete_category,
 	delete_expense,
 	delete_income,
+	delete_source,
 	get_analytics,
 	get_app_version,
 	get_budgets,
@@ -605,6 +607,68 @@ class TestCategorySettingsApi(FrappeTestCase):
 		self.assertEqual(doc.family, self.family.name)
 		self.assertNotEqual(doc.family, other_family.name)
 
+	# I105
+	def test_delete_category_removes_from_db(self):
+		frappe.set_user(self.member)
+		doc = add_category(name="Groceries")
+
+		delete_category(name=doc.name)
+
+		self.assertFalse(frappe.db.exists("Category", doc.name))
+
+	# I106
+	def test_delete_category_with_linked_expense_raises_link_exists_error(self):
+		frappe.set_user(self.member)
+		doc = add_category(name="Groceries")
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 25.0,
+				"category": doc.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		with self.assertRaises(frappe.LinkExistsError):
+			delete_category(name=doc.name)
+		self.assertTrue(frappe.db.exists("Category", doc.name))
+
+	# I107
+	def test_delete_category_removes_its_budgets(self):
+		frappe.set_user(self.member)
+		doc = add_category(name="Groceries")
+		set_budget(category=doc.name, month=6, year=2025, amount=500)
+
+		delete_category(name=doc.name)
+
+		self.assertEqual(frappe.db.count("Budget", {"category": doc.name}), 0)
+
+	# I108
+	def test_delete_category_from_different_family_raises_permission_error(self):
+		other_member = _ensure_test_user("settings.deleteother@expenso.test")
+		other_user = frappe.get_doc("User", other_member)
+		if "Family Member" not in {r.role for r in other_user.roles}:
+			other_user.add_roles("Family Member")
+		other_family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Settings Delete Other Family",
+				"currency": "USD",
+				"members": [{"user": other_member}],
+			}
+		).insert(ignore_permissions=True)
+		other_category = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Other Family Category",
+				"family": other_family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		with self.assertRaises(frappe.PermissionError):
+			delete_category(name=other_category.name)
+
 
 class TestGetFamilyNameApi(FrappeTestCase):
 	def setUp(self):
@@ -767,6 +831,58 @@ class TestSourceSettingsApi(FrappeTestCase):
 			frappe.db.get_value("Source", doc.name, "source_name"),
 			"Annual Bonus",
 		)
+
+	# I109
+	def test_delete_source_removes_from_db(self):
+		frappe.set_user(self.member)
+		doc = add_source(name="Bonus")
+
+		delete_source(name=doc.name)
+
+		self.assertFalse(frappe.db.exists("Source", doc.name))
+
+	# I110
+	def test_delete_source_with_linked_income_raises_link_exists_error(self):
+		frappe.set_user(self.member)
+		doc = add_source(name="Bonus")
+		frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 250.0,
+				"source": doc.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		with self.assertRaises(frappe.LinkExistsError):
+			delete_source(name=doc.name)
+		self.assertTrue(frappe.db.exists("Source", doc.name))
+
+	# I111
+	def test_delete_source_from_different_family_raises_permission_error(self):
+		other_member = _ensure_test_user("sourcesettings.deleteother@expenso.test")
+		other_user = frappe.get_doc("User", other_member)
+		if "Family Member" not in {r.role for r in other_user.roles}:
+			other_user.add_roles("Family Member")
+		other_family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Source Settings Delete Other Family",
+				"currency": "USD",
+				"members": [{"user": other_member}],
+			}
+		).insert(ignore_permissions=True)
+		other_source = frappe.get_doc(
+			{
+				"doctype": "Source",
+				"source_name": "Other Family Source",
+				"family": other_family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		with self.assertRaises(frappe.PermissionError):
+			delete_source(name=other_source.name)
 
 
 class TestBudgetSettingsApi(FrappeTestCase):

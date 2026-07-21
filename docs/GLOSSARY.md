@@ -33,26 +33,26 @@ _Avoid_: Description, memo, comment
 **Feed**: The home screen — Expenses in the Member's Family for the selected month, grouped by date with a compact monthly total at the top. Prev/next month navigation is available.
 _Avoid_: Dashboard, timeline, activity
 
-**Analytics**: A separate screen showing the selected month's financial summary — plain numbers, no charts. Phase 1: total Expenses and a breakdown by Category. Phase 2 adds: Income total, Savings (net), and an Add Income entry point. There is no per-Member breakdown. The Category breakdown shows each Category's spend alongside its Budget for the month and its Budget Status. Prev/next month navigation is available.
+**Analytics**: A separate, read-only screen showing the selected month's financial summary — plain numbers, no charts. Phase 1: total Expenses and a breakdown by Category. Phase 2 adds: Income total and Savings (net). There is no per-Member breakdown. The Category breakdown shows each Category's spend alongside its Budget for the month and its Budget Status. Prev/next month navigation is available. Adding an Expense or Income happens via the Feed FAB, not here.
 _Avoid_: Dashboard, reports, insights
 
-**Budget** (screen): A bottom-nav screen, alongside Feed and Analytics, purely for setting each Category's Budget amount for the selected month — spend and Budget Status are not shown here, see Analytics. Prev/next month navigation is available, sharing the same selected month as Feed and Analytics. The Category list itself (adding/renaming) is managed on Settings, not here — this screen only uses it to render one row per Category.
+**Budget** (screen): A bottom-nav screen, alongside Feed and Analytics, purely for setting each Category's Budget amount for the selected month — spend and Budget Status are not shown here, see Analytics. Prev/next month navigation is available, sharing the same selected month as Feed and Analytics. The Category list itself (adding, renaming, deleting) is managed on Settings, not here — this screen only uses it to render one row per Category.
 _Avoid_: Budgets, Spending, Caps
 
-**FAB (Floating Action Button)**: The persistent primary action button — always visible on the Feed and Analytics screens — that opens the Add Expense form.
+**FAB (Floating Action Button)**: The persistent primary action button — visible on the Feed screen only — that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB.
 _Avoid_: Add button, create button
 
-**Settings**: A screen reachable via a gear icon in the app header. It is the single surface for all Family configuration: Phase 1 — Category list management; Phase 2 — Source list management. Budget amounts are managed on the Budget screen, not here.
+**Settings**: A screen reachable via a gear icon in the app header. It is the single surface for all Family configuration: Phase 1 — Category list management (add, rename, delete); Phase 2 — Source list management (add, rename, delete). Budget amounts are managed on the Budget screen, not here.
 _Avoid_: Profile, preferences, configuration
 
 ---
 
 ## Income
 
-**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` and `notes` are optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income does not appear on the Feed; it is recorded and reviewed from the Analytics screen.
+**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` and `notes` are optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income does not appear on the Feed's list; it is recorded via the Feed FAB (Income tab) and reviewed from the Analytics screen.
 _Avoid_: Revenue, credit, earning
 
-**Source**: A Member-defined label that classifies an Income record (e.g. Salary, Freelance, Rental). Sources belong to a Family — each Family manages its own list. Any Member may add or rename Sources; Sources cannot be deleted.
+**Source**: A Member-defined label that classifies an Income record (e.g. Salary, Freelance, Rental). Sources belong to a Family — each Family manages its own list. Any Member may add, rename, or delete a Source; deleting is blocked while any Income record still references it.
 _Avoid_: Income type, income category
 
 **Savings**: The net result of a month's Income minus Expenses for the Family. Displayed on the Analytics screen alongside Income total and Expense total. Not a stored value — always computed on read.
@@ -62,7 +62,7 @@ _Avoid_: Balance, profit, surplus
 
 ## Categories
 
-**Category**: A Member-defined label that classifies an Expense (e.g. Groceries, Dining, Transport). Categories belong to a Family — each Family manages its own list, seeded with defaults on creation. Any Member may add or rename Categories; Categories cannot be deleted.
+**Category**: A Member-defined label that classifies an Expense (e.g. Groceries, Dining, Transport). Categories belong to a Family — each Family manages its own list, seeded with defaults on creation. Any Member may add, rename, or delete a Category; deleting is blocked while any Expense still references it, and removes that Category's Budgets for every month.
 _Avoid_: Tag, type, label
 
 ---

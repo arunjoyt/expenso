@@ -84,16 +84,16 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] User B can edit and delete User A's Expense
 - [ ] Analytics shows correct monthly total and per-category breakdown
 - [ ] Prev / next month navigation scopes the Feed and Analytics correctly
-- [ ] Settings screen shows the Category list; add and rename work; no delete option
+- [ ] Settings screen shows the Category list; add, rename, and delete work; deleting a Category still in use by an Expense is blocked with an error
 - [ ] App version appears in the Settings footer
 
 ### Phase 2
 
 - [ ] `bench --site <site> migrate` after Income + Source DocTypes
 - [ ] Default Sources seeded on new Family creation (Salary, Freelance, Rental, Other)
-- [ ] Analytics: Add Income button opens IncomeSheet; Income is saved and appears in total
+- [ ] Feed FAB → Income tab opens IncomeSheet; Income is saved and appears in Analytics total
 - [ ] Analytics: Savings line shows Income − Expenses correctly
-- [ ] Settings: Source list tab — add and rename work
+- [ ] Settings: Source list — add, rename, and delete work; deleting a Source still in use by an Income is blocked with an error
 
 ### Phase 3
 

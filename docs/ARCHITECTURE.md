@@ -135,7 +135,7 @@ Pattern is identical for `Expense`, `Income`, and `Budget`:
 - `has_permission()`: validates requesting user belongs to that Family
 - No `if_owner: 1` — any Member may create, edit, or delete any record in their Family
 
-`Category` and `Source` follow the same family-scoping pattern but are managed only through Settings (add, rename — no delete).
+`Category` and `Source` follow the same family-scoping pattern but are managed only through Settings (add, rename, delete). Deleting is blocked while any Expense (for Category) or Income (for Source) still references the record — Frappe's built-in link-existence check raises `LinkExistsError` on `frappe.delete_doc` for any doctype with existing Link references, so no manual "is it in use" query is needed. Deleting a Category also deletes its Budget rows for every month, since a Budget has no meaning without its Category.
 
 ---
 
@@ -188,12 +188,12 @@ No Family Switcher — a Member belongs to exactly one Family.
   previously from Settings, now scoped to the selected month
 - Prev / next month navigation; month state shared with Feed and Analytics
 - Spend and Budget Status are not shown here — see Analytics
-- Category list itself (add, rename) is managed on Settings; this screen only reads it
+- Category list itself (add, rename, delete) is managed on Settings; this screen only reads it
 
 ### Settings
 - Reachable via gear icon in app header (not a tab)
-- **Phase 1:** Category list — add, rename (no delete)
-- **Phase 2:** Source list — add, rename (no delete)
+- **Phase 1:** Category list — add, rename, delete (delete blocked while an Expense references the Category; also removes its Budgets)
+- **Phase 2:** Source list — add, rename, delete (delete blocked while an Income references the Source)
 - Budget amounts are managed on the Budget tab, not here
 - App version displayed in footer (read from a whitelisted API method at runtime)
 

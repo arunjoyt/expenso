@@ -8,11 +8,13 @@ vi.mock("@/composables/useCategories", () => ({
 	useCategories: vi.fn(),
 	addCategory: vi.fn(),
 	renameCategory: vi.fn(),
+	deleteCategory: vi.fn(),
 }));
 vi.mock("@/composables/useSources", () => ({
 	useSources: vi.fn(),
 	addSource: vi.fn(),
 	renameSource: vi.fn(),
+	deleteSource: vi.fn(),
 }));
 vi.mock("frappe-ui", async (importOriginal) => {
 	const actual = await importOriginal();
@@ -21,8 +23,13 @@ vi.mock("frappe-ui", async (importOriginal) => {
 
 import { call } from "frappe-ui";
 import { session } from "@/data/session";
-import { addCategory, renameCategory, useCategories } from "@/composables/useCategories";
-import { addSource, renameSource, useSources } from "@/composables/useSources";
+import {
+	addCategory,
+	deleteCategory,
+	renameCategory,
+	useCategories,
+} from "@/composables/useCategories";
+import { addSource, deleteSource, renameSource, useSources } from "@/composables/useSources";
 
 function mockCategories(categories, reload = vi.fn()) {
 	useCategories.mockReturnValue({
@@ -45,8 +52,10 @@ beforeEach(() => {
 	call.mockResolvedValue("0.0.9");
 	addCategory.mockResolvedValue({ name: "CAT-2" });
 	renameCategory.mockResolvedValue({});
+	deleteCategory.mockResolvedValue();
 	addSource.mockResolvedValue({ name: "SRC-2" });
 	renameSource.mockResolvedValue({});
+	deleteSource.mockResolvedValue();
 	mockSources([]);
 	session.user = "administrator";
 });
@@ -101,6 +110,70 @@ describe("Settings page", () => {
 
 		expect(renameCategory).toHaveBeenCalledWith("CAT-1", "Groceries & Household");
 		expect(wrapper.text()).toContain("Groceries & Household");
+	});
+
+	// F82
+	it("shows a delete button on Category rows", () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries" }]);
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="category-delete-button"]').exists()).toBe(true);
+	});
+
+	// F83
+	it("shows a confirmation prompt on Category delete button click", async () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries" }]);
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="category-confirm-delete-button"]').exists()).toBe(false);
+
+		await wrapper.find('[data-test="category-delete-button"]').trigger("click");
+
+		expect(wrapper.find('[data-test="category-confirm-delete-button"]').exists()).toBe(true);
+		expect(deleteCategory).not.toHaveBeenCalled();
+	});
+
+	// F84
+	it("dismisses the Category delete confirmation on Cancel without deleting", async () => {
+		mockCategories([{ name: "CAT-1", category_name: "Groceries" }]);
+		const wrapper = mount(Settings);
+		await wrapper.find('[data-test="category-delete-button"]').trigger("click");
+
+		await wrapper.find('[data-test="category-cancel-delete-button"]').trigger("click");
+
+		expect(wrapper.find('[data-test="category-confirm-delete-button"]').exists()).toBe(false);
+		expect(deleteCategory).not.toHaveBeenCalled();
+	});
+
+	// F85
+	it("deletes the Category and reloads the list once the delete is confirmed", async () => {
+		const categoriesRef = ref([{ name: "CAT-1", category_name: "Groceries" }]);
+		const reload = vi.fn(() => {
+			categoriesRef.value = [];
+		});
+		useCategories.mockReturnValue({ categories: categoriesRef, loading: ref(false), reload });
+
+		const wrapper = mount(Settings);
+		await wrapper.find('[data-test="category-delete-button"]').trigger("click");
+		await wrapper.find('[data-test="category-confirm-delete-button"]').trigger("click");
+		await flushPromises();
+
+		expect(deleteCategory).toHaveBeenCalledWith("CAT-1");
+		expect(reload).toHaveBeenCalled();
+		expect(wrapper.text()).not.toContain("Groceries");
+	});
+
+	// F86
+	it("shows an error and keeps the Category when delete is blocked", async () => {
+		deleteCategory.mockRejectedValue({
+			messages: ["Cannot delete: Category is linked with Expense"],
+		});
+		mockCategories([{ name: "CAT-1", category_name: "Groceries" }]);
+		const wrapper = mount(Settings);
+		await wrapper.find('[data-test="category-delete-button"]').trigger("click");
+		await wrapper.find('[data-test="category-confirm-delete-button"]').trigger("click");
+		await flushPromises();
+
+		expect(wrapper.text()).toContain("Cannot delete: Category is linked with Expense");
+		expect(wrapper.text()).toContain("Groceries");
 	});
 
 	// F27
@@ -164,6 +237,75 @@ describe("Settings page", () => {
 
 		expect(renameSource).toHaveBeenCalledWith("SRC-1", "Monthly Salary");
 		expect(wrapper.text()).toContain("Monthly Salary");
+	});
+
+	// F87
+	it("shows a delete button on Source rows", () => {
+		mockCategories([]);
+		mockSources([{ name: "SRC-1", source_name: "Salary" }]);
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="source-delete-button"]').exists()).toBe(true);
+	});
+
+	// F88
+	it("shows a confirmation prompt on Source delete button click", async () => {
+		mockCategories([]);
+		mockSources([{ name: "SRC-1", source_name: "Salary" }]);
+		const wrapper = mount(Settings);
+		expect(wrapper.find('[data-test="source-confirm-delete-button"]').exists()).toBe(false);
+
+		await wrapper.find('[data-test="source-delete-button"]').trigger("click");
+
+		expect(wrapper.find('[data-test="source-confirm-delete-button"]').exists()).toBe(true);
+		expect(deleteSource).not.toHaveBeenCalled();
+	});
+
+	// F89
+	it("dismisses the Source delete confirmation on Cancel without deleting", async () => {
+		mockCategories([]);
+		mockSources([{ name: "SRC-1", source_name: "Salary" }]);
+		const wrapper = mount(Settings);
+		await wrapper.find('[data-test="source-delete-button"]').trigger("click");
+
+		await wrapper.find('[data-test="source-cancel-delete-button"]').trigger("click");
+
+		expect(wrapper.find('[data-test="source-confirm-delete-button"]').exists()).toBe(false);
+		expect(deleteSource).not.toHaveBeenCalled();
+	});
+
+	// F90
+	it("deletes the Source and reloads the list once the delete is confirmed", async () => {
+		mockCategories([]);
+		const sourcesRef = ref([{ name: "SRC-1", source_name: "Salary" }]);
+		const reload = vi.fn(() => {
+			sourcesRef.value = [];
+		});
+		useSources.mockReturnValue({ sources: sourcesRef, loading: ref(false), reload });
+
+		const wrapper = mount(Settings);
+		await wrapper.find('[data-test="source-delete-button"]').trigger("click");
+		await wrapper.find('[data-test="source-confirm-delete-button"]').trigger("click");
+		await flushPromises();
+
+		expect(deleteSource).toHaveBeenCalledWith("SRC-1");
+		expect(reload).toHaveBeenCalled();
+		expect(wrapper.text()).not.toContain("Salary");
+	});
+
+	// F91
+	it("shows an error and keeps the Source when delete is blocked", async () => {
+		mockCategories([]);
+		deleteSource.mockRejectedValue({
+			messages: ["Cannot delete: Source is linked with Income"],
+		});
+		mockSources([{ name: "SRC-1", source_name: "Salary" }]);
+		const wrapper = mount(Settings);
+		await wrapper.find('[data-test="source-delete-button"]').trigger("click");
+		await wrapper.find('[data-test="source-confirm-delete-button"]').trigger("click");
+		await flushPromises();
+
+		expect(wrapper.text()).toContain("Cannot delete: Source is linked with Income");
+		expect(wrapper.text()).toContain("Salary");
 	});
 
 	// F66

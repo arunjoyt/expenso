@@ -8,13 +8,15 @@ A family expense tracker where multiple household members share and record expen
 |---|---|---|
 | ![Login](docs/images/login.png) | ![Feed](docs/images/feed.png) | ![Analytics](docs/images/analytics.png) |
 
-| Add Expense | Edit Expense | Add Income |
+| Add Expense | Add Income | Edit Expense |
 |---|---|---|
-| ![Add Expense](docs/images/add-expense.png) | ![Edit Expense](docs/images/edit-expense.png) | ![Add Income](docs/images/add-income.png) |
+| ![Add Expense](docs/images/add-expense.png) | ![Add Income](docs/images/add-income.png) | ![Edit Expense](docs/images/edit-expense.png) |
 
-| Settings |
-|---|
-| ![Settings](docs/images/settings.png) |
+The Feed's + button opens the Add Expense sheet directly; the Expense/Income tab switcher inside it reaches Add Income without a second tap.
+
+| Budget | Settings |
+|---|---|
+| ![Budget](docs/images/budget.png) | ![Settings](docs/images/settings.png) |
 
 ### Admin: setting up a Family
 

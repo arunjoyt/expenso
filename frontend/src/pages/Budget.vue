@@ -26,7 +26,9 @@
 					>
 						{{ getCategoryVisual(category.category_name).emoji }}
 					</span>
-					<span class="truncate font-medium text-gray-800">{{ category.category_name }}</span>
+					<span class="truncate font-medium text-gray-800">{{
+						category.category_name
+					}}</span>
 				</div>
 
 				<button

@@ -53,7 +53,9 @@ export default defineConfig(async () => {
 					display: "standalone",
 					name: "Expenso",
 					short_name: "Expenso",
+					id: "/expenso",
 					start_url: "/expenso",
+					scope: "/expenso",
 					description: "Shared family expense tracker",
 					theme_color: "#ffffff",
 					icons: [

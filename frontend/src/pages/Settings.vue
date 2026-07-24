@@ -160,20 +160,13 @@
 		>
 			🚪 Log out
 		</button>
-
-		<div
-			class="mx-auto mt-3 w-fit rounded-full bg-white px-3 py-1 text-center text-xs font-semibold text-gray-400 shadow-sm"
-			data-test="app-version"
-		>
-			v{{ appVersion }}
-		</div>
 	</div>
 </template>
 
 <script setup>
-import { onMounted, ref } from "vue";
+import { ref } from "vue";
 import { useRouter } from "vue-router";
-import { call, Input, Button, ErrorMessage } from "frappe-ui";
+import { Input, Button, ErrorMessage } from "frappe-ui";
 import { session } from "@/data/session";
 import {
 	addCategory,
@@ -269,12 +262,6 @@ async function closeSourceRenameSheet() {
 	renameSourceTarget.value = null;
 	await reloadSources();
 }
-
-const appVersion = ref("");
-
-onMounted(async () => {
-	appVersion.value = await call("expenso.expenso.api.get_app_version");
-});
 
 async function logout() {
 	await session.logout();

@@ -207,7 +207,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 |---|------|-----------|
 | I44 | `add_category(name)` | Category created for user's Family; returned |
 | I45 | `rename_category(id, new_name)` | `category_name` updated; old name gone |
-| I46 | `get_app_version()` | returns `__version__` string from `expenso/__init__.py` |
+| I46 | ~~`get_app_version()`~~ — removed; version is now injected server-side into `context.boot.app_version` (see `expenso/www/expenso.py`) and read from `window.app_version` in `App.vue`, matching kido/flashcard | n/a |
 | I47 | `add_category` called by Member — Category linked to their Family, not another | `family` field is correct |
 
 **Frontend unit tests**
@@ -217,7 +217,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | F24 | Settings lists all Categories for the Family | all names visible |
 | F25 | Add Category form | new Category appears in list after submit |
 | F26 | Rename via `RenameSheet` | tapping name opens sheet; submitting updates displayed name |
-| F27 | App version in footer | matches value from API |
+| F27 | ~~App version in footer~~ — moved to `App.vue` global footer pill, sourced from `window.app_version` (server-injected boot value, no API call); no longer Settings-specific | n/a |
 
 ---
 

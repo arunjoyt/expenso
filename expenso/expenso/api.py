@@ -2,7 +2,6 @@ import frappe
 from frappe import _
 from frappe.utils import cint, get_first_day, get_last_day
 
-from expenso import __version__
 from expenso.expenso.doctype.budget.budget import compute_budget_status
 from expenso.expenso.permissions import get_user_family
 
@@ -259,11 +258,6 @@ def delete_category(name: str):
 		frappe.delete_doc("Budget", budget_name, ignore_permissions=True)
 
 	frappe.delete_doc("Category", name, ignore_permissions=True)
-
-
-@frappe.whitelist()
-def get_app_version():
-	return __version__
 
 
 @frappe.whitelist()

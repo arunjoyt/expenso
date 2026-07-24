@@ -49,7 +49,7 @@ function mockSources(sources, reload = vi.fn()) {
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	call.mockResolvedValue("0.0.9");
+	call.mockResolvedValue();
 	addCategory.mockResolvedValue({ name: "CAT-2" });
 	renameCategory.mockResolvedValue({});
 	deleteCategory.mockResolvedValue();
@@ -174,15 +174,6 @@ describe("Settings page", () => {
 
 		expect(wrapper.text()).toContain("Cannot delete: Category is linked with Expense");
 		expect(wrapper.text()).toContain("Groceries");
-	});
-
-	// F27
-	it("shows the app version in the footer from the API", async () => {
-		mockCategories([]);
-		call.mockResolvedValue("1.2.3");
-		const wrapper = mount(Settings);
-		await flushPromises();
-		expect(wrapper.find('[data-test="app-version"]').text()).toContain("1.2.3");
 	});
 
 	// F38

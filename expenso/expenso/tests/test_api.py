@@ -13,7 +13,6 @@ from expenso.expenso.api import (
 	delete_income,
 	delete_source,
 	get_analytics,
-	get_app_version,
 	get_budgets,
 	get_expenses,
 	get_family_name,
@@ -579,12 +578,6 @@ class TestCategorySettingsApi(FrappeTestCase):
 			frappe.db.get_value("Category", doc.name, "category_name"),
 			"Groceries & Household",
 		)
-
-	# I46
-	def test_get_app_version_returns_version_from_init(self):
-		from expenso import __version__
-
-		self.assertEqual(get_app_version(), __version__)
 
 	# I47
 	def test_add_category_is_linked_to_callers_family_not_another(self):

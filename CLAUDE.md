@@ -16,73 +16,34 @@ Implementation is underway. **Do not assume any streak is done or pending from m
 
 ```bash
 gh issue list                     # open = pending streaks; closed = done
-gh pr list --state all            # open PRs = in-progress streaks; merged = shipped
-git log --oneline -20             # recent commits for context
-gh issue view 16                  # overall progress dashboard (📍 Project Roadmap)
+git log --oneline -20             # recent commits for context — this is now the source of in-progress/shipped state, not open PRs
 ```
 
 `docs/IMPLEMENTATION_PLAN.md` is the **ordered** source of truth for phases and streaks. Each streak depends on the ones before it within its phase. Treat `docs/ARCHITECTURE.md` as the source of truth for the data model, screen specs, and file layout. Treat `docs/DEPLOYMENT.md` as the source of truth for production setup and the end-to-end verification checklist. `docs/GLOSSARY.md` is the source of truth for all domain terminology — use it before introducing or renaming any concept. **`docs/TEST_PLAN.md` is the source of truth for all tests** — every streak has a numbered test table there; implement every test in that streak's section alongside the feature code.
 
 ---
 
-## Branch & PR Workflow
+## Commit Workflow
 
-**Every streak of remaining work must follow this workflow without exception.**
+**Commit directly to `develop` for every streak — no feature branches, no PRs.** Matches kido and flashcard's workflow.
 
 ### Rules
 
-1. **Never commit directly to `develop` or `main`** for any streak work. Create a dedicated branch first.
-2. **Branch naming** — `phase-<N>-streak-<N>-<short-slug>`, e.g. `phase-1-streak-1-doctypes`.
-3. **One PR per streak** — open the PR against `develop` as soon as the branch is pushed.
-4. **Auto-merge once checks pass** — after opening the PR, poll `gh pr checks <pr-number>` until all required GitHub checks complete. If they all pass, merge the PR into `develop` with `gh pr merge <pr-number> --merge` (no `--admin`/`--auto`, no skipping checks) and then start the next streak. If any check fails, stop and fix the issue on the branch instead of merging — do not merge a red PR.
-5. Always `git push -u origin <branch>` before creating the PR.
+1. Work directly on `develop`; do not create a branch for streak work.
+2. Make sure `develop` is up to date (`git pull`) before starting a streak.
+3. Bump `__version__` in every commit (see above).
 
 ### Cross-referencing on GitHub
 
-- **Commit → Issue**: include `Refs #<N>` or `Closes #<N>` in the commit message body when the commit addresses an open issue. `Closes` auto-closes on merge; `Refs` links without closing.
-- **PR → Issue**: open the PR body with `Closes #<N>` so the issue appears in the PR sidebar.
-- **PR body → Commits**: when writing the PR description, reference key commit SHAs so reviewers can jump to relevant diffs.
-- **Issue updates**: when posting a progress comment on an issue, include the branch name and PR URL so the issue thread tells the full story.
-
-### PR body template (always use this)
-
-```
-## Summary
-- <bullet: what this streak implements>
-- <bullet: key design decision or tradeoff>
-
-## Steps completed
-- [ ] <step description>
-- [ ] <step description>
-
-## Closes / Refs
-Closes #<issue>
-
-## Test plan
-- [ ] bench migrate runs without errors
-- [ ] <streak-specific manual test — e.g. "Family created → default Categories seeded">
-- [ ] <frontend test if applicable — e.g. "Feed loads, month nav works">
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-```
-
----
-
-## Roadmap tracking
-
-A single GitHub issue (`📍 Project Roadmap`) is the live progress dashboard for all three phases. Keep it in sync:
-
-- **When a streak PR is created**: post a comment on the roadmap issue linking to the PR
-  (`gh issue comment 16 --body "P<N>-S<N> PR: #<pr-number>"`)
-- **When a streak issue is closed**: post a comment on the roadmap issue noting what shipped and the commit SHA.
-- **When a phase is fully done**: post a summary comment on the roadmap issue (e.g. "Phase 1 complete — all streaks done, PRs merged") and update the phase heading in the roadmap body to add ✅.
+- **Commit → Issue**: include `Refs #<N>` or `Closes #<N>` in the commit message body when the commit addresses an open issue. Since `develop` is this repo's default branch, `Closes #<N>` auto-closes the issue as soon as the commit is pushed — no PR needed. `Refs` links without closing.
+- **Issue updates**: when posting a progress comment on an issue, include the commit SHA so the issue thread tells the full story.
 
 ---
 
 ## Workflow checklist (per streak)
 
-1. Check GitHub state: `gh issue list` + `gh pr list --state all` + `gh issue view 16`
-2. `git checkout -b phase-<N>-streak-<N>-<slug>` from latest `develop`
+1. Check GitHub state: `gh issue list` + `git log --oneline -20`
+2. `git checkout develop && git pull`
 3. Implement the streak **and** write all tests listed for it in `docs/TEST_PLAN.md`
 4. Run tests: `bench --site expenso1.test run-tests --app expenso`
 5. Run linter (auto-fixes in place, then re-run to confirm clean):
@@ -96,9 +57,6 @@ A single GitHub issue (`📍 Project Roadmap`) is the live progress dashboard fo
    > Always add `from frappe import _` to any file that calls `frappe.throw/msgprint`
    > (ruff also flags `_` as undefined without the explicit import).
 6. Commit with `Refs #<streak-issue>` or `Closes #<streak-issue>` in each commit message body; bump `__version__`
-7. `git push -u origin <branch>`
-8. `gh pr create` using the PR body template above
-9. Post a comment on the roadmap issue linking to the new PR
-10. Wait for GitHub checks to complete on the PR (`gh pr checks <pr-number>`, polling until done). If green, merge into `develop` (`gh pr merge <pr-number> --merge`); post a comment on the roadmap issue noting what shipped. If red, fix on the branch, push, and re-check — do not merge a failing PR.
-11. Once merged, move on to the next streak per `docs/IMPLEMENTATION_PLAN.md`'s ordering (repeat from step 1), continuing into the next phase when the current one's streaks are all merged.
+7. `git push origin develop`
+8. Once pushed, move on to the next streak per `docs/IMPLEMENTATION_PLAN.md`'s ordering (repeat from step 1), continuing into the next phase when the current one's streaks are all done.
 

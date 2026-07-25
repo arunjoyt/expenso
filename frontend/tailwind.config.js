@@ -1,12 +1,21 @@
+import { createRequire } from "module";
+import path from "path";
 import frappeUIPreset from "frappe-ui/tailwind";
+
+// bench hoists frappe-ui to the app-level node_modules (apps/expenso/node_modules),
+// not frontend/node_modules, so a relative "./node_modules/frappe-ui" glob never
+// matches anything and frappe-ui's own component classes silently never generate.
+// Resolve the package's real install location instead of assuming where it lives.
+const require = createRequire(import.meta.url);
+const frappeUIRoot = path.dirname(path.dirname(require.resolve("frappe-ui/tailwind")));
 
 export default {
 	presets: [frappeUIPreset],
 	content: [
 		"./index.html",
 		"./src/**/*.{vue,js,ts,jsx,tsx}",
-		"./node_modules/frappe-ui/src/**/*.{vue,js,ts,jsx,tsx}",
-		"./node_modules/frappe-ui/frappe/**/*.{vue,js,ts,jsx,tsx}",
+		`${frappeUIRoot}/src/**/*.{vue,js,ts,jsx,tsx}`,
+		`${frappeUIRoot}/frappe/**/*.{vue,js,ts,jsx,tsx}`,
 	],
 	theme: {
 		extend: {

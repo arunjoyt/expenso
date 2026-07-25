@@ -12,7 +12,7 @@
  "is_hidden": 0,
  "label": "Expenso",
  "links": [],
- "modified": "2026-07-19 21:05:00.000000",
+ "modified": "2026-07-25 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Expenso",
  "name": "Expenso",
@@ -56,39 +56,51 @@
    "url": "/expenso"
   },
   {
-   "doc_view": "",
+   "color": "Grey",
+   "doc_view": "List",
    "label": "Family",
    "link_to": "Family",
+   "stats_filter": "[]",
    "type": "DocType"
   },
   {
-   "doc_view": "",
+   "color": "Grey",
+   "doc_view": "List",
    "label": "Category",
    "link_to": "Category",
+   "stats_filter": "[]",
    "type": "DocType"
   },
   {
-   "doc_view": "",
+   "color": "Grey",
+   "doc_view": "List",
    "label": "Expense",
    "link_to": "Expense",
+   "stats_filter": "[]",
    "type": "DocType"
   },
   {
-   "doc_view": "",
+   "color": "Grey",
+   "doc_view": "List",
    "label": "Income",
    "link_to": "Income",
+   "stats_filter": "[]",
    "type": "DocType"
   },
   {
-   "doc_view": "",
+   "color": "Grey",
+   "doc_view": "List",
    "label": "Source",
    "link_to": "Source",
+   "stats_filter": "[]",
    "type": "DocType"
   },
   {
-   "doc_view": "",
+   "color": "Grey",
+   "doc_view": "List",
    "label": "Budget",
    "link_to": "Budget",
+   "stats_filter": "[]",
    "type": "DocType"
   },
   {

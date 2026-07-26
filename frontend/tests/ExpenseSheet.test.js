@@ -5,6 +5,7 @@ import ExpenseSheet from "@/components/ExpenseSheet.vue";
 
 vi.mock("@/composables/useCategories", () => ({
 	useCategories: vi.fn(),
+	addCategory: vi.fn(),
 }));
 vi.mock("@/composables/useExpenses", () => ({
 	createExpense: vi.fn(),
@@ -12,19 +13,27 @@ vi.mock("@/composables/useExpenses", () => ({
 	deleteExpense: vi.fn(),
 }));
 
-import { useCategories } from "@/composables/useCategories";
+import { useCategories, addCategory } from "@/composables/useCategories";
 import { createExpense, updateExpense, deleteExpense } from "@/composables/useExpenses";
+
+let reloadCategories;
+let categoriesRef;
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	categoriesRef = ref([{ name: "CAT-1", category_name: "Groceries" }]);
+	reloadCategories = vi.fn(async () => {
+		categoriesRef.value = [...categoriesRef.value, { name: "CAT-NEW", category_name: "Pets" }];
+	});
 	useCategories.mockReturnValue({
-		categories: ref([{ name: "CAT-1", category_name: "Groceries" }]),
+		categories: categoriesRef,
 		loading: ref(false),
-		reload: vi.fn(),
+		reload: reloadCategories,
 	});
 	createExpense.mockResolvedValue({ name: "EXP-NEW" });
 	updateExpense.mockResolvedValue({ name: "EXP-1" });
 	deleteExpense.mockResolvedValue();
+	addCategory.mockResolvedValue({ name: "CAT-NEW" });
 });
 
 function amountInput(wrapper) {
@@ -159,6 +168,47 @@ describe("ExpenseSheet", () => {
 		const wrapper = mount(ExpenseSheet);
 		await wrapper.find('[data-test="tab-income"]').trigger("click");
 		expect(wrapper.emitted("switch-mode")).toEqual([["income"]]);
+	});
+
+	// F94
+	it("reveals an inline name input when '+ New category' is selected", async () => {
+		const wrapper = mount(ExpenseSheet);
+		expect(wrapper.find('[data-test="new-category-inline"]').exists()).toBe(false);
+		await wrapper.find('[data-test="category-select"]').setValue("__new_category__");
+		expect(wrapper.find('[data-test="new-category-inline"]').exists()).toBe(true);
+	});
+
+	// F95
+	it("creates and selects a new category without leaving the sheet", async () => {
+		const wrapper = mount(ExpenseSheet);
+		await wrapper.find('[data-test="category-select"]').setValue("__new_category__");
+		await wrapper.find('[data-test="new-category-input"]').setValue("Pets");
+		await wrapper.find('[data-test="new-category-create-button"]').trigger("click");
+		await flushPromises();
+
+		expect(addCategory).toHaveBeenCalledWith("Pets");
+		expect(reloadCategories).toHaveBeenCalled();
+		expect(wrapper.find('[data-test="new-category-inline"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="category-select"]').element.value).toBe("CAT-NEW");
+	});
+
+	// F96
+	it("cancels inline category creation and resets the category select", async () => {
+		const wrapper = mount(ExpenseSheet);
+		await wrapper.find('[data-test="category-select"]').setValue("__new_category__");
+		await wrapper.find('[data-test="new-category-cancel-button"]').trigger("click");
+
+		expect(wrapper.find('[data-test="new-category-inline"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="category-select"]').element.value).toBe("");
+		expect(addCategory).not.toHaveBeenCalled();
+	});
+
+	// F97
+	it("disables submit while inline category creation is open", async () => {
+		const wrapper = mount(ExpenseSheet);
+		await amountInput(wrapper).setValue("25");
+		await wrapper.find('[data-test="category-select"]').setValue("__new_category__");
+		expect(wrapper.find('[data-test="submit-button"]').attributes("disabled")).toBeDefined();
 	});
 
 	// F80

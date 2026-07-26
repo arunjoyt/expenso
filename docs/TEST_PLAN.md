@@ -568,11 +568,34 @@ Budget. Sort stays by amount spent descending, so zero-spend rows sort last.
 
 ---
 
+### Add Expense/Income sheet: inline create for new Category/Source (issue #63)
+
+Creating a new Category/Source previously required leaving the Add Expense/Income sheet for
+Settings, breaking flow mid-entry. The Category/Source `<select>` now has a trailing
+"+ New category"/"+ New source" option; picking it reveals an inline name input in the sheet.
+Submitting calls the existing `add_category`/`add_source` API, reloads the list, and
+auto-selects the new record — no navigation away. Rename/delete are unchanged and still
+Settings-only.
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F94 | Selecting "+ New category" in ExpenseSheet | inline name input appears |
+| F95 | Submitting the inline Category name | `addCategory` called; list reloads; new Category auto-selected; inline input closes |
+| F96 | Cancelling inline Category creation | inline input closes; Category select resets to empty; `addCategory` not called |
+| F97 | Inline Category creation open | submit button disabled even with a valid amount |
+| F98 | Selecting "+ New source" in IncomeSheet | inline name input appears |
+| F99 | Submitting the inline Source name | `addSource` called; list reloads; new Source auto-selected; inline input closes |
+| F100 | Cancelling inline Source creation | inline input closes; Source select resets to empty; `addSource` not called |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
 | Backend unit tests | 21 |
 | Backend integration tests | 113 |
-| Frontend unit tests | 110 |
-| **Total** | **244** |
+| Frontend unit tests | 117 |
+| **Total** | **251** |

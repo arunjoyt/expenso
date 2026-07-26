@@ -85,6 +85,7 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] Analytics shows correct monthly total and per-category breakdown
 - [ ] Prev / next month navigation scopes the Feed and Analytics correctly
 - [ ] Settings screen shows the Category list; add, rename, and delete work; deleting a Category still in use by an Expense is blocked with an error
+- [ ] Add Expense sheet: selecting "+ New category" reveals an inline input; creating a Category there selects it immediately without leaving the sheet
 - [ ] App version appears in the Settings footer
 
 ### Phase 2
@@ -94,6 +95,7 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] Feed FAB → Income tab opens IncomeSheet; Income is saved and appears in Analytics total
 - [ ] Analytics: Savings line shows Income − Expenses correctly
 - [ ] Settings: Source list — add, rename, and delete work; deleting a Source still in use by an Income is blocked with an error
+- [ ] Add Income sheet: selecting "+ New source" reveals an inline input; creating a Source there selects it immediately without leaving the sheet
 
 ### Phase 3
 

@@ -58,6 +58,40 @@
 					v-model="category"
 					:options="categoryOptions"
 				/>
+				<div
+					v-if="creatingCategory"
+					data-test="new-category-inline"
+					class="flex flex-col gap-2 rounded-2xl bg-gray-50 p-3"
+				>
+					<Input
+						data-test="new-category-input"
+						placeholder="New category name"
+						:model-value="newCategoryName"
+						@input="newCategoryName = $event"
+					/>
+					<ErrorMessage :message="newCategoryError" />
+					<div class="flex gap-2">
+						<Button
+							data-test="new-category-create-button"
+							variant="solid"
+							theme="blue"
+							type="button"
+							:loading="savingNewCategory"
+							:disabled="!newCategoryName"
+							@click="submitNewCategory"
+						>
+							Create
+						</Button>
+						<Button
+							data-test="new-category-cancel-button"
+							variant="ghost"
+							type="button"
+							@click="cancelNewCategory"
+						>
+							Cancel
+						</Button>
+					</div>
+				</div>
 				<Input
 					data-test="notes-input"
 					label="Notes"
@@ -116,11 +150,13 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { Input, Button, ErrorMessage } from "frappe-ui";
-import { useCategories } from "@/composables/useCategories";
+import { addCategory, useCategories } from "@/composables/useCategories";
 import { createExpense, updateExpense, deleteExpense } from "@/composables/useExpenses";
 import { getCategoryVisual } from "@/utils/categoryStyle";
+
+const NEW_CATEGORY_VALUE = "__new_category__";
 
 const props = defineProps({
 	expense: {
@@ -142,16 +178,53 @@ const date = ref(props.expense?.date ?? today());
 const category = ref(props.expense?.category ?? "");
 const notes = ref(props.expense?.notes ?? "");
 
-const { categories } = useCategories();
+const { categories, reload: reloadCategories } = useCategories();
 const categoryOptions = computed(() => [
 	{ label: `${getCategoryVisual().emoji} Uncategorized`, value: "" },
 	...categories.value.map((c) => ({
 		label: `${getCategoryVisual(c.category_name).emoji} ${c.category_name}`,
 		value: c.name,
 	})),
+	{ label: "➕ New category", value: NEW_CATEGORY_VALUE },
 ]);
 
-const canSubmit = computed(() => Number(amount.value) > 0);
+const creatingCategory = ref(false);
+const newCategoryName = ref("");
+const newCategoryError = ref("");
+const savingNewCategory = ref(false);
+
+watch(category, (value) => {
+	if (value === NEW_CATEGORY_VALUE) {
+		creatingCategory.value = true;
+	}
+});
+
+async function submitNewCategory() {
+	if (!newCategoryName.value) return;
+	newCategoryError.value = "";
+	savingNewCategory.value = true;
+	try {
+		const created = await addCategory(newCategoryName.value);
+		await reloadCategories();
+		category.value = created.name;
+		creatingCategory.value = false;
+		newCategoryName.value = "";
+	} catch (error) {
+		newCategoryError.value =
+			error?.messages?.join("\n") || error?.message || "Failed to create category";
+	} finally {
+		savingNewCategory.value = false;
+	}
+}
+
+function cancelNewCategory() {
+	creatingCategory.value = false;
+	newCategoryName.value = "";
+	newCategoryError.value = "";
+	category.value = "";
+}
+
+const canSubmit = computed(() => Number(amount.value) > 0 && !creatingCategory.value);
 
 const saving = ref(false);
 const deleting = ref(false);

@@ -58,6 +58,40 @@
 					v-model="source"
 					:options="sourceOptions"
 				/>
+				<div
+					v-if="creatingSource"
+					data-test="new-source-inline"
+					class="flex flex-col gap-2 rounded-2xl bg-gray-50 p-3"
+				>
+					<Input
+						data-test="new-source-input"
+						placeholder="New source name"
+						:model-value="newSourceName"
+						@input="newSourceName = $event"
+					/>
+					<ErrorMessage :message="newSourceError" />
+					<div class="flex gap-2">
+						<Button
+							data-test="new-source-create-button"
+							variant="solid"
+							theme="blue"
+							type="button"
+							:loading="savingNewSource"
+							:disabled="!newSourceName"
+							@click="submitNewSource"
+						>
+							Create
+						</Button>
+						<Button
+							data-test="new-source-cancel-button"
+							variant="ghost"
+							type="button"
+							@click="cancelNewSource"
+						>
+							Cancel
+						</Button>
+					</div>
+				</div>
 				<Input
 					data-test="income-notes-input"
 					label="Notes"
@@ -116,10 +150,12 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { Input, Button, ErrorMessage } from "frappe-ui";
-import { useSources } from "@/composables/useSources";
+import { addSource, useSources } from "@/composables/useSources";
 import { createIncome, updateIncome, deleteIncome } from "@/composables/useIncome";
+
+const NEW_SOURCE_VALUE = "__new_source__";
 
 const props = defineProps({
 	income: {
@@ -141,13 +177,50 @@ const date = ref(props.income?.date ?? today());
 const source = ref(props.income?.source ?? "");
 const notes = ref(props.income?.notes ?? "");
 
-const { sources } = useSources();
+const { sources, reload: reloadSources } = useSources();
 const sourceOptions = computed(() => [
 	{ label: "None", value: "" },
 	...sources.value.map((s) => ({ label: `💵 ${s.source_name}`, value: s.name })),
+	{ label: "➕ New source", value: NEW_SOURCE_VALUE },
 ]);
 
-const canSubmit = computed(() => Number(amount.value) > 0);
+const creatingSource = ref(false);
+const newSourceName = ref("");
+const newSourceError = ref("");
+const savingNewSource = ref(false);
+
+watch(source, (value) => {
+	if (value === NEW_SOURCE_VALUE) {
+		creatingSource.value = true;
+	}
+});
+
+async function submitNewSource() {
+	if (!newSourceName.value) return;
+	newSourceError.value = "";
+	savingNewSource.value = true;
+	try {
+		const created = await addSource(newSourceName.value);
+		await reloadSources();
+		source.value = created.name;
+		creatingSource.value = false;
+		newSourceName.value = "";
+	} catch (error) {
+		newSourceError.value =
+			error?.messages?.join("\n") || error?.message || "Failed to create source";
+	} finally {
+		savingNewSource.value = false;
+	}
+}
+
+function cancelNewSource() {
+	creatingSource.value = false;
+	newSourceName.value = "";
+	newSourceError.value = "";
+	source.value = "";
+}
+
+const canSubmit = computed(() => Number(amount.value) > 0 && !creatingSource.value);
 
 const saving = ref(false);
 const deleting = ref(false);

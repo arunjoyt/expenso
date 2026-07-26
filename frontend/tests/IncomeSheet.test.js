@@ -5,6 +5,7 @@ import IncomeSheet from "@/components/IncomeSheet.vue";
 
 vi.mock("@/composables/useSources", () => ({
 	useSources: vi.fn(),
+	addSource: vi.fn(),
 }));
 vi.mock("@/composables/useIncome", () => ({
 	createIncome: vi.fn(),
@@ -12,19 +13,27 @@ vi.mock("@/composables/useIncome", () => ({
 	deleteIncome: vi.fn(),
 }));
 
-import { useSources } from "@/composables/useSources";
+import { useSources, addSource } from "@/composables/useSources";
 import { createIncome, updateIncome, deleteIncome } from "@/composables/useIncome";
+
+let reloadSources;
+let sourcesRef;
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	sourcesRef = ref([{ name: "SRC-1", source_name: "Salary" }]);
+	reloadSources = vi.fn(async () => {
+		sourcesRef.value = [...sourcesRef.value, { name: "SRC-NEW", source_name: "Dividends" }];
+	});
 	useSources.mockReturnValue({
-		sources: ref([{ name: "SRC-1", source_name: "Salary" }]),
+		sources: sourcesRef,
 		loading: ref(false),
-		reload: vi.fn(),
+		reload: reloadSources,
 	});
 	createIncome.mockResolvedValue({ name: "INC-NEW" });
 	updateIncome.mockResolvedValue({ name: "INC-1" });
 	deleteIncome.mockResolvedValue();
+	addSource.mockResolvedValue({ name: "SRC-NEW" });
 });
 
 function amountInput(wrapper) {
@@ -147,6 +156,39 @@ describe("IncomeSheet", () => {
 		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(true);
 		await wrapper.find('[data-test="tab-expense"]').trigger("click");
 		expect(wrapper.emitted("switch-mode")).toEqual([["expense"]]);
+	});
+
+	// F98
+	it("reveals an inline name input when '+ New source' is selected", async () => {
+		const wrapper = mount(IncomeSheet);
+		expect(wrapper.find('[data-test="new-source-inline"]').exists()).toBe(false);
+		await wrapper.find('[data-test="income-source-select"]').setValue("__new_source__");
+		expect(wrapper.find('[data-test="new-source-inline"]').exists()).toBe(true);
+	});
+
+	// F99
+	it("creates and selects a new source without leaving the sheet", async () => {
+		const wrapper = mount(IncomeSheet);
+		await wrapper.find('[data-test="income-source-select"]').setValue("__new_source__");
+		await wrapper.find('[data-test="new-source-input"]').setValue("Dividends");
+		await wrapper.find('[data-test="new-source-create-button"]').trigger("click");
+		await flushPromises();
+
+		expect(addSource).toHaveBeenCalledWith("Dividends");
+		expect(reloadSources).toHaveBeenCalled();
+		expect(wrapper.find('[data-test="new-source-inline"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="income-source-select"]').element.value).toBe("SRC-NEW");
+	});
+
+	// F100
+	it("cancels inline source creation and resets the source select", async () => {
+		const wrapper = mount(IncomeSheet);
+		await wrapper.find('[data-test="income-source-select"]').setValue("__new_source__");
+		await wrapper.find('[data-test="new-source-cancel-button"]').trigger("click");
+
+		expect(wrapper.find('[data-test="new-source-inline"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="income-source-select"]').element.value).toBe("");
+		expect(addSource).not.toHaveBeenCalled();
 	});
 
 	it("hides the tabs in edit mode", () => {

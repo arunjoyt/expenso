@@ -102,6 +102,8 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] Analytics: Category with ≥80% of Budget spent shows yellow Warning state
 - [ ] Analytics: Category with ≥100% of Budget spent shows red Exceeded state
 - [ ] Category with no Budget shows no indicator
+- [ ] Analytics: a Category with a Budget set but no spend this month still appears, at $0
+- [ ] Analytics: Budget stat tile shows the sum of every visible Category's effective Budget
 
 ### Production (all phases)
 

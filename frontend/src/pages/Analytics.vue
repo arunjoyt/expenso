@@ -4,7 +4,7 @@
 
 		<MonthNav />
 
-		<div class="mb-5 mt-4 grid grid-cols-3 gap-2">
+		<div class="mb-5 mt-4 grid grid-cols-2 gap-2">
 			<div class="rounded-2xl bg-white p-3 text-center shadow-sm">
 				<p class="text-lg">💸</p>
 				<p class="text-xs font-semibold text-gray-400">Spent</p>
@@ -26,6 +26,11 @@
 				>
 					{{ formattedSavings }}
 				</p>
+			</div>
+			<div class="rounded-2xl bg-white p-3 text-center shadow-sm" data-test="budget-total">
+				<p class="text-lg">🎯</p>
+				<p class="text-xs font-semibold text-gray-400">Budget</p>
+				<p class="text-sm font-bold text-gray-900">{{ formattedBudgetTotal }}</p>
 			</div>
 		</div>
 
@@ -104,7 +109,7 @@ import { getCategoryVisual } from "@/utils/categoryStyle";
 import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
-const { total, categories, incomeTotal, savings, loading } = useAnalytics(monthStore);
+const { total, categories, incomeTotal, savings, budgetTotal, loading } = useAnalytics(monthStore);
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);
@@ -113,6 +118,7 @@ function formatAmount(amount) {
 const formattedTotal = computed(() => formatAmount(total.value));
 const formattedIncomeTotal = computed(() => formatAmount(incomeTotal.value));
 const formattedSavings = computed(() => formatAmount(savings.value));
+const formattedBudgetTotal = computed(() => formatAmount(budgetTotal.value));
 
 const maxCategoryAmount = computed(() =>
 	categories.value.reduce((max, category) => Math.max(max, category.amount), 0)

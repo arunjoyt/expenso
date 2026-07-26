@@ -538,11 +538,41 @@ Category too, so it would otherwise block the delete on its own link).
 
 ---
 
+### Analytics: total Budget stat + budgeted zero-spend categories (issue #62)
+
+The Category breakdown was built only from Expense rows this month, so a Category with a
+Budget set but no spend was invisible to Analytics entirely. `_add_budgeted_categories` now
+appends a Category to the list (at `amount: 0`) whenever it has an effective Budget for the
+month and isn't already present from spend, resolving via the same `_resolve_budget_amount`
+carry-forward logic and attaching `budget`/`budget_status` directly (bypassing the
+expense-derived label lookup in `_attach_budget_status`, which cannot disambiguate categories
+that share a name within a Family). `budget_total` sums every visible category's effective
+Budget. Sort stays by amount spent descending, so zero-spend rows sort last.
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I112 | `get_analytics` for a Category with a Budget but no Expense this month | category row appears with `amount: 0`, `budget: <amount>`, `budget_status` computed against 0 spend |
+| I113 | `get_analytics` for a Category with neither Budget nor Expense this month | Category does not appear in `categories` |
+| I114 | `get_analytics` sort order with a mix of spent and zero-spend budgeted Categories | zero-spend budgeted Category sorts after Categories with spend |
+| I115 | `get_analytics` `budget_total` with Budgets set on multiple Categories | sums each visible Category's effective Budget |
+| I116 | `get_analytics` `budget_total` with no Budgets set | equals 0 |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F92 | Analytics stat tiles | Budget tile shows the total Budget, formatted |
+| F93 | Category row with `amount: 0` and a Budget set | row renders with budget summary (not "No budget set"), 0% |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
 | Backend unit tests | 21 |
-| Backend integration tests | 108 |
-| Frontend unit tests | 108 |
-| **Total** | **237** |
+| Backend integration tests | 113 |
+| Frontend unit tests | 110 |
+| **Total** | **244** |

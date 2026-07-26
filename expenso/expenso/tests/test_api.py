@@ -525,6 +525,129 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		result = get_analytics(month=6, year=2025)
 		self.assertIsNone(self._category_row(result, "Groceries")["budget_status"])
 
+	# I112
+	def test_get_analytics_includes_category_with_budget_but_no_expense(self):
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 200.0,
+				"month": 6,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+
+		row = self._category_row(result, "Groceries")
+		self.assertEqual(row["amount"], 0)
+		self.assertEqual(row["budget"], 200.0)
+		self.assertEqual(row["budget_status"], "Normal")
+
+	# I113
+	def test_get_analytics_excludes_category_with_neither_budget_nor_expense(self):
+		frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Unused",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+
+		self.assertEqual(result["categories"], [])
+
+	# I114
+	def test_get_analytics_sorts_zero_spend_budgeted_category_after_spent_categories(self):
+		dining = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Dining",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 200.0,
+				"month": 6,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 10.0,
+				"date": "2025-06-01",
+				"category": dining.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+
+		names = [c["name"] for c in result["categories"]]
+		self.assertEqual(names, ["Dining", "Groceries"])
+
+	# I115
+	def test_get_analytics_budget_total_sums_effective_budgets(self):
+		dining = frappe.get_doc(
+			{
+				"doctype": "Category",
+				"category_name": "Dining",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": self.groceries.name,
+				"family": self.family.name,
+				"amount": 200.0,
+				"month": 6,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "Budget",
+				"category": dining.name,
+				"family": self.family.name,
+				"amount": 50.0,
+				"month": 6,
+				"year": 2025,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+
+		self.assertEqual(result["budget_total"], 250.0)
+
+	# I116
+	def test_get_analytics_budget_total_is_zero_with_no_budgets_set(self):
+		frappe.get_doc(
+			{
+				"doctype": "Expense",
+				"amount": 30.0,
+				"date": "2025-06-15",
+				"category": self.groceries.name,
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_analytics(month=6, year=2025)
+
+		self.assertEqual(result["budget_total"], 0)
+
 
 class TestComputeSavings(FrappeTestCase):
 	# U12

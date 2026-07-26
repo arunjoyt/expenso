@@ -117,6 +117,26 @@ def _aggregate_categories(expenses):
 	return categories
 
 
+def _add_budgeted_categories(categories, family, month, year):
+	existing_names = {category["name"] for category in categories}
+	for category in frappe.get_all("Category", filters={"family": family}, fields=["name", "category_name"]):
+		if category.category_name in existing_names:
+			continue
+		budget_amount = _resolve_budget_amount(category.name, family, month, year)
+		if budget_amount is None:
+			continue
+		categories.append(
+			{
+				"name": category.category_name,
+				"amount": 0,
+				"budget": budget_amount,
+				"budget_status": compute_budget_status(0, budget_amount),
+			}
+		)
+		existing_names.add(category.category_name)
+	return categories
+
+
 def _period_key(month, year):
 	return cint(year) * 12 + cint(month)
 
@@ -161,6 +181,9 @@ def _attach_budget_status(categories, expenses, family, month, year):
 		)
 
 	for category in categories:
+		if "budget" in category:
+			continue
+
 		category_id = category_id_by_label.get(category["name"])
 		budget_amount = _resolve_budget_amount(category_id, family, month, year) if category_id else None
 		category["budget"] = budget_amount
@@ -203,13 +226,19 @@ def compute_analytics(family: str, month: int, year: int):
 	expense_total = sum(expense.amount for expense in expenses)
 	income_total = sum(income.amount for income in incomes)
 
-	categories = _attach_budget_status(_aggregate_categories(expenses), expenses, family, month, year)
+	categories = _aggregate_categories(expenses)
+	categories = _add_budgeted_categories(categories, family, month, year)
+	categories = _attach_budget_status(categories, expenses, family, month, year)
+	categories.sort(key=lambda category: category["amount"], reverse=True)
+
+	budget_total = sum(category["budget"] for category in categories if category["budget"])
 
 	return {
 		"total": expense_total,
 		"categories": categories,
 		"income_total": income_total,
 		"savings": _compute_savings(income_total, expense_total),
+		"budget_total": budget_total,
 	}
 
 

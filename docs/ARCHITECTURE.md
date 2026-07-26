@@ -165,7 +165,9 @@ No Family Switcher — a Member belongs to exactly one Family.
 ### Analytics
 - **Phase 1:** total spent + Category breakdown (name + amount, no charts)
 - **Phase 2 additions:** Income total, Savings line (Income − Expenses)
-- **Phase 3 additions:** Budget Status indicator per Category row, budget amount shown alongside spend
+- **Phase 3 additions:** Budget Status indicator per Category row, budget amount shown alongside spend; a total Budget stat (sum of each Category's effective Budget for the month)
+- Stat tiles laid out as a 2×2 grid: Spent / Income on top, Savings / Budget below
+- Category breakdown includes any Category with spend this month, an effective Budget this month, or both — a Budget with $0 spent still shows a row; sorted by amount spent descending (zero-spend rows sort last)
 - Prev / next month navigation; month state shared with Feed and Budget
 - Read-only — no add/edit entry points live here; editing a Budget happens on the Budget screen, adding Income/Expense happens via the Feed FAB
 

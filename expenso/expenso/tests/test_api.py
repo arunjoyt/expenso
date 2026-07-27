@@ -16,6 +16,7 @@ from expenso.expenso.api import (
 	get_budgets,
 	get_expenses,
 	get_family_name,
+	get_income,
 	rename_category,
 	rename_source,
 	set_budget,
@@ -816,6 +817,91 @@ class TestGetFamilyNameApi(FrappeTestCase):
 			get_family_name()
 
 
+class TestGetIncome(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("income.get.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "Get Income Test Family",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+		self.june_income = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 500.0,
+				"date": "2025-06-15",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		self.july_income = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 300.0,
+				"date": "2025-07-01",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		self.income_with_notes = frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 200.0,
+				"date": "2025-06-05",
+				"family": self.family.name,
+				"notes": "Year-end bonus",
+			}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I117
+	def test_get_income_returns_only_income_in_month(self):
+		frappe.set_user(self.member)
+		result = get_income(month=6, year=2025)
+		names = [r.name for r in result]
+		self.assertIn(self.june_income.name, names)
+
+	# I118
+	def test_get_income_excludes_other_months(self):
+		frappe.set_user(self.member)
+		result = get_income(month=6, year=2025)
+		names = [r.name for r in result]
+		self.assertNotIn(self.july_income.name, names)
+
+	# I119
+	def test_get_income_ordered_newest_date_first(self):
+		frappe.get_doc(
+			{
+				"doctype": "Income",
+				"amount": 150.0,
+				"date": "2025-06-20",
+				"family": self.family.name,
+			}
+		).insert(ignore_permissions=True)
+
+		frappe.set_user(self.member)
+		result = get_income(month=6, year=2025)
+		dates = [str(r.date) for r in result]
+		self.assertEqual(dates, sorted(dates, reverse=True))
+
+	# I120
+	def test_get_income_includes_notes(self):
+		frappe.set_user(self.member)
+		result = get_income(month=6, year=2025)
+		row = next(r for r in result if r.name == self.income_with_notes.name)
+		self.assertEqual(row.notes, "Year-end bonus")
+
+
 class TestIncomeCrudApi(FrappeTestCase):
 	def setUp(self):
 		self.member_a = _ensure_test_user("income.membera@expenso.test")
@@ -855,6 +941,7 @@ class TestIncomeCrudApi(FrappeTestCase):
 
 	def tearDown(self):
 		frappe.set_user("Administrator")
+		frappe.local._realtime_log = []
 
 	# I64
 	def test_create_income_persists(self):
@@ -906,6 +993,32 @@ class TestIncomeCrudApi(FrappeTestCase):
 		frappe.set_user(self.member_a)
 		with self.assertRaises(frappe.PermissionError):
 			delete_income(name=self.income_b.name)
+
+	# I121
+	def test_create_income_publishes_realtime_event(self):
+		frappe.local._realtime_log = []
+		frappe.set_user(self.member_a)
+		create_income(amount=250.0)
+		events = [entry[0] for entry in frappe.local._realtime_log]
+		self.assertIn("income_created", events)
+
+	# I122
+	def test_update_income_publishes_realtime_event(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0)
+		frappe.local._realtime_log = []
+		update_income(name=doc.name, amount=300.0)
+		events = [entry[0] for entry in frappe.local._realtime_log]
+		self.assertIn("income_updated", events)
+
+	# I123
+	def test_delete_income_publishes_realtime_event(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0)
+		frappe.local._realtime_log = []
+		delete_income(name=doc.name)
+		events = [entry[0] for entry in frappe.local._realtime_log]
+		self.assertIn("income_deleted", events)
 
 
 class TestSourceSettingsApi(FrappeTestCase):

@@ -93,6 +93,9 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] `bench --site <site> migrate` after Income + Source DocTypes
 - [ ] Default Sources seeded on new Family creation (Salary, Freelance, Rental, Other)
 - [ ] Feed FAB → Income tab opens IncomeSheet; Income is saved and appears in Analytics total
+- [ ] Feed: the saved Income appears in the unified list alongside Expenses, in green with a leading "+", grouped under today's date
+- [ ] Log in as User B — the Income appears in Feed **without** manual refresh (WebSocket)
+- [ ] Feed: an entry with Notes shows Notes as the bold primary line, Category/Source as the caption below it
 - [ ] Analytics: Savings line shows Income − Expenses correctly
 - [ ] Settings: Source list — add, rename, and delete work; deleting a Source still in use by an Income is blocked with an error
 - [ ] Add Income sheet: selecting "+ New source" reveals an inline input; creating a Source there selects it immediately without leaving the sheet

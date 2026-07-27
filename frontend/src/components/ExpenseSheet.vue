@@ -52,6 +52,13 @@
 					@input="date = $event"
 				/>
 				<Input
+					data-test="notes-input"
+					label="Notes"
+					type="textarea"
+					:model-value="notes"
+					@input="notes = $event"
+				/>
+				<Input
 					data-test="category-select"
 					label="Category"
 					type="select"
@@ -92,13 +99,6 @@
 						</Button>
 					</div>
 				</div>
-				<Input
-					data-test="notes-input"
-					label="Notes"
-					type="textarea"
-					:model-value="notes"
-					@input="notes = $event"
-				/>
 
 				<ErrorMessage :message="errorMessage" />
 

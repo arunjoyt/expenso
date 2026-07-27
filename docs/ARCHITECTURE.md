@@ -94,6 +94,8 @@ Defaults seeded via `Family.after_insert`: `Salary, Freelance, Rental, Other`.
 
 **Savings** is never stored — always computed as `Income − Expenses` for the selected month.
 
+Income records for the selected month are fetched via a whitelisted `get_income` method (mirroring `get_expenses`), so Feed can list and interleave them with Expenses; realtime events `income_created` / `income_updated` / `income_deleted` refresh Feed the same way the existing `expense_*` events do.
+
 ---
 
 ### Phase 3 DocTypes
@@ -142,7 +144,7 @@ Pattern is identical for `Expense`, `Income`, and `Budget`:
 ## Navigation (mobile)
 
 Bottom navigation bar with 4 tabs + FAB:
-- **Feed tab** — home screen, monthly expense list
+- **Feed tab** — home screen, unified monthly Expense + Income ledger
 - **Analytics tab** — monthly financial summary (read-only), including Budget Status per Category
 - **Budget tab** — set each Category's Budget amount for the selected month (editing only)
 - **Settings tab** — Category/Source list management, logout, version
@@ -155,12 +157,14 @@ No Family Switcher — a Member belongs to exactly one Family.
 ## Screens
 
 ### Feed
-- Reverse-chronological Expense list for the selected month
-- Grouped by date (headers: "Today", "Yesterday", "Jun 12"); within each group, sorted newest-first
-- Each row: amount + category; date is the group header
-- Compact monthly total at the top
+- Reverse-chronological, unified Expense + Income list for the selected month
+- Grouped by date (headers: "Today", "Yesterday", "Jun 12"); within each group, Expense and Income rows interleave newest-first together (not clustered by type)
+- Each row's primary line is Notes (bold/dark) when present, falling back to Category/Source (Expense) or "No source" (Income) when there is no Notes; Category/Source is otherwise shown as a smaller gray caption below Notes
+- Income rows show their amount in green with a leading "+" (e.g. "+$500"); Expense rows are unchanged (dark, no sign)
+- Tapping a row opens the matching Edit sheet — Edit Expense or Edit Income
+- Summary banner at top shows two stats side by side: Spent this month, Income this month (no Net/Savings here — that stays on Analytics)
 - Prev / next month navigation; month state shared with Analytics and Budget
-- Silently refreshes via Frappe WebSocket on any add / edit / delete in the Family
+- Silently refreshes via Frappe WebSocket on any add / edit / delete of an Expense or Income in the Family
 
 ### Analytics
 - **Phase 1:** total spent + Category breakdown (name + amount, no charts)
@@ -174,14 +178,14 @@ No Family Switcher — a Member belongs to exactly one Family.
 ### Add / Edit Expense (bottom sheet)
 - Slides up from the Feed FAB (add, defaults to the Expense tab) or tapping an Expense row (edit)
 - In add mode, an Expense/Income tab switcher sits at the top of the sheet; tapping "Income" swaps in the Add Income sheet in place. Not shown in edit mode.
-- Fields: `amount` (required), `date` (defaults to today), `category` (optional)
+- Fields, in order: `amount` (required), `date` (defaults to today), `notes` (optional), `category` (optional)
 - Category select includes a trailing "+ New category" option; picking it reveals an inline text input in the sheet to name and create the Category without leaving Add/Edit Expense, then auto-selects it. Rename/delete are not available here — those stay on Settings.
 - Delete action behind a confirmation prompt
 - Dismissable by tapping outside or swiping down
 
 ### Add / Edit Income (bottom sheet) — Phase 2
 - Same UX as Expense sheet, including the Expense/Income tab switcher in add mode
-- Fields: `amount` (required), `date` (defaults to today), `source` (optional)
+- Fields, in order: `amount` (required), `date` (defaults to today), `notes` (optional), `source` (optional)
 - Source select includes the same trailing "+ New source" inline-create option as the Category select on the Expense sheet
 - Reached from the Feed FAB by switching to the Income tab (no dedicated entry point of its own)
 

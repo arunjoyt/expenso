@@ -36,18 +36,30 @@ vi.mock("@/composables/useSources", () => ({
 	})),
 }));
 vi.mock("@/composables/useIncome", () => ({
+	useIncome: vi.fn(),
 	createIncome: vi.fn(),
 	updateIncome: vi.fn(),
 	deleteIncome: vi.fn(),
 }));
 
 import { useExpenses } from "@/composables/useExpenses";
+import { useIncome } from "@/composables/useIncome";
 import { useFamily } from "@/composables/useFamily";
 
 function mockExpenses(expenses, loading = false) {
 	const reload = vi.fn();
 	useExpenses.mockReturnValue({
 		expenses: ref(expenses),
+		loading: ref(loading),
+		reload,
+	});
+	return reload;
+}
+
+function mockIncomes(incomes, loading = false) {
+	const reload = vi.fn();
+	useIncome.mockReturnValue({
+		incomes: ref(incomes),
 		loading: ref(loading),
 		reload,
 	});
@@ -61,6 +73,7 @@ function mountFeed() {
 
 beforeEach(() => {
 	setActivePinia(createPinia());
+	mockIncomes([]);
 });
 
 describe("Feed page", () => {
@@ -122,20 +135,43 @@ describe("Feed page", () => {
 	});
 
 	// F10
-	it("shows an empty state for a month with no expenses", () => {
+	it("shows an empty state for a month with no Expenses or Income", () => {
 		mockExpenses([]);
 		const wrapper = mountFeed();
-		expect(wrapper.text()).toContain("No expenses this month");
+		expect(wrapper.text()).toContain("No activity this month");
+	});
+
+	// F101
+	it("does not show the empty state when there is Income but no Expenses", () => {
+		mockExpenses([]);
+		mockIncomes([{ name: "INC-1", amount: 500, date: "2025-06-01", source_name: "Salary" }]);
+		const wrapper = mountFeed();
+		expect(wrapper.text()).not.toContain("No activity this month");
 	});
 
 	// F11
-	it("shows a monthly total equal to the sum of rendered expenses", () => {
+	it("shows a Spent total equal to the sum of rendered Expenses", () => {
 		mockExpenses([
 			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
 			{ name: "EXP-2", amount: 20, date: "2025-06-12", category_name: "Dining" },
 		]);
 		const wrapper = mountFeed();
-		expect(wrapper.text()).toContain(new Intl.NumberFormat().format(30));
+		expect(wrapper.find('[data-test="feed-spent-total"]').text()).toBe(
+			new Intl.NumberFormat().format(30)
+		);
+	});
+
+	// F102
+	it("shows an Income total equal to the sum of rendered Income", () => {
+		mockExpenses([]);
+		mockIncomes([
+			{ name: "INC-1", amount: 500, date: "2025-06-01", source_name: "Salary" },
+			{ name: "INC-2", amount: 100, date: "2025-06-02", source_name: "Freelance" },
+		]);
+		const wrapper = mountFeed();
+		expect(wrapper.find('[data-test="feed-income-total"]').text()).toBe(
+			new Intl.NumberFormat().format(600)
+		);
 	});
 
 	// F12
@@ -185,7 +221,8 @@ describe("Feed page", () => {
 		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(false);
 	});
 
-	it("shows a notes preview under the category when present", () => {
+	// F103
+	it("shows Notes as the bold primary line and Category as the caption below it", () => {
 		mockExpenses([
 			{
 				name: "EXP-1",
@@ -200,6 +237,17 @@ describe("Feed page", () => {
 		const notes = wrapper.findAll('[data-test="expense-notes"]');
 		expect(notes.length).toBe(1);
 		expect(notes[0].text()).toBe("Weekly shop");
+		const rows = wrapper.findAll('[data-test="expense-row"]');
+		expect(rows[0].text()).toContain("Weekly shop");
+		expect(rows[0].text()).toContain("Groceries");
+	});
+
+	// F104
+	it("falls back to Category as the primary line when there is no Notes", () => {
+		mockExpenses([{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Dining" }]);
+		const wrapper = mountFeed();
+		expect(wrapper.find('[data-test="expense-notes"]').exists()).toBe(false);
+		expect(wrapper.find('[data-test="expense-row"]').text()).toContain("Dining");
 	});
 
 	// F17
@@ -215,31 +263,106 @@ describe("Feed page", () => {
 	});
 
 	// F16
-	it("reloads the Expense list once the ExpenseSheet closes after a save", async () => {
-		const reload = mockExpenses([]);
+	it("reloads both lists once the ExpenseSheet closes after a save", async () => {
+		const reloadExpenses = mockExpenses([]);
+		const reloadIncomes = mockIncomes([]);
 		const wrapper = mountFeed();
 		await wrapper.find('[data-test="fab"]').trigger("click");
-		reload.mockClear();
+		reloadExpenses.mockClear();
+		reloadIncomes.mockClear();
 
 		await wrapper.findComponent(ExpenseSheet).vm.$emit("close");
 
-		expect(reload).toHaveBeenCalled();
+		expect(reloadExpenses).toHaveBeenCalled();
+		expect(reloadIncomes).toHaveBeenCalled();
 		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
 	});
 
-	// F81
-	it("closes the IncomeSheet without reloading Expenses", async () => {
-		const reload = mockExpenses([]);
+	// F81 (superseded — Income now appears on Feed, so closing IncomeSheet must refresh it)
+	it("reloads both lists once the IncomeSheet closes after a save", async () => {
+		const reloadExpenses = mockExpenses([]);
+		const reloadIncomes = mockIncomes([]);
 		const wrapper = mountFeed();
 		await wrapper.find('[data-test="fab"]').trigger("click");
 		await wrapper
 			.find('[data-test="expense-sheet"] [data-test="tab-income"]')
 			.trigger("click");
-		reload.mockClear();
+		reloadExpenses.mockClear();
+		reloadIncomes.mockClear();
 
 		await wrapper.findComponent(IncomeSheet).vm.$emit("close");
 
-		expect(reload).not.toHaveBeenCalled();
+		expect(reloadExpenses).toHaveBeenCalled();
+		expect(reloadIncomes).toHaveBeenCalled();
 		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
+	});
+
+	// F105
+	it("renders Income rows with a green, plus-signed amount", () => {
+		mockExpenses([]);
+		mockIncomes([{ name: "INC-1", amount: 500, date: "2025-06-01", source_name: "Salary" }]);
+		const wrapper = mountFeed();
+		const row = wrapper.find('[data-test="income-row"]');
+		expect(row.exists()).toBe(true);
+		expect(row.text()).toContain("Salary");
+		expect(row.text()).toContain(`+${new Intl.NumberFormat().format(500)}`);
+	});
+
+	// F106
+	it("falls back to 'No source' as the primary line for an Income row with no Source or Notes", () => {
+		mockExpenses([]);
+		mockIncomes([{ name: "INC-1", amount: 500, date: "2025-06-01" }]);
+		const wrapper = mountFeed();
+		expect(wrapper.find('[data-test="income-row"]').text()).toContain("No source");
+	});
+
+	// F107
+	it("shows Notes as the primary line on an Income row, Source as the caption", () => {
+		mockExpenses([]);
+		mockIncomes([
+			{
+				name: "INC-1",
+				amount: 500,
+				date: "2025-06-01",
+				source_name: "Salary",
+				notes: "July payout",
+			},
+		]);
+		const wrapper = mountFeed();
+		const notes = wrapper.find('[data-test="income-notes"]');
+		expect(notes.exists()).toBe(true);
+		expect(notes.text()).toBe("July payout");
+		const row = wrapper.find('[data-test="income-row"]');
+		expect(row.text()).toContain("Salary");
+	});
+
+	// F108
+	it("interleaves Expense and Income rows within the same date group, newest first", () => {
+		mockExpenses([{ name: "EXP-1", amount: 10, date: "2025-06-10", category_name: "Dining" }]);
+		mockIncomes([
+			{ name: "INC-1", amount: 500, date: "2025-06-15", source_name: "Salary" },
+			{ name: "INC-2", amount: 50, date: "2025-06-05", source_name: "Freelance" },
+		]);
+		const wrapper = mountFeed();
+		const groups = wrapper.findAll('[data-test="date-group-header"]');
+		expect(groups.length).toBe(3);
+
+		const rows = wrapper.findAll('[data-test="expense-row"], [data-test="income-row"]');
+		expect(rows.map((row) => row.text())).toEqual([
+			expect.stringContaining("Salary"),
+			expect.stringContaining("Dining"),
+			expect.stringContaining("Freelance"),
+		]);
+	});
+
+	// F109
+	it("opens the IncomeSheet in edit mode with fields pre-filled on Income row tap", async () => {
+		mockExpenses([]);
+		mockIncomes([{ name: "INC-1", amount: 500, date: "2025-06-15", source_name: "Salary" }]);
+		const wrapper = mountFeed();
+		await wrapper.find('[data-test="income-row"]').trigger("click");
+		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(true);
+		expect(wrapper.text()).toContain("Edit Income");
+		expect(wrapper.find('[data-test="income-amount-input"]').element.value).toBe("500");
 	});
 });

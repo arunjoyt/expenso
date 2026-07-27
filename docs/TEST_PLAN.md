@@ -591,11 +591,53 @@ Settings-only.
 
 ---
 
+### Feed: unify Expense + Income ledger, promote Notes over Category/Source (issue #64)
+
+Income never appeared on Feed — it was recorded via the FAB but only reviewed from Analytics.
+Feed now merges Expense and Income into one reverse-chronological, date-grouped list, sorted
+and interleaved together (not clustered by type). A new `get_income` method (mirroring
+`get_expenses`) and `income_created`/`income_updated`/`income_deleted` realtime events (mirroring
+the existing `expense_*` ones) back this. Each row's typographic hierarchy is swapped: Notes
+(when present) is now the bold primary line, with Category/Source demoted to a smaller gray
+caption below it — falling back to Category/Source alone (or "No source" for Income) when
+there's no Notes. Income rows show their amount in green with a leading "+". The Feed banner
+gains a second stat, Income, alongside Spent. The Add Expense/Income sheets reorder their
+fields to Amount → Date → Notes → Category/Source, matching the new row hierarchy.
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I117 | `get_income` returns only Income in the requested month | included/excluded correctly |
+| I118 | `get_income` excludes other months | out-of-month Income not present |
+| I119 | `get_income` ordering | newest date first |
+| I120 | `get_income` includes notes | `notes` field present on each row |
+| I121 | `create_income` | publishes `income_created` realtime event |
+| I122 | `update_income` | publishes `income_updated` realtime event |
+| I123 | `delete_income` | publishes `income_deleted` realtime event |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F101 | Feed with Income but no Expenses | empty state not shown |
+| F102 | Feed Income total | equals the sum of rendered Income |
+| F103 | Expense row with Notes | Notes is the bold primary line; Category shows as the caption below it |
+| F104 | Expense row with no Notes | Category is the primary line; no caption line rendered |
+| F105 | Income row | amount shown in green with a leading "+" |
+| F106 | Income row with no Source and no Notes | primary line reads "No source" |
+| F107 | Income row with Notes | Notes is the primary line; Source shows as the caption below it |
+| F108 | Feed with Expense and Income on different dates | rows interleave newest-first across both types, grouped by date |
+| F109 | Tapping an Income row | opens IncomeSheet in edit mode with fields pre-filled |
+| — | Closing ExpenseSheet or IncomeSheet after a save | both Expense and Income lists reload (supersedes the old "Income doesn't reload Feed" assumption, now that Income appears there) |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
 | Backend unit tests | 21 |
-| Backend integration tests | 113 |
-| Frontend unit tests | 117 |
-| **Total** | **251** |
+| Backend integration tests | 120 |
+| Frontend unit tests | 126 |
+| **Total** | **267** |

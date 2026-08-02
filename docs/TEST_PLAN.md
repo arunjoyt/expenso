@@ -633,11 +633,70 @@ fields to Amount → Date → Notes → Category/Source, matching the new row hi
 
 ---
 
+## Phase 4 — Receipt-to-Expense
+
+See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-vision-llm.md` for the settled design this phase implements.
+
+### P4-S1 · Receipt extraction: OpenAI vision endpoint (issue #66)
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U22 | `build_extraction_prompt(category_names=["Groceries", "Dining"])` | prompt/payload includes both Category names |
+| U23 | `parse_extraction_response(json_with_all_fields)` | returns dict with `amount`, `date`, `category`, `notes` all populated |
+| U24 | `parse_extraction_response(json_missing_amount)` | returns dict with `amount: None`; other fields still populated |
+| U25 | `parse_extraction_response(...)` with `category` not in the allowed list | returns `category: None` (suggestion discarded, never invented) |
+| U26 | `check_rate_limit(count=20, cap=20)` | not allowed |
+| U27 | `check_rate_limit(count=19, cap=20)` | allowed |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I124 | `extract_receipt(image)` by a Member, OpenAI mock returns full valid data | returns dict with `amount`, `date`, `category` (matched to an existing Family Category), `notes` |
+| I125 | `extract_receipt(image)`, OpenAI mock returns a category name not in the Family's list | response `category` is `None` |
+| I126 | `extract_receipt(image)`, OpenAI mock raises an error | request does not raise; returns a response with all fields `None` (graceful fallback, per ADR 0002) |
+| I127 | `extract_receipt(image)` without an `image` param | raises `MandatoryError` |
+| I128 | `extract_receipt(image)` by a Member with no Family | raises `PermissionError` |
+| I129 | `extract_receipt(image)` call | increments that Member's daily extraction count |
+| I130 | `extract_receipt(image)` when Member has reached the daily cap | raises `ValidationError`; OpenAI mock not called |
+| I131 | `extract_receipt(image)` by two different Members on the same day | each Member's count tracked independently |
+| I132 | `extract_receipt(image)` — Member's count from a previous day | doesn't count toward today's cap |
+
+---
+
+### P4-S2 · Receipt capture flow: Add Expense sheet + image attachment (issue #67)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I133 | `create_expense(..., receipt_image=<file>)` | Expense created; File attachment linked to the new Expense via `attached_to_doctype`/`attached_to_name` |
+| I134 | `create_expense(...)` without `receipt_image` | Expense created as before; no File attachment created |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F110 | ExpenseSheet in add mode | "Scan receipt" (camera/upload) entry point visible |
+| F111 | Selecting an image via camera or gallery input | client-side compression runs before the extraction call fires |
+| F112 | Extraction call in flight | loading state shown in the sheet |
+| F113 | Extraction succeeds with all fields | amount, date, category, and notes pre-filled in the form |
+| F114 | Extraction returns partial data (e.g. no category) | only the successfully extracted fields are pre-filled; the rest left blank |
+| F115 | Extraction fails entirely (API error) | sheet still opens, all fields blank, non-blocking warning message shown |
+| F116 | Fields pre-filled after extraction | remain editable; Member can change any field before saving |
+| F117 | Saving after a successful extraction | `create_expense` called with the edited/confirmed fields, with the receipt image attached |
+| F118 | Daily scan cap reached (backend error) | warning message shown; sheet still usable for manual entry |
+| F119 | Selecting an image, then dismissing the sheet before saving | no Expense created; no image uploaded |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
-| Backend unit tests | 21 |
-| Backend integration tests | 120 |
-| Frontend unit tests | 126 |
-| **Total** | **267** |
+| Backend unit tests | 27 |
+| Backend integration tests | 131 |
+| Frontend unit tests | 136 |
+| **Total** | **294** |

@@ -58,3 +58,16 @@ See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layou
 | P3-S1 | #13 | DocType: Budget; one Budget per Category per Family validation | Backend |
 | P3-S2 | #14 | Settings: Budget amount field on each Category row | Frontend |
 | P3-S3 | #15 | Analytics: Budget Status per Category (Warning ≥80%, Exceeded ≥100%) | Frontend |
+
+---
+
+## Phase 4 — Receipt-to-Expense
+
+**Goal:** Members can create an Expense from a photo of a Receipt instead of typing it manually. See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-vision-llm.md` for the settled design.
+
+**No new DocTypes.** The extracted image is stored as a standard Frappe File attached to the created Expense; no schema changes to Expense are needed.
+
+| Streak | Issue | Title | Scope |
+|--------|-------|-------|-------|
+| P4-S1 | #66 | Receipt extraction: OpenAI vision endpoint (config, prompt, rate limit) | Backend |
+| P4-S2 | #67 | Receipt capture flow: Add Expense sheet + image attachment | Full-stack |

@@ -26,6 +26,9 @@ _Avoid_: Transaction, entry, payment
 **Notes**: An optional free-text field on an Expense or Income capturing what it was specifically for, beyond its Category/Source (e.g. "Dinner with the Smiths"). On the Feed, Notes is the primary (bold) line of a row when present, with Category/Source demoted to a smaller caption below it; a row with no Notes falls back to showing Category/Source alone as the primary line. In the Add/Edit Expense and Income sheets, Notes is field-ordered ahead of Category/Source (after Amount and Date).
 _Avoid_: Description, memo, comment
 
+**Receipt**: A photo of proof-of-purchase (camera capture or gallery upload) that a Member submits to have Expense fields (Amount, Date, Category, Notes) pre-filled automatically, via a vision LLM, into the same Add Expense sheet used for manual entry — the Member still reviews and confirms before saving. One Receipt produces at most one Expense per pass (no batch import). The original image is kept as an attachment on the created Expense for later reference.
+_Avoid_: Bill, invoice, scan
+
 ---
 
 ## Navigation

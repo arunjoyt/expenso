@@ -21,9 +21,10 @@
 				<Input
 					data-test="budget-sheet-amount-input"
 					label="Budget Amount"
-					type="number"
+					type="text"
+					inputmode="decimal"
 					:model-value="amount"
-					@input="amount = $event"
+					@input="amount = sanitizeAmountInput($event)"
 				/>
 
 				<ErrorMessage :message="errorMessage" />
@@ -57,6 +58,7 @@
 import { computed, ref } from "vue";
 import { Input, Button, ErrorMessage } from "frappe-ui";
 import { setBudget } from "@/composables/useBudgets";
+import { parseAmount, sanitizeAmountInput } from "@/utils/parseAmount";
 
 const props = defineProps({
 	category: {
@@ -86,8 +88,7 @@ async function submit() {
 	errorMessage.value = "";
 	saving.value = true;
 	try {
-		const raw = amount.value;
-		const value = raw === "" || raw === null ? null : Number(raw);
+		const value = parseAmount(amount.value);
 		await setBudget(props.category.name, props.month, props.year, value);
 		emit("close");
 	} catch (error) {

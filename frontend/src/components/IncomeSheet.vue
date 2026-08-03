@@ -39,9 +39,10 @@
 				<Input
 					data-test="income-amount-input"
 					label="Amount"
-					type="number"
+					type="text"
+					inputmode="decimal"
 					:model-value="amount"
-					@input="amount = $event"
+					@input="amount = sanitizeAmountInput($event)"
 					required
 				/>
 				<Input
@@ -154,6 +155,7 @@ import { computed, ref, watch } from "vue";
 import { Input, Button, ErrorMessage } from "frappe-ui";
 import { addSource, useSources } from "@/composables/useSources";
 import { createIncome, updateIncome, deleteIncome } from "@/composables/useIncome";
+import { parseAmount, sanitizeAmountInput } from "@/utils/parseAmount";
 
 const NEW_SOURCE_VALUE = "__new_source__";
 
@@ -220,7 +222,7 @@ function cancelNewSource() {
 	source.value = "";
 }
 
-const canSubmit = computed(() => Number(amount.value) > 0 && !creatingSource.value);
+const canSubmit = computed(() => parseAmount(amount.value) > 0 && !creatingSource.value);
 
 const saving = ref(false);
 const deleting = ref(false);
@@ -233,7 +235,7 @@ async function submit() {
 	saving.value = true;
 	try {
 		const payload = {
-			amount: Number(amount.value),
+			amount: parseAmount(amount.value),
 			date: date.value,
 			source: source.value || null,
 			notes: notes.value || null,

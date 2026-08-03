@@ -141,6 +141,12 @@ Complete unit and integration test plan across all three phases. Backend tests u
 
 ### P1-S6 · Expense bottom sheet: Add / Edit / Delete + realtime
 
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U35 | `parseAmount` / `sanitizeAmountInput` | comma and period decimals both parse to the same Number; non-numeric characters stripped; empty/null → `null` |
+
 **Integration tests**
 
 | # | Test | Assertion |
@@ -160,6 +166,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 |---|------|-----------|
 | F12 | FAB click | ExpenseSheet slides up directly, defaulting to the Expense tab |
 | F13 | ExpenseSheet — `amount` field is required | submit disabled without amount |
+| F137 | ExpenseSheet — `amount` accepts a comma as decimal separator | e.g. `12,50` submits as `12.5` |
 | F14 | ExpenseSheet — `date` defaults to today | date field pre-filled |
 | F15 | ExpenseSheet — `category` is optional | can submit without it |
 | F16 | Successful add submit | sheet closes; Feed list updated |
@@ -331,6 +338,7 @@ Complete unit and integration test plan across all three phases. Backend tests u
 | # | Test | Assertion |
 |---|------|-----------|
 | F32 | IncomeSheet `amount` is required | submit disabled without amount |
+| F138 | IncomeSheet — `amount` accepts a comma as decimal separator | e.g. `12,50` submits as `12.5` |
 | F33 | IncomeSheet `date` defaults to today | pre-filled |
 | F34 | IncomeSheet `source` is optional | can submit without it |
 | F35 | Successful add submit | sheet closes; `createIncome` called |
@@ -423,6 +431,7 @@ read of a new month (see `docs/adr/0001-monthly-budget-carry-forward.md`).
 |---|------|-----------|
 | F43 | `BudgetSheet` submit with an amount | Budget persisted via `setBudget(category, month, year, amount)`; sheet closes |
 | F44 | `BudgetSheet` for a Category with an existing Budget | amount input pre-filled with current amount |
+| F139 | `BudgetSheet` — `amount` accepts a comma as decimal separator | e.g. `12,50` saved as `12.5` |
 | F55 | `BudgetSheet` opened for a Category | sheet title includes the Category name |
 | F56 | `BudgetSheet` for a Category with no existing Budget | amount input starts empty |
 | F57 | `BudgetSheet` for a Category with no existing Budget | no "Remove Budget" button shown |
@@ -829,7 +838,7 @@ See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-cal
 
 | Layer | Count |
 |---|---|
-| Backend unit tests | 34 |
+| Backend unit tests | 35 |
 | Backend integration tests | 175 |
-| Frontend unit tests | 153 |
-| **Total** | **362** |
+| Frontend unit tests | 156 |
+| **Total** | **366** |

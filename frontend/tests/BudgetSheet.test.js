@@ -58,6 +58,18 @@ describe("BudgetSheet", () => {
 		expect(wrapper.emitted("close")).toBeTruthy();
 	});
 
+	// F139
+	it("accepts a comma as the decimal separator in the amount field", async () => {
+		const wrapper = mount(BudgetSheet, {
+			props: { category: groceries, month: 6, year: 2025 },
+		});
+		await amountInput(wrapper).setValue("12,50");
+		await wrapper.find("form").trigger("submit.prevent");
+		await flushPromises();
+
+		expect(setBudget).toHaveBeenCalledWith("CAT-1", 6, 2025, 12.5);
+	});
+
 	// F57
 	it("does not show a Remove Budget button when there is no existing Budget", () => {
 		const wrapper = mount(BudgetSheet, {

@@ -69,6 +69,17 @@ describe("ExpenseSheet", () => {
 		expect(wrapper.emitted("close")).toBeTruthy();
 	});
 
+	// F137
+	it("accepts a comma as the decimal separator in the amount field", async () => {
+		const wrapper = mount(ExpenseSheet);
+		await amountInput(wrapper).setValue("12,50");
+		expect(wrapper.find('[data-test="submit-button"]').attributes("disabled")).toBeUndefined();
+		await wrapper.find("form").trigger("submit.prevent");
+		await flushPromises();
+
+		expect(createExpense).toHaveBeenCalledWith(expect.objectContaining({ amount: 12.5 }));
+	});
+
 	it("submits an add with notes", async () => {
 		const wrapper = mount(ExpenseSheet);
 		await amountInput(wrapper).setValue("25");

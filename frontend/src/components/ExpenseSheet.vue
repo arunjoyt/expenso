@@ -39,9 +39,10 @@
 				<Input
 					data-test="amount-input"
 					label="Amount"
-					type="number"
+					type="text"
+					inputmode="decimal"
 					:model-value="amount"
-					@input="amount = $event"
+					@input="amount = sanitizeAmountInput($event)"
 					required
 				/>
 				<Input
@@ -155,6 +156,7 @@ import { Input, Button, ErrorMessage } from "frappe-ui";
 import { addCategory, useCategories } from "@/composables/useCategories";
 import { createExpense, updateExpense, deleteExpense } from "@/composables/useExpenses";
 import { getCategoryVisual } from "@/utils/categoryStyle";
+import { parseAmount, sanitizeAmountInput } from "@/utils/parseAmount";
 
 const NEW_CATEGORY_VALUE = "__new_category__";
 
@@ -224,7 +226,7 @@ function cancelNewCategory() {
 	category.value = "";
 }
 
-const canSubmit = computed(() => Number(amount.value) > 0 && !creatingCategory.value);
+const canSubmit = computed(() => parseAmount(amount.value) > 0 && !creatingCategory.value);
 
 const saving = ref(false);
 const deleting = ref(false);
@@ -237,7 +239,7 @@ async function submit() {
 	saving.value = true;
 	try {
 		const payload = {
-			amount: Number(amount.value),
+			amount: parseAmount(amount.value),
 			date: date.value,
 			category: category.value || null,
 			notes: notes.value || null,

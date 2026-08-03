@@ -721,6 +721,40 @@ See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-l
 
 ---
 
+### P4-S4 · LLM Call Log: Cost by Member by Month report (issue #72)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I168 | "Cost by Member by Month" Script Report | exists, System Manager-only |
+| I169 | Report with one Member's `LLM Call Log` rows spanning two different months | returns one row per (Member, Month), each with the correct summed cost |
+| I170 | Report with rows from both features (`receipt_extraction` and `chat`) for the same Member/Month | separate Receipt-cost and Chat-cost columns present, summing to the row's total cost |
+| I171 | Report with rows for two different Members in the same month | returns separate rows per Member, not merged |
+
+---
+
+### P4-S5 · Settings: your usage this month (issue #73)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I172 | `get_my_llm_cost()` (defaults to current month) by a Member with both Receipt and Chat `LLM Call Log` rows this month | returns `{total, receipt_extraction, chat}` matching the sum of that Member's own rows |
+| I173 | `get_my_llm_cost()` by a Member with no `LLM Call Log` rows this month | returns `{total: 0, receipt_extraction: 0, chat: 0}` |
+| I174 | `get_my_llm_cost()` — Member and another Member of the same Family both have rows this month | response never includes the other Member's rows |
+| I175 | `get_my_llm_cost()` response | contains only the aggregated dollar figures — no raw `LLM Call Log` fields, no `content`, nothing identifying another Member |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F134 | Settings screen | shows a "Your usage this month" section with a total cost figure |
+| F135 | "Your usage this month" section | shows Receipt and Chat cost breakdown beneath the total |
+| F136 | Member with no usage this month | section shows $0 (or equivalent), not hidden or broken |
+
+---
+
 ## Phase 5 — Chat
 
 See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design this phase implements.
@@ -796,6 +830,6 @@ See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-cal
 | Layer | Count |
 |---|---|
 | Backend unit tests | 34 |
-| Backend integration tests | 167 |
-| Frontend unit tests | 150 |
-| **Total** | **351** |
+| Backend integration tests | 175 |
+| Frontend unit tests | 153 |
+| **Total** | **362** |

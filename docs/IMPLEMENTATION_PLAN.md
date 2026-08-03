@@ -67,11 +67,15 @@ See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layou
 
 **New DocType:** `LLM Call Log` — one row per OpenAI call (`feature` discriminator, latency, tokens, cost, model, per-field accuracy), System Manager-only. Named feature-agnostic rather than Receipt-specific since the planned chat feature (issue #44) will also need this tracking. The extracted image itself is stored as a standard Frappe File attached to the created Expense; no schema changes to Expense are needed.
 
+P4-S4 and P4-S5 span both features (Receipt + Chat) via the shared `LLM Call Log`; both ship functionally once P4-S1 lands (Receipt-only data) and pick up Chat's contribution automatically once P5-S1 (#69) ships — no rework needed either way.
+
 | Streak | Issue | Title | Scope |
 |--------|-------|-------|-------|
 | P4-S1 | #66 | Receipt extraction: OpenAI vision endpoint + LLM Call Log (config, prompt, rate limit, cost/latency tracking) | Backend |
 | P4-S2 | #67 | Receipt capture flow: Add Expense sheet + image attachment + accuracy linking | Full-stack |
 | P4-S3 | #68 | Receipt extraction: admin cost/accuracy reporting (Workspace Number Cards + daily-trend report) | Backend |
+| P4-S4 | #72 | LLM Call Log: Cost by Member by Month report (admin) | Backend |
+| P4-S5 | #73 | Settings: your usage this month (Member-facing cost) | Full-stack |
 
 ---
 

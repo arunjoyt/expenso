@@ -45,7 +45,7 @@ _Avoid_: Budgets, Spending, Caps
 **FAB (Floating Action Button)**: The persistent primary action button — visible on every screen (Phase 5 widened this from Feed-only) — that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB. Sits bottom-right; the Chat bubble stacks directly above it in the same corner, both within single-hand thumb reach.
 _Avoid_: Add button, create button
 
-**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here.
+**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here. Phase 4/5 add a "Your usage this month" section showing the logged-in Member's own Receipt + Chat API cost for the current month, with a feature breakdown — their own usage only, never another Member's or the Family's total.
 _Avoid_: Profile, preferences, configuration
 
 ---

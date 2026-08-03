@@ -635,9 +635,9 @@ fields to Amount → Date → Notes → Category/Source, matching the new row hi
 
 ## Phase 4 — Receipt-to-Expense
 
-See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-vision-llm.md` for the settled design this phase implements.
+See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-llm.md`, and `docs/adr/0003-receipt-extraction-tracking.md` for the settled design this phase implements.
 
-### P4-S1 · Receipt extraction: OpenAI vision endpoint (issue #66)
+### P4-S1 · Receipt extraction: OpenAI vision endpoint + LLM Call Log (issue #66)
 
 **Unit tests**
 
@@ -649,6 +649,10 @@ See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-visio
 | U25 | `parse_extraction_response(...)` with `category` not in the allowed list | returns `category: None` (suggestion discarded, never invented) |
 | U26 | `check_rate_limit(count=20, cap=20)` | not allowed |
 | U27 | `check_rate_limit(count=19, cap=20)` | allowed |
+| U28 | `compute_cost(input_tokens=1000, output_tokens=200, model="gpt-4o-mini")` | matches the hardcoded pricing constant's computed value |
+| U29 | `compute_field_accuracy(extracted={"amount": 12.5}, saved={"amount": 12.5})` | `{"amount": True}` |
+| U30 | `compute_field_accuracy(extracted={"category": None}, saved={"category": "Groceries"})` | `category` key absent from result (excluded, not counted as inaccurate) |
+| U31 | `compute_field_accuracy(extracted={"notes": "Trader Joe's"}, saved={"notes": "Trader Joe's, groceries"})` | `{"notes": False}` (exact match required) |
 
 **Integration tests**
 
@@ -663,17 +667,27 @@ See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-visio
 | I130 | `extract_receipt(image)` when Member has reached the daily cap | raises `ValidationError`; OpenAI mock not called |
 | I131 | `extract_receipt(image)` by two different Members on the same day | each Member's count tracked independently |
 | I132 | `extract_receipt(image)` — Member's count from a previous day | doesn't count toward today's cap |
+| I133 | `extract_receipt(image)` success | creates a `LLM Call Log` row with `latency_ms`, `input_tokens`, `output_tokens`, `cost`, `model` populated; accuracy fields unset |
+| I134 | `extract_receipt(image)` response | includes the created log row's `name` |
+| I135 | `extract_receipt(image)` when the daily cap is already reached | no `LLM Call Log` row created (rate-limited attempts aren't logged) |
+| I136 | `extract_receipt(image)`, OpenAI mock raises an error | log row still created, with `status: "error"` and latency recorded |
+| I137 | `extract_receipt(image)` success | created `LLM Call Log` row has `feature: "receipt_extraction"` |
+| I138 | Non-System-Manager user lists `LLM Call Log` | returns no rows / raises `PermissionError` |
 
 ---
 
-### P4-S2 · Receipt capture flow: Add Expense sheet + image attachment (issue #67)
+### P4-S2 · Receipt capture flow: Add Expense sheet + image attachment + accuracy linking (issue #67)
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I133 | `create_expense(..., receipt_image=<file>)` | Expense created; File attachment linked to the new Expense via `attached_to_doctype`/`attached_to_name` |
-| I134 | `create_expense(...)` without `receipt_image` | Expense created as before; no File attachment created |
+| I139 | `create_expense(..., receipt_image=<file>)` | Expense created; File attachment linked to the new Expense via `attached_to_doctype`/`attached_to_name` |
+| I140 | `create_expense(...)` without `receipt_image` | Expense created as before; no File attachment created |
+| I141 | `create_expense(..., receipt_extraction_log=<name>)` where saved values match the extraction | log row updated with final values, all gradeable fields marked accurate, linked to the created Expense |
+| I142 | `create_expense(..., receipt_extraction_log=<name>)` where saved `amount` differs from the extracted `amount` | log row's `amount` accuracy is `False` |
+| I143 | `create_expense(..., receipt_extraction_log=<name>)` where extracted `category` was `None` | log row's `category` accuracy field stays unset (excluded, not graded) |
+| I144 | `create_expense(...)` without a `receipt_extraction_log` param (plain manual entry) | no `LLM Call Log` row is touched |
 
 **Frontend unit tests**
 
@@ -689,6 +703,21 @@ See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-visio
 | F117 | Saving after a successful extraction | `create_expense` called with the edited/confirmed fields, with the receipt image attached |
 | F118 | Daily scan cap reached (backend error) | warning message shown; sheet still usable for manual entry |
 | F119 | Selecting an image, then dismissing the sheet before saving | no Expense created; no image uploaded |
+| F120 | Saving after a successful extraction | `create_expense` is called with the `receipt_extraction_log` id returned by the earlier `extract_receipt` call |
+
+---
+
+### P4-S3 · Receipt extraction: admin cost/accuracy reporting (issue #68)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I145 | "Total Cost This Month" Number Card | targets `LLM Call Log`, `Sum` of `cost`, filtered to the current month |
+| I146 | "Avg Latency" Number Card | targets `LLM Call Log`, `Average` of `latency_ms` |
+| I147 | "Accuracy Rate" Number Card | computes percentage of graded fields (non-null extraction) that matched, across the current month |
+| I148 | Daily-trend Script Report | exists, System Manager-only, mirroring the "Family Members" Script Report pattern |
+| I149 | Daily-trend Script Report with log rows spanning two different days | returns one aggregated row per day (`cost`, `count`, avg `latency_ms`, accuracy) |
 
 ---
 
@@ -696,7 +725,7 @@ See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-visio
 
 | Layer | Count |
 |---|---|
-| Backend unit tests | 27 |
-| Backend integration tests | 131 |
-| Frontend unit tests | 136 |
-| **Total** | **294** |
+| Backend unit tests | 31 |
+| Backend integration tests | 149 |
+| Frontend unit tests | 137 |
+| **Total** | **317** |

@@ -63,11 +63,12 @@ See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layou
 
 ## Phase 4 — Receipt-to-Expense
 
-**Goal:** Members can create an Expense from a photo of a Receipt instead of typing it manually. See `docs/GLOSSARY.md` (Receipt) and `docs/adr/0002-receipt-extraction-via-vision-llm.md` for the settled design.
+**Goal:** Members can create an Expense from a photo of a Receipt instead of typing it manually. See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-llm.md`, and `docs/adr/0003-receipt-extraction-tracking.md` for the settled design.
 
-**No new DocTypes.** The extracted image is stored as a standard Frappe File attached to the created Expense; no schema changes to Expense are needed.
+**New DocType:** `LLM Call Log` — one row per OpenAI call (`feature` discriminator, latency, tokens, cost, model, per-field accuracy), System Manager-only. Named feature-agnostic rather than Receipt-specific since the planned chat feature (issue #44) will also need this tracking. The extracted image itself is stored as a standard Frappe File attached to the created Expense; no schema changes to Expense are needed.
 
 | Streak | Issue | Title | Scope |
 |--------|-------|-------|-------|
-| P4-S1 | #66 | Receipt extraction: OpenAI vision endpoint (config, prompt, rate limit) | Backend |
-| P4-S2 | #67 | Receipt capture flow: Add Expense sheet + image attachment | Full-stack |
+| P4-S1 | #66 | Receipt extraction: OpenAI vision endpoint + LLM Call Log (config, prompt, rate limit, cost/latency tracking) | Backend |
+| P4-S2 | #67 | Receipt capture flow: Add Expense sheet + image attachment + accuracy linking | Full-stack |
+| P4-S3 | #68 | Receipt extraction: admin cost/accuracy reporting (Workspace Number Cards + daily-trend report) | Backend |

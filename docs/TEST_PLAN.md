@@ -721,11 +721,81 @@ See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-l
 
 ---
 
+## Phase 5 — Chat
+
+See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design this phase implements.
+
+### P5-S1 · Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content (issue #69)
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U32 | `build_chat_context(messages=<25 rows>, limit=20)` | returns only the most recent 20 |
+| U33 | `build_chat_context(messages=<5 rows>, limit=20)` | returns all 5 |
+| U34 | `build_tool_schema()` | includes exactly `get_expenses`, `get_analytics`, `get_income`, `get_budgets`; no write-capable tool |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I150 | `send_message(text)` by a Member, OpenAI mock calls `get_expenses` then returns a final answer | tool executed under the Member's normal permissions; final answer returned; both the Member's message and Chat's answer persisted as `Chat Message` rows |
+| I151 | `send_message(text)` — OpenAI mock requests data belonging to a different Family | tool execution stays scoped to the calling Member's own Family regardless of what the LLM requests (existing `has_permission`/`permission_query_conditions` enforcement, no new access path) |
+| I152 | `send_message(text)` without a `text` param | raises `MandatoryError` |
+| I153 | `send_message(text)` by a Member with no Family | raises `PermissionError` |
+| I154 | `send_message(text)` call | increments that Member's daily chat count, independent of the Receipt extraction daily count |
+| I155 | `send_message(text)` when Member has reached the daily chat cap | raises `ValidationError`; OpenAI mock not called |
+| I156 | `send_message(text)`, OpenAI mock raises an error | request does not raise; returns a transient error response; no `Chat Message` row created for the attempt |
+| I157 | `send_message(text)` success | creates an `LLM Call Log` row with `feature: "chat"`, `latency_ms`, `input_tokens`, `output_tokens`, `cost`, `model` populated, and `content` containing the full tool-calling trace (message, tool calls, results, final answer) |
+| I158 | `get_chat_history()` | returns only the calling Member's `Chat Message` rows, ordered chronologically |
+| I159 | `get_chat_history()` for a Member with no messages | returns empty list |
+| I160 | Two different Members each with `Chat Message` rows | each Member's `get_chat_history()` excludes the other's messages (private, not Family-shared) |
+| I161 | `clear_chat()` | deletes all of the calling Member's `Chat Message` rows |
+| I162 | `clear_chat()` | does not delete or modify any `LLM Call Log` rows |
+| I163 | `send_message(text)` immediately after `clear_chat()` | context assembled for the LLM call contains no prior messages (fresh context) |
+
+---
+
+### P5-S2 · Chat UI: floating bubble, full-screen thread, Clear chat (issue #70)
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F121 | Chat bubble | visible on Feed, Analytics, Budget, and Settings screens |
+| F122 | FAB | now visible on Analytics, Budget, and Settings too (previously Feed-only); same Add Expense sheet behavior on every screen |
+| F123 | Chat bubble and FAB together, any screen | both bottom-right; Chat bubble stacked directly above the FAB, with a clear gap (no overlapping tap targets) |
+| F124 | Tapping the chat bubble | opens the full-screen chat overlay |
+| F125 | Chat overlay on open | renders message history from `get_chat_history()` |
+| F126 | Sending a message | input cleared; loading state shown while `send_message` is in flight |
+| F127 | Successful `send_message` response | Member's message and Chat's answer both appended to the visible thread |
+| F128 | Failed `send_message` call | transient error notice shown; message list unchanged (nothing appended) |
+| F129 | Daily chat cap reached (backend error) | warning message shown; input remains usable |
+| F130 | "Clear chat" action | confirmation prompt shown before clearing |
+| F131 | Confirmed "Clear chat" | `clear_chat` called; message list becomes empty |
+| F132 | Cancelled "Clear chat" confirmation | `clear_chat` not called; message list unchanged |
+| F133 | Chat overlay closed (back/close action) | returns to the underlying screen; thread still present on reopen |
+
+---
+
+### P5-S3 · Chat: admin cost/latency reporting (issue #71)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I164 | "Total Cost This Month (Chat)" Number Card | targets `LLM Call Log`, `Sum` of `cost`, filtered to `feature: "chat"` and the current month |
+| I165 | "Avg Latency (Chat)" Number Card | targets `LLM Call Log`, `Average` of `latency_ms`, filtered to `feature: "chat"` |
+| I166 | Daily-trend Script Report | breaks out rows by `feature` (or accepts a feature filter), so Receipt and Chat trends are distinguishable rather than conflated |
+| I167 | Daily-trend Script Report with both Receipt and Chat log rows on the same day | each feature's aggregates (cost, count, avg latency) are computed independently |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
-| Backend unit tests | 31 |
-| Backend integration tests | 149 |
-| Frontend unit tests | 137 |
-| **Total** | **317** |
+| Backend unit tests | 34 |
+| Backend integration tests | 167 |
+| Frontend unit tests | 150 |
+| **Total** | **351** |

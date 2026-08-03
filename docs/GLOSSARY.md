@@ -42,7 +42,7 @@ _Avoid_: Dashboard, reports, insights
 **Budget** (screen): A bottom-nav screen, alongside Feed and Analytics, purely for setting each Category's Budget amount for the selected month — spend and Budget Status are not shown here, see Analytics. Prev/next month navigation is available, sharing the same selected month as Feed and Analytics. The Category list itself (renaming, deleting) is managed on Settings, not here — this screen only uses it to render one row per Category.
 _Avoid_: Budgets, Spending, Caps
 
-**FAB (Floating Action Button)**: The persistent primary action button — visible on the Feed screen only — that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB.
+**FAB (Floating Action Button)**: The persistent primary action button — visible on every screen (Phase 5 widened this from Feed-only) — that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB. Sits bottom-right; the Chat bubble stacks directly above it in the same corner, both within single-hand thumb reach.
 _Avoid_: Add button, create button
 
 **Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here.
@@ -92,6 +92,16 @@ _Avoid_: Sprint, task, ticket
 ## Realtime
 
 The Feed silently refreshes via Frappe's WebSocket when any Member adds, edits, or deletes an Expense or Income — no manual refresh needed, no push notifications.
+
+---
+
+## Chat
+
+**Chat**: A read-only Q&A assistant, reachable via a floating bubble on every screen — stacked directly above the FAB in the bottom-right corner, both reachable with one thumb — that answers a Member's questions about their Family's existing Expenses, Income, and Budgets (e.g. "How much did I spend on Groceries this month?") by calling the same whitelisted read APIs the rest of the app uses. Cannot create, edit, or delete records. Each Member has exactly one continuous, ever-growing Chat thread, private to them (not visible to the other Member) — there is no concept of multiple/named conversations. A Member may clear their own thread at any time ("Clear chat"), permanently removing it from their view; nothing is auto-deleted otherwise.
+_Avoid_: Assistant, chatbot, AI
+
+**Chat Message**: A single message within a Member's Chat thread — either from the Member or from Chat. Ordered chronologically; only the most recent messages are sent to the LLM as context on each turn (older ones remain stored and viewable but drop out of context).
+_Avoid_: Prompt, turn, reply
 
 ---
 

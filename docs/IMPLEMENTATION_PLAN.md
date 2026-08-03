@@ -72,3 +72,19 @@ See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layou
 | P4-S1 | #66 | Receipt extraction: OpenAI vision endpoint + LLM Call Log (config, prompt, rate limit, cost/latency tracking) | Backend |
 | P4-S2 | #67 | Receipt capture flow: Add Expense sheet + image attachment + accuracy linking | Full-stack |
 | P4-S3 | #68 | Receipt extraction: admin cost/accuracy reporting (Workspace Number Cards + daily-trend report) | Backend |
+
+---
+
+## Phase 5 — Chat
+
+**Goal:** Members can ask read-only questions about their Family's Expenses, Income, and Budgets via a chat assistant. See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design.
+
+**New DocType:** `Chat Message` — one row per message, private per Member (not Family-shared), retained indefinitely unless the Member clears their thread. **Extends** `LLM Call Log` (from Phase 4) with a nullable `content` field, populated only for `feature: "chat"` rows (full tool-calling trace, for admin debugging) — Receipt's rows don't use it. No new tools/actions beyond the existing whitelisted `get_expenses`/`get_analytics`/`get_income`/`get_budgets` methods, which Chat calls directly under their existing Family-scoped permissions.
+
+Depends on Phase 4 (P4-S1 creates `LLM Call Log`; P4-S3's report pattern is extended, not duplicated).
+
+| Streak | Issue | Title | Scope |
+|--------|-------|-------|-------|
+| P5-S1 | #69 | Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content | Backend |
+| P5-S2 | #70 | Chat UI: floating bubble, full-screen thread, Clear chat | Full-stack |
+| P5-S3 | #71 | Chat: admin cost/latency reporting | Backend |

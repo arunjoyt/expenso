@@ -1,9 +1,13 @@
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { call } from "frappe-ui";
 
 export function useBudgets(monthStore) {
 	const categories = ref([]);
 	const loading = ref(false);
+
+	const budgetTotal = computed(() =>
+		categories.value.reduce((sum, category) => sum + (category.budget_amount || 0), 0)
+	);
 
 	async function reload() {
 		loading.value = true;
@@ -19,7 +23,7 @@ export function useBudgets(monthStore) {
 
 	watch(() => [monthStore.month, monthStore.year], reload, { immediate: true });
 
-	return { categories, loading, reload };
+	return { categories, budgetTotal, loading, reload };
 }
 
 export async function setBudget(category, month, year, amount) {

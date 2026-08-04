@@ -15,21 +15,30 @@
 			class="mx-4 mb-6 mt-4 flex items-center justify-between rounded-3xl bg-gradient-to-br from-accent-500 to-purple-600 p-5 text-white shadow-lg shadow-blue-200"
 		>
 			<div>
-				<p class="text-sm font-semibold text-blue-100">💸 Spent</p>
-				<p
-					class="mt-1 text-2xl font-extrabold tracking-tight"
-					data-test="feed-spent-total"
-				>
-					{{ formattedTotal }}
-				</p>
-			</div>
-			<div class="text-right">
 				<p class="text-sm font-semibold text-blue-100">💰 Income</p>
 				<p
 					class="mt-1 text-2xl font-extrabold tracking-tight"
 					data-test="feed-income-total"
 				>
 					{{ formattedIncomeTotal }}
+				</p>
+			</div>
+			<div class="text-center">
+				<p class="text-sm font-semibold text-blue-100">💸 Expense</p>
+				<p
+					class="mt-1 text-2xl font-extrabold tracking-tight"
+					data-test="feed-expense-total"
+				>
+					{{ formattedTotal }}
+				</p>
+			</div>
+			<div class="text-right">
+				<p class="text-sm font-semibold text-blue-100">⚖️ Balance</p>
+				<p
+					class="mt-1 text-2xl font-extrabold tracking-tight"
+					data-test="feed-balance-total"
+				>
+					{{ formattedBalance }}
 				</p>
 			</div>
 		</div>
@@ -197,6 +206,9 @@ const formattedTotal = computed(() => formatAmount(total.value));
 
 const incomeTotal = computed(() => incomes.value.reduce((sum, income) => sum + income.amount, 0));
 const formattedIncomeTotal = computed(() => formatAmount(incomeTotal.value));
+
+const balance = computed(() => incomeTotal.value - total.value);
+const formattedBalance = computed(() => formatAmount(balance.value));
 
 const groupedEntries = computed(() => {
 	const merged = [

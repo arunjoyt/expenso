@@ -5,8 +5,7 @@ export function useAnalytics(monthStore) {
 	const total = ref(0);
 	const categories = ref([]);
 	const incomeTotal = ref(0);
-	const savings = ref(0);
-	const budgetTotal = ref(0);
+	const balance = ref(0);
 	const loading = ref(false);
 
 	async function reload() {
@@ -19,8 +18,7 @@ export function useAnalytics(monthStore) {
 			total.value = result.total;
 			categories.value = result.categories;
 			incomeTotal.value = result.income_total;
-			savings.value = result.savings;
-			budgetTotal.value = result.budget_total;
+			balance.value = result.balance;
 		} finally {
 			loading.value = false;
 		}
@@ -28,5 +26,5 @@ export function useAnalytics(monthStore) {
 
 	watch(() => [monthStore.month, monthStore.year], reload, { immediate: true });
 
-	return { total, categories, incomeTotal, savings, budgetTotal, loading, reload };
+	return { total, categories, incomeTotal, balance, loading, reload };
 }

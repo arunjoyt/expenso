@@ -292,30 +292,32 @@ Complete unit and integration test plan across all three phases. Backend tests u
 
 ---
 
-### P2-S2 · Analytics: Income total, Savings line
+### P2-S2 · Analytics: Income total, Balance line
+
+Renamed to "Balance" in issue #75 — see the retrofit section near the end of this document.
 
 **Unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| U12 | Savings = income_total − expense_total (positive) | correct |
-| U13 | Savings with no Income | equals `−expense_total` (negative) |
-| U14 | Savings with no Expenses | equals `income_total` |
+| U12 | Balance = income_total − expense_total (positive) | correct |
+| U13 | Balance with no Income | equals `−expense_total` (negative) |
+| U14 | Balance with no Expenses | equals `income_total` |
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I61 | `get_analytics` response | includes `income_total` and `savings` fields |
-| I62 | `savings` value | equals `income_total − expense_total` |
-| I63 | No Income records for month | `income_total = 0`, `savings = −expense_total` |
+| I61 | `get_analytics` response | includes `income_total` and `balance` fields |
+| I62 | `balance` value | equals `income_total − expense_total` |
+| I63 | No Income records for month | `income_total = 0`, `balance = −expense_total` |
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
 | F28 | Analytics shows income_total row | correct amount |
-| F29 | Analytics shows Savings row | correct (can be negative) |
+| F29 | Analytics shows Balance row | correct (can be negative) |
 | F30 | Feed FAB click, then Income tab click | IncomeSheet slides up in place of ExpenseSheet |
 
 ---
@@ -549,14 +551,19 @@ Category too, so it would otherwise block the delete on its own link).
 
 ### Analytics: total Budget stat + budgeted zero-spend categories (issue #62)
 
+The total Budget stat tile this section originally added to Analytics (with `budget_total` on
+`get_analytics`, tests I115/I116/F92) was later moved to the Budget screen in issue #75 — see
+the retrofit section near the end of this document. The zero-spend Category behavior described
+below is unaffected and still lives on Analytics.
+
 The Category breakdown was built only from Expense rows this month, so a Category with a
 Budget set but no spend was invisible to Analytics entirely. `_add_budgeted_categories` now
 appends a Category to the list (at `amount: 0`) whenever it has an effective Budget for the
 month and isn't already present from spend, resolving via the same `_resolve_budget_amount`
 carry-forward logic and attaching `budget`/`budget_status` directly (bypassing the
 expense-derived label lookup in `_attach_budget_status`, which cannot disambiguate categories
-that share a name within a Family). `budget_total` sums every visible category's effective
-Budget. Sort stays by amount spent descending, so zero-spend rows sort last.
+that share a name within a Family). Sort stays by amount spent descending, so zero-spend rows
+sort last.
 
 **Integration tests**
 
@@ -565,14 +572,11 @@ Budget. Sort stays by amount spent descending, so zero-spend rows sort last.
 | I112 | `get_analytics` for a Category with a Budget but no Expense this month | category row appears with `amount: 0`, `budget: <amount>`, `budget_status` computed against 0 spend |
 | I113 | `get_analytics` for a Category with neither Budget nor Expense this month | Category does not appear in `categories` |
 | I114 | `get_analytics` sort order with a mix of spent and zero-spend budgeted Categories | zero-spend budgeted Category sorts after Categories with spend |
-| I115 | `get_analytics` `budget_total` with Budgets set on multiple Categories | sums each visible Category's effective Budget |
-| I116 | `get_analytics` `budget_total` with no Budgets set | equals 0 |
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F92 | Analytics stat tiles | Budget tile shows the total Budget, formatted |
 | F93 | Category row with `amount: 0` and a Budget set | row renders with budget summary (not "No budget set"), 0% |
 
 ---
@@ -834,11 +838,34 @@ See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-cal
 
 ---
 
+### Feed/Analytics: rename Spent→Expense and Savings→Balance; move Budget total to Budget screen (issue #75)
+
+"Spent" is renamed to "Expense" (Feed banner, Analytics tile) and "Savings" is renamed to
+"Balance" (`get_analytics`'s `savings` key becomes `balance` — see P2-S2 above, edited in
+place). Feed's summary banner gains a Balance figure it never showed before (Income − Expense),
+so it now shows Income, Expense, and Balance in one line, matching Analytics. Analytics' top
+summary collapses from a 2×2 grid of four tiles to a single line of three (Income, Expense,
+Balance), dropping its Budget tile entirely. The total-Budget figure moves to the Budget screen,
+computed client-side in `useBudgets()` as the sum of each Category's `budget_amount` already
+returned by `get_budgets` — no backend API change, so the I115/I116 tests that lived on
+`get_analytics` (issue #62) are removed rather than moved. Analytics' per-category "Balance"
+label (Budget minus spend) is renamed to "Remaining" to avoid colliding with the new top-level
+Balance figure.
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F140 | Budget page shows a "Budget" summary tile | total equals the sum of each Category's `budget_amount` for the month, formatted |
+| F141 | Feed banner shows a Balance figure | equals Income total minus Expense total; appears third, after Income and Expense |
+
+---
+
 ## Totals
 
 | Layer | Count |
 |---|---|
 | Backend unit tests | 35 |
-| Backend integration tests | 175 |
-| Frontend unit tests | 156 |
-| **Total** | **366** |
+| Backend integration tests | 173 |
+| Frontend unit tests | 157 |
+| **Total** | **365** |

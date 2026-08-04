@@ -3,7 +3,7 @@ from frappe.tests.utils import FrappeTestCase
 
 from expenso.expenso.api import (
 	_aggregate_categories,
-	_compute_savings,
+	_compute_balance,
 	add_category,
 	add_source,
 	create_expense,
@@ -386,7 +386,7 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		)
 
 	# I61 / I62
-	def test_get_analytics_includes_income_total_and_savings(self):
+	def test_get_analytics_includes_income_total_and_balance(self):
 		frappe.get_doc(
 			{
 				"doctype": "Expense",
@@ -408,10 +408,10 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		result = get_analytics(month=6, year=2025)
 
 		self.assertEqual(result["income_total"], 100.0)
-		self.assertEqual(result["savings"], 70.0)
+		self.assertEqual(result["balance"], 70.0)
 
 	# I63
-	def test_get_analytics_with_no_income_savings_is_negative_expense_total(self):
+	def test_get_analytics_with_no_income_balance_is_negative_expense_total(self):
 		frappe.get_doc(
 			{
 				"doctype": "Expense",
@@ -425,7 +425,7 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		result = get_analytics(month=6, year=2025)
 
 		self.assertEqual(result["income_total"], 0)
-		self.assertEqual(result["savings"], -40.0)
+		self.assertEqual(result["balance"], -40.0)
 
 	def _category_row(self, result, name):
 		return next(c for c in result["categories"] if c["name"] == name)
@@ -597,71 +597,19 @@ class TestGetAnalyticsApi(FrappeTestCase):
 		names = [c["name"] for c in result["categories"]]
 		self.assertEqual(names, ["Dining", "Groceries"])
 
-	# I115
-	def test_get_analytics_budget_total_sums_effective_budgets(self):
-		dining = frappe.get_doc(
-			{
-				"doctype": "Category",
-				"category_name": "Dining",
-				"family": self.family.name,
-			}
-		).insert(ignore_permissions=True)
-		frappe.get_doc(
-			{
-				"doctype": "Budget",
-				"category": self.groceries.name,
-				"family": self.family.name,
-				"amount": 200.0,
-				"month": 6,
-				"year": 2025,
-			}
-		).insert(ignore_permissions=True)
-		frappe.get_doc(
-			{
-				"doctype": "Budget",
-				"category": dining.name,
-				"family": self.family.name,
-				"amount": 50.0,
-				"month": 6,
-				"year": 2025,
-			}
-		).insert(ignore_permissions=True)
 
-		frappe.set_user(self.member)
-		result = get_analytics(month=6, year=2025)
-
-		self.assertEqual(result["budget_total"], 250.0)
-
-	# I116
-	def test_get_analytics_budget_total_is_zero_with_no_budgets_set(self):
-		frappe.get_doc(
-			{
-				"doctype": "Expense",
-				"amount": 30.0,
-				"date": "2025-06-15",
-				"category": self.groceries.name,
-				"family": self.family.name,
-			}
-		).insert(ignore_permissions=True)
-
-		frappe.set_user(self.member)
-		result = get_analytics(month=6, year=2025)
-
-		self.assertEqual(result["budget_total"], 0)
-
-
-class TestComputeSavings(FrappeTestCase):
+class TestComputeBalance(FrappeTestCase):
 	# U12
-	def test_savings_positive_when_income_exceeds_expenses(self):
-		self.assertEqual(_compute_savings(income_total=100, expense_total=60), 40)
+	def test_balance_positive_when_income_exceeds_expenses(self):
+		self.assertEqual(_compute_balance(income_total=100, expense_total=60), 40)
 
 	# U13
-	def test_savings_negative_with_no_income(self):
-		self.assertEqual(_compute_savings(income_total=0, expense_total=60), -60)
+	def test_balance_negative_with_no_income(self):
+		self.assertEqual(_compute_balance(income_total=0, expense_total=60), -60)
 
 	# U14
-	def test_savings_equals_income_with_no_expenses(self):
-		self.assertEqual(_compute_savings(income_total=100, expense_total=0), 100)
+	def test_balance_equals_income_with_no_expenses(self):
+		self.assertEqual(_compute_balance(income_total=100, expense_total=0), 100)
 
 
 class TestCategorySettingsApi(FrappeTestCase):

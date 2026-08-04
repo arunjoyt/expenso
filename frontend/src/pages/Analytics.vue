@@ -4,33 +4,28 @@
 
 		<MonthNav />
 
-		<div class="mb-5 mt-4 grid grid-cols-2 gap-2">
-			<div class="rounded-2xl bg-white p-3 text-center shadow-sm">
-				<p class="text-lg">💸</p>
-				<p class="text-xs font-semibold text-gray-400">Spent</p>
-				<p class="text-sm font-bold text-gray-900" data-test="monthly-total">
-					{{ formattedTotal }}
-				</p>
-			</div>
+		<div class="mb-5 mt-4 grid grid-cols-3 gap-2">
 			<div class="rounded-2xl bg-white p-3 text-center shadow-sm" data-test="income-total">
 				<p class="text-lg">💰</p>
 				<p class="text-xs font-semibold text-gray-400">Income</p>
 				<p class="text-sm font-bold text-green-600">{{ formattedIncomeTotal }}</p>
 			</div>
-			<div class="rounded-2xl bg-white p-3 text-center shadow-sm" data-test="savings">
-				<p class="text-lg">{{ savings >= 0 ? "🐷" : "😬" }}</p>
-				<p class="text-xs font-semibold text-gray-400">Savings</p>
-				<p
-					class="text-sm font-bold"
-					:class="savings >= 0 ? 'text-green-600' : 'text-red-600'"
-				>
-					{{ formattedSavings }}
+			<div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+				<p class="text-lg">💸</p>
+				<p class="text-xs font-semibold text-gray-400">Expense</p>
+				<p class="text-sm font-bold text-gray-900" data-test="monthly-total">
+					{{ formattedTotal }}
 				</p>
 			</div>
-			<div class="rounded-2xl bg-white p-3 text-center shadow-sm" data-test="budget-total">
-				<p class="text-lg">🎯</p>
-				<p class="text-xs font-semibold text-gray-400">Budget</p>
-				<p class="text-sm font-bold text-gray-900">{{ formattedBudgetTotal }}</p>
+			<div class="rounded-2xl bg-white p-3 text-center shadow-sm" data-test="balance">
+				<p class="text-lg">{{ balance >= 0 ? "🐷" : "😬" }}</p>
+				<p class="text-xs font-semibold text-gray-400">Balance</p>
+				<p
+					class="text-sm font-bold"
+					:class="balance >= 0 ? 'text-green-600' : 'text-red-600'"
+				>
+					{{ formattedBalance }}
+				</p>
 			</div>
 		</div>
 
@@ -86,7 +81,7 @@
 					class="mt-1.5 flex items-center justify-between gap-2 text-xs text-gray-600"
 				>
 					<span
-						>Budget {{ formatAmount(category.budget) }} · Balance
+						>Budget {{ formatAmount(category.budget) }} · Remaining
 						{{ formatAmount(category.budget - category.amount) }}</span
 					>
 					<span class="shrink-0 font-semibold text-gray-800"
@@ -109,7 +104,7 @@ import { getCategoryVisual } from "@/utils/categoryStyle";
 import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
-const { total, categories, incomeTotal, savings, budgetTotal, loading } = useAnalytics(monthStore);
+const { total, categories, incomeTotal, balance, loading } = useAnalytics(monthStore);
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);
@@ -117,8 +112,7 @@ function formatAmount(amount) {
 
 const formattedTotal = computed(() => formatAmount(total.value));
 const formattedIncomeTotal = computed(() => formatAmount(incomeTotal.value));
-const formattedSavings = computed(() => formatAmount(savings.value));
-const formattedBudgetTotal = computed(() => formatAmount(budgetTotal.value));
+const formattedBalance = computed(() => formatAmount(balance.value));
 
 const maxCategoryAmount = computed(() =>
 	categories.value.reduce((max, category) => Math.max(max, category.amount), 0)

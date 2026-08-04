@@ -12,9 +12,10 @@ vi.mock("@/composables/useBudgets", () => ({
 
 import { useBudgets } from "@/composables/useBudgets";
 
-function mockBudgets(categories, reload = vi.fn()) {
+function mockBudgets(categories, reload = vi.fn(), budgetTotal = 0) {
 	useBudgets.mockReturnValue({
 		categories: ref(categories),
+		budgetTotal: ref(budgetTotal),
 		loading: ref(false),
 		reload,
 	});
@@ -114,5 +115,21 @@ describe("Budget page", () => {
 		mockBudgets([]);
 		const wrapper = mount(Budget);
 		expect(wrapper.find('[data-test="budget-empty-state"]').exists()).toBe(true);
+	});
+
+	// F140
+	it("shows the total Budget for the month", () => {
+		mockBudgets(
+			[
+				{ name: "CAT-1", category_name: "Groceries", budget_amount: 500 },
+				{ name: "CAT-2", category_name: "Dining", budget_amount: null },
+			],
+			vi.fn(),
+			500
+		);
+		const wrapper = mount(Budget);
+		expect(wrapper.find('[data-test="budget-summary-total"]').text()).toContain(
+			new Intl.NumberFormat().format(500)
+		);
 	});
 });

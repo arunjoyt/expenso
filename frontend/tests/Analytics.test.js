@@ -11,17 +11,12 @@ vi.mock("@/composables/useAnalytics", () => ({
 
 import { useAnalytics } from "@/composables/useAnalytics";
 
-function mockAnalytics(
-	total,
-	categories,
-	{ incomeTotal = 0, savings = 0, budgetTotal = 0, loading = false } = {}
-) {
+function mockAnalytics(total, categories, { incomeTotal = 0, balance = 0, loading = false } = {}) {
 	useAnalytics.mockReturnValue({
 		total: ref(total),
 		categories: ref(categories),
 		incomeTotal: ref(incomeTotal),
-		savings: ref(savings),
-		budgetTotal: ref(budgetTotal),
+		balance: ref(balance),
 		loading: ref(loading),
 		reload: vi.fn(),
 	});
@@ -73,10 +68,10 @@ describe("Analytics page", () => {
 	});
 
 	// F29
-	it("shows the savings, including when negative", () => {
-		mockAnalytics(50, [], { incomeTotal: 20, savings: -30 });
+	it("shows the balance, including when negative", () => {
+		mockAnalytics(50, [], { incomeTotal: 20, balance: -30 });
 		const wrapper = mount(Analytics);
-		expect(wrapper.find('[data-test="savings"]').text()).toContain(
+		expect(wrapper.find('[data-test="balance"]').text()).toContain(
 			new Intl.NumberFormat().format(-30)
 		);
 	});
@@ -163,24 +158,9 @@ describe("Analytics page", () => {
 		expect(wrapper.findAll('[data-test="budget-summary-none"]')).toHaveLength(2);
 	});
 
-	// F92
-	it("shows the total budget", () => {
-		mockAnalytics(50, [], { budgetTotal: 350 });
-		const wrapper = mount(Analytics);
-		expect(wrapper.find('[data-test="budget-total"]').text()).toContain(
-			new Intl.NumberFormat().format(350)
-		);
-	});
-
 	// F93
 	it("shows a category row with $0 spent when only a Budget is set for it", () => {
-		mockAnalytics(
-			0,
-			[{ name: "Groceries", amount: 0, budget: 200, budget_status: "Normal" }],
-			{
-				budgetTotal: 200,
-			}
-		);
+		mockAnalytics(0, [{ name: "Groceries", amount: 0, budget: 200, budget_status: "Normal" }]);
 		const wrapper = mount(Analytics);
 		const rows = wrapper.findAll('[data-test="category-row"]');
 		expect(rows).toHaveLength(1);

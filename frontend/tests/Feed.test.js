@@ -150,13 +150,13 @@ describe("Feed page", () => {
 	});
 
 	// F11
-	it("shows a Spent total equal to the sum of rendered Expenses", () => {
+	it("shows an Expense total equal to the sum of rendered Expenses", () => {
 		mockExpenses([
 			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
 			{ name: "EXP-2", amount: 20, date: "2025-06-12", category_name: "Dining" },
 		]);
 		const wrapper = mountFeed();
-		expect(wrapper.find('[data-test="feed-spent-total"]').text()).toBe(
+		expect(wrapper.find('[data-test="feed-expense-total"]').text()).toBe(
 			new Intl.NumberFormat().format(30)
 		);
 	});
@@ -171,6 +171,18 @@ describe("Feed page", () => {
 		const wrapper = mountFeed();
 		expect(wrapper.find('[data-test="feed-income-total"]').text()).toBe(
 			new Intl.NumberFormat().format(600)
+		);
+	});
+
+	// F141
+	it("shows a Balance total equal to Income minus Expense", () => {
+		mockExpenses([
+			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
+		]);
+		mockIncomes([{ name: "INC-1", amount: 500, date: "2025-06-01", source_name: "Salary" }]);
+		const wrapper = mountFeed();
+		expect(wrapper.find('[data-test="feed-balance-total"]').text()).toBe(
+			new Intl.NumberFormat().format(490)
 		);
 	});
 

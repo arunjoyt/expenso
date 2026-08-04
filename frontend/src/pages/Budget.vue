@@ -5,6 +5,15 @@
 		<MonthNav />
 
 		<div
+			class="mb-2 mt-4 rounded-2xl bg-white p-3 text-center shadow-sm"
+			data-test="budget-summary-total"
+		>
+			<p class="text-lg">🎯</p>
+			<p class="text-xs font-semibold text-gray-400">Budget</p>
+			<p class="text-sm font-bold text-gray-900">{{ formattedBudgetTotal }}</p>
+		</div>
+
+		<div
 			v-if="!loading && categories.length === 0"
 			class="py-12 text-center text-gray-500"
 			data-test="budget-empty-state"
@@ -57,7 +66,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useMonthStore } from "@/stores/month";
 import { useBudgets } from "@/composables/useBudgets";
 import { getCategoryVisual } from "@/utils/categoryStyle";
@@ -65,11 +74,13 @@ import BudgetSheet from "@/components/BudgetSheet.vue";
 import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
-const { categories, loading, reload } = useBudgets(monthStore);
+const { categories, budgetTotal, loading, reload } = useBudgets(monthStore);
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);
 }
+
+const formattedBudgetTotal = computed(() => formatAmount(budgetTotal.value));
 
 const budgetSheetCategory = ref(null);
 

@@ -194,7 +194,7 @@ def _attach_budget_status(categories, expenses, family, month, year):
 	return categories
 
 
-def _compute_savings(income_total, expense_total):
+def _compute_balance(income_total, expense_total):
 	return income_total - expense_total
 
 
@@ -229,14 +229,11 @@ def compute_analytics(family: str, month: int, year: int):
 	categories = _attach_budget_status(categories, expenses, family, month, year)
 	categories.sort(key=lambda category: category["amount"], reverse=True)
 
-	budget_total = sum(category["budget"] for category in categories if category["budget"])
-
 	return {
 		"total": expense_total,
 		"categories": categories,
 		"income_total": income_total,
-		"savings": _compute_savings(income_total, expense_total),
-		"budget_total": budget_total,
+		"balance": _compute_balance(income_total, expense_total),
 	}
 
 

@@ -20,7 +20,7 @@ _Avoid_: Group, household, account
 
 ## Expenses
 
-**Expense**: A single spending record entered by a Member. `amount` and `date` are required (`date` defaults to today). `category` and `notes` are optional. The app is a shared ledger: both Members can see all Expenses in their Family.
+**Expense**: A single spending record entered by a Member. `amount` and `date` are required (`date` defaults to today). `category` and `notes` are optional. The app is a shared ledger: both Members can see all Expenses in their Family. From Phase 5, an Expense may instead be created by the `create_expense` MCP tool (see **Chat**) — such a record carries a visible "unreviewed external write" marker and the verbatim message it was created from, shown in its detail view.
 _Avoid_: Transaction, entry, payment, Spent
 
 **Notes**: An optional free-text field on an Expense or Income capturing what it was specifically for, beyond its Category/Source (e.g. "Dinner with the Smiths"). On the Feed, Notes is the primary (bold) line of a row when present, with Category/Source demoted to a smaller caption below it; a row with no Notes falls back to showing Category/Source alone as the primary line. In the Add/Edit Expense and Income sheets, Notes is field-ordered ahead of Category/Source (after Amount and Date).
@@ -42,17 +42,17 @@ _Avoid_: Dashboard, reports, insights; Balance (this term is reserved for the Fa
 **Budget** (screen): A bottom-nav screen, alongside Feed and Analytics, for setting each Category's Budget amount for the selected month. A summary tile at the top, labeled "Budget", shows the total Budget for the month (sum of each Category's effective Budget) — spend and Budget Status are not shown here, see Analytics. Prev/next month navigation is available, sharing the same selected month as Feed and Analytics. The Category list itself (renaming, deleting) is managed on Settings, not here — this screen only uses it to render one row per Category.
 _Avoid_: Budgets, Spending, Caps
 
-**FAB (Floating Action Button)**: The persistent primary action button — visible on every screen (Phase 5 widened this from Feed-only) — that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB. Sits bottom-right; the Chat bubble stacks directly above it in the same corner, both within single-hand thumb reach.
+**FAB (Floating Action Button)**: The persistent primary action button — visible on Feed only until Phase 6 widens it to every screen — that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB. Sits bottom-right; from Phase 6 onward, the in-app Chat bubble stacks directly above it in the same corner, both within single-hand thumb reach. Phase 5's MCP-connector Chat has no in-app surface and does not affect the FAB.
 _Avoid_: Add button, create button
 
-**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here. Phase 4/5 add a "Your usage this month" section showing the logged-in Member's own Receipt + Chat API cost for the current month, with a feature breakdown — their own usage only, never another Member's or the Family's total.
+**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here. Phase 4 adds a "Your usage this month" section showing the logged-in Member's own Receipt API cost for the current month; Phase 6 extends it with an in-app Chat cost breakdown once that phase's OpenAI calls start producing `LLM Call Log` rows (Phase 5's MCP-connector Chat makes no such calls, so it never appears here) — their own usage only, never another Member's or the Family's total.
 _Avoid_: Profile, preferences, configuration
 
 ---
 
 ## Income
 
-**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` and `notes` are optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income is recorded via the Feed FAB (Income tab), appears alongside Expenses in the Feed list (shown in green with a leading "+"), and its monthly total/Balance are reviewed from the Feed banner and the Analytics screen.
+**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` and `notes` are optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income is recorded via the Feed FAB (Income tab), appears alongside Expenses in the Feed list (shown in green with a leading "+"), and its monthly total/Balance are reviewed from the Feed banner and the Analytics screen. From Phase 5, an Income may instead be created by the `create_income` MCP tool (see **Chat**) — same "unreviewed external write" marker and verbatim-message treatment as Expense.
 _Avoid_: Revenue, credit, earning
 
 **Source**: A Member-defined label that classifies an Income record (e.g. Salary, Freelance, Rental). Sources belong to a Family — each Family manages its own list. Any Member may add, rename, or delete a Source — adding can happen on Settings or inline from the Add Income sheet, rename/delete only on Settings; deleting is blocked while any Income record still references it.
@@ -97,10 +97,14 @@ The Feed silently refreshes via Frappe's WebSocket when any Member adds, edits, 
 
 ## Chat
 
-**Chat**: A read-only Q&A assistant, reachable via a floating bubble on every screen — stacked directly above the FAB in the bottom-right corner, both reachable with one thumb — that answers a Member's questions about their Family's existing Expenses, Income, and Budgets (e.g. "How much did I spend on Groceries this month?") by calling the same whitelisted read APIs the rest of the app uses. Cannot create, edit, or delete records. Each Member has exactly one continuous, ever-growing Chat thread, private to them (not visible to the other Member) — there is no concept of multiple/named conversations. A Member may clear their own thread at any time ("Clear chat"), permanently removing it from their view; nothing is auto-deleted otherwise.
+**Chat**: Ships in two phases, decided 2026-08-11 (issues #78, #79) to build both rather than choose one:
+
+- **Phase 5 — MCP connector** (current plan of record, ships first): a remote MCP server, added as a connector inside a Member's own ChatGPT/Claude app — not reachable from inside Expenso itself. Exposes read tools (`get_expenses`, `get_analytics`, `get_income`, `get_budgets`, `list_categories`, `list_sources`) answering questions about the Family's data, and write tools (`create_expense`, `create_income`) that create records directly with no in-app review step. Auth is Frappe's built-in OAuth2 (`expenso:read` / `expenso:write` scopes); Expenso never sees or stores the conversation — ChatGPT/Claude hold it client-side. Every write carries a visible "unreviewed external write" marker and the verbatim source message (see **Expense**, **Income**), and is bounded by a combined per-Member daily write cap. See `docs/adr/0005-chat-via-mcp-connector-alternative.md` and `docs/adr/0006-chat-driven-manual-entry-mcp-connector.md`.
+- **Phase 6 — in-app Chat** (deferred, not dropped): a read-only Q&A assistant reachable via a floating bubble on every screen — stacked directly above the FAB in the bottom-right corner, both reachable with one thumb — answering the same kinds of questions via the same whitelisted read APIs, but cannot create, edit, or delete records. Each Member has exactly one continuous, ever-growing Chat thread, private to them, stored in Expenso as **Chat Message** rows. A Member may clear their own thread at any time ("Clear chat"). See `docs/adr/0004-chat-via-tool-calling.md`.
+
 _Avoid_: Assistant, chatbot, AI
 
-**Chat Message**: A single message within a Member's Chat thread — either from the Member or from Chat. Ordered chronologically; only the most recent messages are sent to the LLM as context on each turn (older ones remain stored and viewable but drop out of context).
+**Chat Message**: A single message within a Member's Phase 6 in-app Chat thread — either from the Member or from Chat. Ordered chronologically; only the most recent messages are sent to the LLM as context on each turn (older ones remain stored and viewable but drop out of context). Does not exist for Phase 5's MCP connector, where ChatGPT/Claude hold history client-side instead.
 _Avoid_: Prompt, turn, reply
 
 ---

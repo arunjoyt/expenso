@@ -742,7 +742,7 @@ See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-l
 |---|------|-----------|
 | I168 | "Cost by Member by Month" Script Report | exists, System Manager-only |
 | I169 | Report with one Member's `LLM Call Log` rows spanning two different months | returns one row per (Member, Month), each with the correct summed cost |
-| I170 | Report with rows from both features (`receipt_extraction` and `chat`) for the same Member/Month | separate Receipt-cost and Chat-cost columns present, summing to the row's total cost |
+| I170 | Report with rows from both features (`receipt_extraction` and `chat`) for the same Member/Month — `chat` rows only exist once Phase 6's in-app Chat ships, but the report's per-feature breakdown is exercised now with synthetic rows | separate Receipt-cost and Chat-cost columns present, summing to the row's total cost |
 | I171 | Report with rows for two different Members in the same month | returns separate rows per Member, not merged |
 
 ---
@@ -753,7 +753,7 @@ See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-l
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I172 | `get_my_llm_cost()` (defaults to current month) by a Member with both Receipt and Chat `LLM Call Log` rows this month | returns `{total, receipt_extraction, chat}` matching the sum of that Member's own rows |
+| I172 | `get_my_llm_cost()` (defaults to current month) by a Member with both Receipt and Chat `LLM Call Log` rows this month — `chat` rows only exist once Phase 6 ships, exercised now with synthetic rows | returns `{total, receipt_extraction, chat}` matching the sum of that Member's own rows |
 | I173 | `get_my_llm_cost()` by a Member with no `LLM Call Log` rows this month | returns `{total: 0, receipt_extraction: 0, chat: 0}` |
 | I174 | `get_my_llm_cost()` — Member and another Member of the same Family both have rows this month | response never includes the other Member's rows |
 | I175 | `get_my_llm_cost()` response | contains only the aggregated dollar figures — no raw `LLM Call Log` fields, no `content`, nothing identifying another Member |
@@ -763,16 +763,74 @@ See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-l
 | # | Test | Assertion |
 |---|------|-----------|
 | F134 | Settings screen | shows a "Your usage this month" section with a total cost figure |
-| F135 | "Your usage this month" section | shows Receipt and Chat cost breakdown beneath the total |
+| F135 | "Your usage this month" section | shows a Receipt cost breakdown beneath the total now; gains a Chat row once Phase 6's in-app Chat ships (component built to break down by feature generically, not hardcoded to Receipt-only) |
 | F136 | Member with no usage this month | section shows $0 (or equivalent), not hidden or broken |
 
 ---
 
-## Phase 5 — Chat
+## Phase 5 — Chat via MCP connector (read + write)
 
-See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design this phase implements.
+See `docs/GLOSSARY.md` (Chat) and `docs/adr/0005-chat-via-mcp-connector-alternative.md` / `docs/adr/0006-chat-driven-manual-entry-mcp-connector.md` for the settled design this phase implements. Ships before Phase 6's in-app Chat (decided #78, #79).
 
-### P5-S1 · Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content (issue #69)
+### P5-S1 · MCP server + OAuth2 (`expenso:read`) + read tools (issue #80)
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U35 | `build_mcp_read_tool_schema()` | includes exactly `get_expenses`, `get_analytics`, `get_income`, `get_budgets`; no write-capable tool |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I176 | OAuth2 authorization-code flow completed by a Member for the connector's `OAuth Client` | resulting access token resolves to that Member's Frappe user via `validate_oauth()`/`frappe.set_user()` |
+| I177 | MCP `get_expenses` call with a valid `expenso:read` token | returns the calling Member's Family's Expenses only — identical result to calling the existing whitelisted method directly |
+| I178 | MCP `get_analytics`/`get_income`/`get_budgets` calls with a valid `expenso:read` token | each returns Family-scoped data identical to the existing whitelisted method |
+| I179 | MCP call with no token, an expired token, or a token for a different scope | request rejected; no data returned |
+| I180 | MCP call requesting data belonging to a different Family (via crafted params) | stays scoped to the calling Member's own Family — existing `has_permission`/`permission_query_conditions` enforcement, no new access path |
+
+---
+
+### P5-S2 · MCP write tools: `create_expense`, `create_income`, `list_categories`, `list_sources` (issue #81)
+
+**Unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| U36 | `build_mcp_write_tool_schema()` | includes exactly `create_expense`, `create_income`, `list_categories`, `list_sources`, gated separately from the read tools |
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I181 | `create_expense(amount, message)` with a valid `expenso:write` token | creates an Expense with the "unreviewed external write" marker set and `message` stored verbatim |
+| I182 | `create_income(amount, message)` with a valid `expenso:write` token | creates an Income with the same marker and verbatim-message treatment as `create_expense` |
+| I183 | `create_expense(...)` without `amount` | raises `MandatoryError`; no record created |
+| I184 | `create_expense(...)` without `date` | Expense created with `date` defaulting to today |
+| I185 | `create_expense(..., category="Nonexistent")` | `category` left unset on the created Expense; category not auto-created |
+| I186 | `create_income(..., source="Nonexistent")` | `source` left unset on the created Income; source not auto-created |
+| I187 | `create_expense`/`create_income` call | increments one combined per-Member daily write-cap counter shared across both tools |
+| I188 | Member at the daily write cap calls either `create_expense` or `create_income` | raises `ValidationError`; no record created |
+| I189 | `create_expense`/`create_income` call with a token that has `expenso:read` but not `expenso:write` | rejected; no record created |
+| I190 | `list_categories()`/`list_sources()` via MCP | returns the calling Member's Family's Category/Source names, for the calling LLM to validate against before calling `create_expense`/`create_income` |
+| I191 | `create_expense`/`create_income` call | creates no `LLM Call Log` row (Expenso makes no OpenAI call for this path) |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F137 | Expense/Income detail view for a record created via `create_expense`/`create_income` | shows the "unreviewed external write" marker and the verbatim source message |
+| F138 | Expense/Income detail view for a normally-created record | no marker, no external message shown |
+| F139 | Feed list row for a record created via `create_expense`/`create_income` | no marker or message shown at the row level (detail view only, to avoid Feed clutter) |
+
+---
+
+## Phase 6 — Chat (in-app)
+
+See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design this phase implements — accepted but deferred until Phase 5 ships (#78).
+
+### P6-S1 · Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content (issue #69)
 
 **Unit tests**
 
@@ -803,7 +861,7 @@ See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-cal
 
 ---
 
-### P5-S2 · Chat UI: floating bubble, full-screen thread, Clear chat (issue #70)
+### P6-S2 · Chat UI: floating bubble, full-screen thread, Clear chat (issue #70)
 
 **Frontend unit tests**
 
@@ -825,7 +883,7 @@ See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-cal
 
 ---
 
-### P5-S3 · Chat: admin cost/latency reporting (issue #71)
+### P6-S3 · Chat: admin cost/latency reporting (issue #71)
 
 **Integration tests**
 
@@ -865,7 +923,7 @@ Balance figure.
 
 | Layer | Count |
 |---|---|
-| Backend unit tests | 35 |
-| Backend integration tests | 173 |
-| Frontend unit tests | 157 |
-| **Total** | **365** |
+| Backend unit tests | 37 |
+| Backend integration tests | 189 |
+| Frontend unit tests | 160 |
+| **Total** | **386** |

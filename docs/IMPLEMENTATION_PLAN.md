@@ -67,7 +67,7 @@ See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layou
 
 **New DocType:** `LLM Call Log` — one row per OpenAI call (`feature` discriminator, latency, tokens, cost, model, per-field accuracy), System Manager-only. Named feature-agnostic rather than Receipt-specific since the planned chat feature (issue #44) will also need this tracking. The extracted image itself is stored as a standard Frappe File attached to the created Expense; no schema changes to Expense are needed.
 
-P4-S4 and P4-S5 span both features (Receipt + Chat) via the shared `LLM Call Log`; both ship functionally once P4-S1 lands (Receipt-only data) and pick up Chat's contribution automatically once P5-S1 (#69) ships — no rework needed either way.
+P4-S4 and P4-S5 span both features (Receipt + in-app Chat) via the shared `LLM Call Log`; both ship functionally once P4-S1 lands (Receipt-only data). Phase 5's MCP-connector Chat makes no OpenAI calls of its own (see ADR 0005/0006) and so contributes no `LLM Call Log` rows; P4-S4/P4-S5 pick up Chat's contribution only once Phase 6's in-app Chat (#69) ships — no rework needed either way.
 
 | Streak | Issue | Title | Scope |
 |--------|-------|-------|-------|
@@ -79,16 +79,31 @@ P4-S4 and P4-S5 span both features (Receipt + Chat) via the shared `LLM Call Log
 
 ---
 
-## Phase 5 — Chat
+## Phase 5 — Chat via MCP connector (read + write)
 
-**Goal:** Members can ask read-only questions about their Family's Expenses, Income, and Budgets via a chat assistant. See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design.
+**Goal:** Members ask questions about their Family's Expenses, Income, and Budgets, and create Expense/Income entries (typed or photo-derived), through their own ChatGPT/Claude app via a remote MCP connector — no in-app UI in this phase. See `docs/adr/0005-chat-via-mcp-connector-alternative.md` (read) and `docs/adr/0006-chat-driven-manual-entry-mcp-connector.md` (write) for the settled design. Decided 2026-08-11 (issues #78, #79) to build this **before** Phase 6's in-app Chat, not instead of it.
 
-**New DocType:** `Chat Message` — one row per message, private per Member (not Family-shared), retained indefinitely unless the Member clears their thread. **Extends** `LLM Call Log` (from Phase 4) with a nullable `content` field, populated only for `feature: "chat"` rows (full tool-calling trace, for admin debugging) — Receipt's rows don't use it. No new tools/actions beyond the existing whitelisted `get_expenses`/`get_analytics`/`get_income`/`get_budgets` methods, which Chat calls directly under their existing Family-scoped permissions.
+**New DocType:** none. Schema additions: `Expense`/`Income` gain a verbatim-message field and an "unreviewed external write" marker (ADR 0006), populated only by the write tools below. A single admin-configured `OAuth Client` (standard Frappe DocType, no new schema) provides auth for both scopes (`expenso:read`, `expenso:write`).
 
-Depends on Phase 4 (P4-S1 creates `LLM Call Log`; P4-S3's report pattern is extended, not duplicated).
+Independent of Phase 4 — the MCP connector makes no OpenAI/Anthropic calls of its own, so it does not touch `LLM Call Log`.
 
 | Streak | Issue | Title | Scope |
 |--------|-------|-------|-------|
-| P5-S1 | #69 | Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content | Backend |
-| P5-S2 | #70 | Chat UI: floating bubble, full-screen thread, Clear chat | Full-stack |
-| P5-S3 | #71 | Chat: admin cost/latency reporting | Backend |
+| P5-S1 | #80 | MCP server + OAuth2 (`expenso:read`) + read tools: `get_expenses`, `get_analytics`, `get_income`, `get_budgets` | Backend |
+| P5-S2 | #81 | MCP write tools: `create_expense`, `create_income`, `list_categories`, `list_sources` + `expenso:write` scope + daily write cap + unreviewed-write marker/message fields | Full-stack |
+
+---
+
+## Phase 6 — Chat (in-app)
+
+**Goal:** Members can ask read-only questions about their Family's Expenses, Income, and Budgets via an in-app chat assistant, alongside (not instead of) Phase 5's MCP connector. See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design — accepted but deferred until Phase 5 ships (#78).
+
+**New DocType:** `Chat Message` — one row per message, private per Member (not Family-shared), retained indefinitely unless the Member clears their thread. **Extends** `LLM Call Log` (from Phase 4) with a nullable `content` field, populated only for `feature: "chat"` rows (full tool-calling trace, for admin debugging) — Receipt's rows don't use it. No new tools/actions beyond the existing whitelisted `get_expenses`/`get_analytics`/`get_income`/`get_budgets` methods, which Chat calls directly under their existing Family-scoped permissions.
+
+Depends on Phase 4 (P4-S1 creates `LLM Call Log`; P4-S3's report pattern is extended, not duplicated) and follows Phase 5 by decision, not technical necessity.
+
+| Streak | Issue | Title | Scope |
+|--------|-------|-------|-------|
+| P6-S1 | #69 | Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content | Backend |
+| P6-S2 | #70 | Chat UI: floating bubble, full-screen thread, Clear chat | Full-stack |
+| P6-S3 | #71 | Chat: admin cost/latency reporting | Backend |

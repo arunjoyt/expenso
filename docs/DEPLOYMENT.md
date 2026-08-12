@@ -65,7 +65,28 @@ Nginx serves the built frontend bundle as static files at the site root. The Fra
 
 ## Environment
 
-No `.env` file — all configuration lives in the site's `site_config.json` (managed by bench). Frappe's built-in session auth is used; no external auth service or API keys required.
+No `.env` file — all configuration lives in the site's `site_config.json` (managed by bench). Frappe's built-in session auth is used for the app itself; no external auth service or API keys required. From Phase 5, the MCP connector reuses Frappe's built-in OAuth2 provider (see below) — still no external auth service.
+
+---
+
+## MCP Connector Setup (Phase 5, admin one-time)
+
+The MCP server (`/api/method/expenso.mcp.handle_mcp`) is reached by adding it as a connector inside a Member's own ChatGPT/Claude app. Auth is a standard OAuth2 Authorization Code flow against one admin-configured `OAuth Client` — there is no self-service UI in Expenso for this. Each Member individually completes login+consent when they add the connector, so their token still resolves to their own Frappe user via Frappe's existing `validate_oauth()` → `frappe.set_user()` path.
+
+**One-time, via Frappe Desk (System Manager):**
+
+1. Confirm `bench --site <site> migrate` has run — the `configure_oauth_settings` patch enables RFC 8414/RFC 9728 discovery metadata (`show_auth_server_metadata`, `show_protected_resource_metadata`) and disables Dynamic Client Registration on **OAuth Settings**, since this design uses a single pre-registered client, not self-registration.
+2. Desk → **OAuth Client** → New:
+   - **App Name**: e.g. `Expenso MCP`
+   - **Redirect URIs**: the callback URI the connecting app (ChatGPT/Claude) shows during connector setup — add one per app.
+   - **Scopes**: `all openid expenso:read` (space-separated). `expenso:write` is added here once Phase 5's write tools (#81) ship.
+   - **Skip Authorization**: leave unchecked — each Member should see the consent screen.
+   - Leave **Allowed Roles** at its default (`System User`) unless access should be restricted further.
+3. Share the resulting `client_id`/`client_secret` and the site's OAuth endpoints (discoverable at `/.well-known/oauth-authorization-server`) with Members setting up the connector.
+
+**Note:** if a connecting app's authorize request omits an explicit `scope=` parameter, Frappe grants the token *every* scope configured on the client (`get_default_scopes()` behavior) — if a Member's connector app doesn't let you set `scope=expenso:read` explicitly, use a separate `OAuth Client` per scope level rather than relying on the client's default falling back correctly.
+
+**Known caveat — prefer PKCE, not `Authorization: Basic`, for client auth at the token step.** Frappe's `get_token` endpoint (`frappe/integrations/oauth2.py`) only reads `client_id`/`client_secret` from the POST body, never from an `Authorization: Basic base64(client_id:client_secret)` header — confirmed by reading `OAuthWebRequestValidator.authenticate_client` (`frappe/oauth.py:94-119`), and previously reported upstream as [frappe/frappe#33395](https://github.com/frappe/frappe/issues/33395), closed "won't implement" (body-parameter client auth is equally RFC 6749 §2.3.1-valid, and Frappe steers static-credential integrations toward API Key/Secret instead). A connecting app that sends `client_id` **only** via the Basic header (omitting it from the body) will fail to authenticate. If a Member's connector errors out at the token step, this is the first thing to check — most MCP clients default to PKCE with `client_id` in the body precisely because it doesn't require a static secret at all, which sidesteps this entirely.
 
 ---
 

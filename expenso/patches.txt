@@ -7,3 +7,4 @@
 expenso.patches.v0_0.backfill_family_categories_and_sources
 expenso.patches.v0_0.stamp_budget_month_year
 expenso.patches.v0_0.split_expenso_budget_from_shared_table
+expenso.patches.v0_0.configure_oauth_settings

@@ -73,6 +73,8 @@ No `.env` file — all configuration lives in the site's `site_config.json` (man
 
 The MCP server (`/api/method/expenso.mcp.handle_mcp`) is reached by adding it as a connector inside a Member's own ChatGPT/Claude app. Auth is a standard OAuth2 Authorization Code flow against one admin-configured `OAuth Client` — there is no self-service UI in Expenso for this. Each Member individually completes login+consent when they add the connector, so their token still resolves to their own Frappe user via Frappe's existing `validate_oauth()` → `frappe.set_user()` path.
 
+**Plan requirement on the Member's side (verified 2026-08-12):** Claude supports custom remote-MCP connectors on every plan, including Free (Free is capped at one custom connector — fine here since Expenso would be it). ChatGPT does **not** support custom remote-MCP connectors on its Free plan at all — it requires Plus, Pro, Business, Enterprise, or Edu with Developer Mode enabled; Free ChatGPT can only use local MCP servers via JSON config. A Member on ChatGPT Free cannot use this connector until they upgrade.
+
 **One-time, via Frappe Desk (System Manager):**
 
 1. Confirm `bench --site <site> migrate` has run — the `configure_oauth_settings` patch enables RFC 8414/RFC 9728 discovery metadata (`show_auth_server_metadata`, `show_protected_resource_metadata`) and disables Dynamic Client Registration on **OAuth Settings**, since this design uses a single pre-registered client, not self-registration.

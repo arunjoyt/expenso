@@ -72,7 +72,7 @@ def run():
 	for category_name, amount in budgets:
 		frappe.get_doc(
 			{
-				"doctype": "Budget",
+				"doctype": "Expenso Budget",
 				"category": categories[category_name],
 				"family": family.name,
 				"amount": amount,

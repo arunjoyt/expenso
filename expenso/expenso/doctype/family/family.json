@@ -61,7 +61,7 @@
         },
         {
             "group": "Transactions",
-            "link_doctype": "Budget",
+            "link_doctype": "Expenso Budget",
             "link_fieldname": "family"
         }
     ]

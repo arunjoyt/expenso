@@ -100,7 +100,10 @@ Income records for the selected month are fetched via a whitelisted `get_income`
 
 ### Phase 3 DocTypes
 
-#### `Budget`
+#### `Expenso Budget`
+
+Named `Expenso Budget`, not `Budget` — the plain name collides with ERPNext core's own `Budget` DocType when both apps are installed on one site (issue #83, [ADR 0007](adr/0007-rename-budget-doctype-erpnext-collision.md)). The domain term is still "Budget" everywhere user-facing.
+
 | Field | Type | Notes |
 |---|---|---|
 | `category` | Link → Category | required; `get_query` scopes to Family |
@@ -131,7 +134,7 @@ later months resumes from whatever row precedes it. Independent of Income.
 
 ## Permissions
 
-Pattern is identical for `Expense`, `Income`, and `Budget`:
+Pattern is identical for `Expense`, `Income`, and `Expenso Budget`:
 - Custom role: **Family Member**
 - `permission_query_conditions`: filters to `family = user's single family`
 - `has_permission()`: validates requesting user belongs to that Family
@@ -239,7 +242,7 @@ expenso/                            ← Frappe app root (git repo)
 │       ├── category/               ← CAT-.####
 │       ├── income/                 ← Phase 2
 │       ├── source/                 ← Phase 2, SRC-.####
-│       └── budget/                 ← Phase 3
+│       └── expenso_budget/         ← Phase 3 (renamed from budget/, see ADR 0007)
 └── frontend/                       ← Vue 3 SPA
     ├── src/
     │   ├── pages/

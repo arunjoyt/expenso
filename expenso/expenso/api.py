@@ -2,7 +2,7 @@ import frappe
 from frappe import _
 from frappe.utils import cint, get_first_day, get_last_day
 
-from expenso.expenso.doctype.budget.budget import compute_budget_status
+from expenso.expenso.doctype.expenso_budget.expenso_budget import compute_budget_status
 from expenso.expenso.permissions import get_user_family
 
 
@@ -141,7 +141,7 @@ def _period_key(month, year):
 
 def _find_prior_budget(category, family, month, year):
 	rows = frappe.get_all(
-		"Budget",
+		"Expenso Budget",
 		filters={"category": category, "family": family},
 		fields=["name", "amount", "month", "year"],
 	)
@@ -154,7 +154,7 @@ def _find_prior_budget(category, family, month, year):
 
 def _resolve_budget_amount(category, family, month, year):
 	exact = frappe.db.get_value(
-		"Budget",
+		"Expenso Budget",
 		{"category": category, "family": family, "month": month, "year": year},
 		"amount",
 	)
@@ -277,9 +277,9 @@ def delete_category(name: str):
 	doc.check_permission("delete")
 
 	for budget_name in frappe.get_all(
-		"Budget", filters={"category": name, "family": doc.family}, pluck="name"
+		"Expenso Budget", filters={"category": name, "family": doc.family}, pluck="name"
 	):
-		frappe.delete_doc("Budget", budget_name, ignore_permissions=True)
+		frappe.delete_doc("Expenso Budget", budget_name, ignore_permissions=True)
 
 	frappe.delete_doc("Category", name, ignore_permissions=True)
 
@@ -434,11 +434,11 @@ def get_budgets(month: int, year: int):
 
 	for category in categories:
 		exact_name = frappe.db.exists(
-			"Budget",
+			"Expenso Budget",
 			{"category": category.name, "family": family, "month": month, "year": year},
 		)
 		if exact_name:
-			category["budget_amount"] = frappe.db.get_value("Budget", exact_name, "amount")
+			category["budget_amount"] = frappe.db.get_value("Expenso Budget", exact_name, "amount")
 			continue
 
 		prior = _find_prior_budget(category.name, family, month, year)
@@ -448,7 +448,7 @@ def get_budgets(month: int, year: int):
 
 		materialized = frappe.get_doc(
 			{
-				"doctype": "Budget",
+				"doctype": "Expenso Budget",
 				"category": category.name,
 				"family": family,
 				"month": month,
@@ -471,23 +471,23 @@ def set_budget(category: str, month: int, year: int, amount: float | None = None
 	year = cint(year)
 
 	existing_name = frappe.db.exists(
-		"Budget", {"category": category, "family": family, "month": month, "year": year}
+		"Expenso Budget", {"category": category, "family": family, "month": month, "year": year}
 	)
 
 	if amount is None:
 		if existing_name:
-			frappe.delete_doc("Budget", existing_name, ignore_permissions=True)
+			frappe.delete_doc("Expenso Budget", existing_name, ignore_permissions=True)
 		return None
 
 	if existing_name:
-		doc = frappe.get_doc("Budget", existing_name)
+		doc = frappe.get_doc("Expenso Budget", existing_name)
 		doc.amount = amount
 		doc.save(ignore_permissions=True)
 		return doc
 
 	return frappe.get_doc(
 		{
-			"doctype": "Budget",
+			"doctype": "Expenso Budget",
 			"category": category,
 			"family": family,
 			"month": month,

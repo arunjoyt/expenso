@@ -1,7 +1,7 @@
 {
  "docstatus": 0,
  "doctype": "Number Card",
- "document_type": "Budget",
+ "document_type": "Expenso Budget",
  "filters_json": "[]",
  "function": "Count",
  "is_public": 1,

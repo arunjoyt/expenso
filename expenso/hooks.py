@@ -136,14 +136,14 @@ permission_query_conditions = {
 	"Category": "expenso.expenso.permissions.get_permission_query_conditions",
 	"Income": "expenso.expenso.permissions.get_permission_query_conditions",
 	"Source": "expenso.expenso.permissions.get_permission_query_conditions",
-	"Budget": "expenso.expenso.permissions.get_permission_query_conditions",
+	"Expenso Budget": "expenso.expenso.permissions.get_permission_query_conditions",
 }
 
 has_permission = {
 	"Expense": "expenso.expenso.permissions.has_permission",
 	"Category": "expenso.expenso.permissions.has_permission",
 	"Income": "expenso.expenso.permissions.has_permission",
-	"Budget": "expenso.expenso.permissions.has_permission",
+	"Expenso Budget": "expenso.expenso.permissions.has_permission",
 	"Source": "expenso.expenso.permissions.has_permission",
 }
 

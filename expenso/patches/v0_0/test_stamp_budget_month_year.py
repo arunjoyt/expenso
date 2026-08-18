@@ -1,74 +1,31 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
-from frappe.utils import getdate
 
 from expenso.patches.v0_0.stamp_budget_month_year import execute
 
 
 class TestStampBudgetMonthYear(FrappeTestCase):
-	def setUp(self):
-		self.family = frappe.get_doc(
-			{
-				"doctype": "Family",
-				"family_name": "Stamp Budget Test Family",
-				"currency": "USD",
-			}
-		).insert(ignore_permissions=True)
+	# This patch already ran (and is recorded in Patch Log) on every site where the
+	# Budget DocType ever existed with month/year columns. After the Budget ->
+	# Expenso Budget rename (#83), a fresh site never gets a tabBudget table at all,
+	# and a site stuck on a pre-month/year schema never gets those columns added
+	# either — expenso no longer ships a Budget DocType to sync either onto. The only
+	# behavior left to cover here is that execute() doesn't blow up in either case.
+	#
+	# CREATE/DROP TABLE cause an implicit commit in MariaDB — frappe.db.sql_ddl()
+	# commits first so that's explicit rather than accidental; tearDown cleans up
+	# explicitly since that implicit commit would defeat the usual rollback cleanup.
+	def tearDown(self):
+		frappe.db.sql_ddl("DROP TABLE IF EXISTS `tabBudget`")  # nosemgrep
+		frappe.db.commit()  # nosemgrep
 
-		self.groceries = frappe.get_doc(
-			{
-				"doctype": "Category",
-				"category_name": "Groceries",
-				"family": self.family.name,
-			}
-		).insert(ignore_permissions=True)
-
-	def _make_bare_budget(self, amount):
-		# db_insert() skips controller validation, simulating a pre-existing Budget
-		# row from before month/year existed on the DocType.
-		budget = frappe.get_doc(
-			{
-				"doctype": "Budget",
-				"category": self.groceries.name,
-				"family": self.family.name,
-				"amount": amount,
-			}
-		)
-		budget.db_insert()
-		return budget.name
-
-	def test_stamps_rows_missing_month_and_year(self):
-		name = self._make_bare_budget(500)
-
+	def test_does_nothing_when_table_missing(self):
+		self.assertFalse(frappe.db.table_exists("Budget"))
 		execute()
 
-		today = getdate()
-		self.assertEqual(frappe.db.get_value("Budget", name, "month"), today.month)
-		self.assertEqual(frappe.db.get_value("Budget", name, "year"), today.year)
+	def test_does_nothing_when_month_year_columns_missing(self):
+		frappe.db.sql_ddl(
+			"CREATE TABLE `tabBudget` (`name` VARCHAR(140) NOT NULL PRIMARY KEY) ENGINE=InnoDB"
+		)  # nosemgrep
 
-	def test_does_not_touch_rows_that_already_have_month_and_year(self):
-		budget = frappe.get_doc(
-			{
-				"doctype": "Budget",
-				"category": self.groceries.name,
-				"family": self.family.name,
-				"amount": 500,
-				"month": 3,
-				"year": 2024,
-			}
-		).insert(ignore_permissions=True)
-
-		execute()
-
-		self.assertEqual(frappe.db.get_value("Budget", budget.name, "month"), 3)
-		self.assertEqual(frappe.db.get_value("Budget", budget.name, "year"), 2024)
-
-	def test_running_twice_is_safe(self):
-		name = self._make_bare_budget(500)
-
-		execute()
-		execute()
-
-		today = getdate()
-		self.assertEqual(frappe.db.get_value("Budget", name, "month"), today.month)
-		self.assertEqual(frappe.db.get_value("Budget", name, "year"), today.year)
+		execute()  # must not raise despite no month/year columns

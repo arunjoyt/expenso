@@ -42,7 +42,7 @@ class TestExpensoWorkspace(FrappeTestCase):
 			"Expenses": "Expense",
 			"Income": "Income",
 			"Sources": "Source",
-			"Budgets": "Budget",
+			"Budgets": "Expenso Budget",
 		}.items():
 			self.assertEqual(frappe.db.get_value("Number Card", card_name, "document_type"), document_type)
 

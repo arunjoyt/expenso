@@ -130,11 +130,13 @@ class TestFamilyIntegration(FrappeTestCase):
 		# "family" field should be reachable from here.
 		meta = frappe.get_meta("Family")
 		by_doctype = {link.link_doctype: link for link in meta.links}
-		self.assertCountEqual(by_doctype.keys(), ["Category", "Source", "Expense", "Income", "Budget"])
+		self.assertCountEqual(
+			by_doctype.keys(), ["Category", "Source", "Expense", "Income", "Expenso Budget"]
+		)
 		for link in by_doctype.values():
 			self.assertEqual(link.link_fieldname, "family")
 		self.assertEqual(by_doctype["Category"].group, "Setup")
 		self.assertEqual(by_doctype["Source"].group, "Setup")
 		self.assertEqual(by_doctype["Expense"].group, "Transactions")
 		self.assertEqual(by_doctype["Income"].group, "Transactions")
-		self.assertEqual(by_doctype["Budget"].group, "Transactions")
+		self.assertEqual(by_doctype["Expenso Budget"].group, "Transactions")

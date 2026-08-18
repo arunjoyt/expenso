@@ -25,7 +25,7 @@ def compute_budget_status(spent, budget):
 	return "Normal"
 
 
-class Budget(Document):
+class ExpensoBudget(Document):
 	def validate(self):
 		if self.amount is not None:
 			_validate_amount(self.amount)
@@ -34,7 +34,7 @@ class Budget(Document):
 			_validate_month(self.month)
 
 		duplicate = frappe.db.exists(
-			"Budget",
+			"Expenso Budget",
 			{
 				"category": self.category,
 				"family": self.family,

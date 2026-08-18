@@ -1,6 +1,6 @@
 {
     "doctype": "DocType",
-    "name": "Budget",
+    "name": "Expenso Budget",
     "module": "Expenso",
     "engine": "InnoDB",
     "autoname": "hash",

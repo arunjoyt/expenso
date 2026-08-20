@@ -1,0 +1,16 @@
+name: Notify CD on tag
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.INFRA_DISPATCH_PAT }}
+          repository: arunjoyt/vps-ref-contabo
+          event-type: app-tagged
+          client-payload: |
+            {"app": "${{ github.event.repository.name }}", "tag": "${{ github.ref_name }}"}

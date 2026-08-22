@@ -9,7 +9,12 @@ readme = "README.md"
 dynamic = ["version"]
 dependencies = [
     # "frappe~=15.0.0" # Installed and managed by bench.
-    "frappe-mcp~=0.1.0",
+    # frappe-mcp 0.1.0 on PyPI hard-pins Werkzeug==3.1.3/pydantic~=2.11.7, which
+    # conflicts with Frappe v16's own Werkzeug==3.1.6/pydantic~=2.12.5 pins and makes
+    # `uv` refuse to resolve on a fresh build (#86). Pinned to a commit on an unmerged
+    # upstream fix (frappe/mcp#5) that only widens those two ranges — swap back to
+    # "frappe-mcp~=0.1.0" (or a newer PyPI release) once that PR ships upstream.
+    "frappe-mcp @ git+https://github.com/newmatik/mcp.git@9a60d1814472a07d47fc33f89a145c74a26cfd7c",
 ]
 
 [build-system]

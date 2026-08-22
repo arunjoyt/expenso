@@ -50,6 +50,23 @@ Admin sets up all accounts through Frappe Desk — there's no self-service signu
 |---|---|
 | ![New Family](docs/images/admin-new-family.png) | ![Family Created](docs/images/admin-family-created.png) |
 
+## Chat via Claude
+
+Ask questions about your Family's Expenses, Income, and Budgets directly in Claude, through Claude's own remote MCP connector. Claude supports this on every plan, including Free (Free allows one custom connector).
+
+Before you start, get the connector's **Client ID** from your admin. Expenso uses one pre-registered client per connecting app, not self-service registration.
+
+1. Open Claude and go to **Settings → Connectors → Add custom connector**.
+2. Enter the server URL your admin gives you (it looks like `https://<your-site>/api/method/expenso.mcp.handle_mcp`).
+3. Open **Advanced settings** and enter the Client ID from your admin.
+4. Click **Connect**.
+5. Log in with your own Expenso account, then approve access.
+6. Ask Claude a question, for example: "What were my expenses last month?"
+
+Claude only sees your own Family's data — access follows the same Family-scoped permissions as the app itself. Claude asks for approval before it calls a tool for the first time; change this under the connector's **Tool permissions**.
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#mcp-connector-setup-phase-5-admin-one-time) for the admin-side setup that creates the Client ID.
+
 ## Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:

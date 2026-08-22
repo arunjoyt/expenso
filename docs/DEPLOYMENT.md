@@ -80,11 +80,13 @@ The MCP server (`/api/method/expenso.mcp.handle_mcp`) is reached by adding it as
 1. Confirm `bench --site <site> migrate` has run — the `configure_oauth_settings` patch enables RFC 8414/RFC 9728 discovery metadata (`show_auth_server_metadata`, `show_protected_resource_metadata`) and disables Dynamic Client Registration on **OAuth Settings**, since this design uses a single pre-registered client, not self-registration.
 2. Desk → **OAuth Client** → New:
    - **App Name**: e.g. `Expenso MCP`
-   - **Redirect URIs**: the callback URI the connecting app (ChatGPT/Claude) shows during connector setup — add one per app.
+   - **Redirect URIs**: the callback URI the connecting app shows during connector setup. **Verified for Claude (2026-08-22): `https://claude.ai/api/mcp/auth_callback`** — Claude's desktop app routes the OAuth callback through claude.ai's own backend, not a local loopback address, so this is the same value regardless of which of a Member's devices is adding the connector. Add one more per additional connecting app, space-separated on the same line (see caveat below).
    - **Scopes**: `all openid expenso:read` (space-separated). `expenso:write` is added here once Phase 5's write tools (#81) ship.
    - **Skip Authorization**: leave unchecked — each Member should see the consent screen.
    - Leave **Allowed Roles** at its default (`System User`) unless access should be restricted further.
 3. Share the resulting `client_id`/`client_secret` and the site's OAuth endpoints (discoverable at `/.well-known/oauth-authorization-server`) with Members setting up the connector.
+
+**Caveat confirmed live (2026-08-22): `Default Redirect URI` and `Redirect URIs` are two separate fields, and only `Redirect URIs` is checked against an incoming request** (`frappe/oauth.py::validate_redirect_uri` reads only the `redirect_uris` field; `default_redirect_uri` is used solely as a fallback when a request omits `redirect_uri` entirely). Filling in `Default Redirect URI` alone leaves `Redirect URIs` blank, and every real authorize request then fails with `{"error": "invalid_request", "description": "Mismatching redirect URI."}` — this is what actually happened setting up the prod connector; make sure `Redirect URIs` itself is populated, not just the Default field. Separately, `Redirect URIs` is a multi-line `Text` field in Desk but the backend splits it on a literal space character, not newlines (`get_url_delimiter()`) — if registering more than one URI, put them on one line separated by spaces, not one per line.
 
 **Note:** if a connecting app's authorize request omits an explicit `scope=` parameter, Frappe grants the token *every* scope configured on the client (`get_default_scopes()` behavior) — if a Member's connector app doesn't let you set `scope=expenso:read` explicitly, use a separate `OAuth Client` per scope level rather than relying on the client's default falling back correctly.
 

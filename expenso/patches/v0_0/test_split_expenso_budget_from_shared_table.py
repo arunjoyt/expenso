@@ -25,7 +25,9 @@ class TestSplitExpensoBudgetFromSharedTable(FrappeTestCase):
 
 	def _create_shared_table(self, with_erpnext_columns):
 		frappe.db.sql_ddl("DROP TABLE IF EXISTS `tabBudget`")  # nosemgrep
-		erpnext_columns = ", `company` VARCHAR(140), `fiscal_year` VARCHAR(140)" if with_erpnext_columns else ""
+		erpnext_columns = (
+			", `company` VARCHAR(140), `fiscal_year` VARCHAR(140)" if with_erpnext_columns else ""
+		)
 		frappe.db.sql_ddl(
 			f"""
 			CREATE TABLE `tabBudget` (

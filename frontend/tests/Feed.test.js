@@ -377,4 +377,32 @@ describe("Feed page", () => {
 		expect(wrapper.text()).toContain("Edit Income");
 		expect(wrapper.find('[data-test="income-amount-input"]').element.value).toBe("500");
 	});
+
+	// F144
+	it("shows no external-write marker or message at the Feed row level", () => {
+		mockExpenses([
+			{
+				name: "EXP-1",
+				amount: 10,
+				date: "2025-06-15",
+				category_name: "Groceries",
+				is_external_write: 1,
+				external_write_message: "add a $10 groceries expense",
+			},
+		]);
+		mockIncomes([
+			{
+				name: "INC-1",
+				amount: 500,
+				date: "2025-06-01",
+				source_name: "Salary",
+				is_external_write: 1,
+				external_write_message: "got paid $500",
+			},
+		]);
+		const wrapper = mountFeed();
+		expect(wrapper.text()).not.toContain("add a $10 groceries expense");
+		expect(wrapper.text()).not.toContain("got paid $500");
+		expect(wrapper.find('[data-test="external-write-marker"]').exists()).toBe(false);
+	});
 });

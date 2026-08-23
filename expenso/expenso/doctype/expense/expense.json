@@ -41,6 +41,17 @@
             "reqd": 1,
             "in_list_view": 1,
             "in_standard_filter": 1
+        },
+        {
+            "fieldname": "is_external_write",
+            "fieldtype": "Check",
+            "label": "Unreviewed External Write",
+            "default": "0"
+        },
+        {
+            "fieldname": "external_write_message",
+            "fieldtype": "Small Text",
+            "label": "Original Message"
         }
     ],
     "permissions": [

@@ -820,9 +820,9 @@ See `docs/GLOSSARY.md` (Chat) and `docs/adr/0005-chat-via-mcp-connector-alternat
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F137 | Expense/Income detail view for a record created via `create_expense`/`create_income` | shows the "unreviewed external write" marker and the verbatim source message |
-| F138 | Expense/Income detail view for a normally-created record | no marker, no external message shown |
-| F139 | Feed list row for a record created via `create_expense`/`create_income` | no marker or message shown at the row level (detail view only, to avoid Feed clutter) |
+| F142 | Expense/Income detail view for a record created via `create_expense`/`create_income` | shows the "unreviewed external write" marker and the verbatim source message |
+| F143 | Expense/Income detail view for a normally-created record | no marker, no external message shown |
+| F144 | Feed list row for a record created via `create_expense`/`create_income` | no marker or message shown at the row level (detail view only, to avoid Feed clutter) |
 
 ---
 

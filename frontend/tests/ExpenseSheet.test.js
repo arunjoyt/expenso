@@ -231,4 +231,33 @@ describe("ExpenseSheet", () => {
 		});
 		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(false);
 	});
+
+	// F142
+	it("shows the unreviewed-external-write marker and verbatim message for a chat-created Expense", () => {
+		const wrapper = mount(ExpenseSheet, {
+			props: {
+				expense: {
+					name: "EXP-1",
+					amount: 40,
+					date: "2025-06-10",
+					is_external_write: 1,
+					external_write_message: "add a $40 dinner expense",
+				},
+			},
+		});
+		expect(wrapper.find('[data-test="external-write-marker"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="external-write-message"]').text()).toContain(
+			"add a $40 dinner expense"
+		);
+	});
+
+	// F143
+	it("shows no marker or message for a normally-created Expense", () => {
+		const wrapper = mount(ExpenseSheet, {
+			props: {
+				expense: { name: "EXP-1", amount: 40, date: "2025-06-10", category: "CAT-1" },
+			},
+		});
+		expect(wrapper.find('[data-test="external-write-marker"]').exists()).toBe(false);
+	});
 });

@@ -34,6 +34,16 @@
 					💰 Income
 				</button>
 			</div>
+			<div
+				v-if="isEdit && income.is_external_write"
+				data-test="external-write-marker"
+				class="mb-4 flex flex-col gap-1 rounded-2xl bg-amber-50 p-3 text-sm text-amber-800"
+			>
+				<span class="font-semibold">💬 Unreviewed external write</span>
+				<span v-if="income.external_write_message" data-test="external-write-message">
+					"{{ income.external_write_message }}"
+				</span>
+			</div>
 
 			<form class="flex flex-col gap-4" @submit.prevent="submit">
 				<Input

@@ -30,6 +30,8 @@ def get_expenses(month: int, year: int):
 			"category",
 			"category.category_name as category_name",
 			"notes",
+			"is_external_write",
+			"external_write_message",
 		],
 		order_by="date desc, `tabExpense`.creation desc",
 	)
@@ -317,6 +319,8 @@ def get_income(month: int, year: int):
 			"source",
 			"source.source_name as source_name",
 			"notes",
+			"is_external_write",
+			"external_write_message",
 		],
 		order_by="date desc, `tabIncome`.creation desc",
 	)

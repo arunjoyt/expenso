@@ -212,4 +212,33 @@ describe("IncomeSheet", () => {
 		});
 		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(false);
 	});
+
+	// F142
+	it("shows the unreviewed-external-write marker and verbatim message for a chat-created Income", () => {
+		const wrapper = mount(IncomeSheet, {
+			props: {
+				income: {
+					name: "INC-1",
+					amount: 200,
+					date: "2025-06-10",
+					is_external_write: 1,
+					external_write_message: "got paid $200",
+				},
+			},
+		});
+		expect(wrapper.find('[data-test="external-write-marker"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="external-write-message"]').text()).toContain(
+			"got paid $200"
+		);
+	});
+
+	// F143
+	it("shows no marker or message for a normally-created Income", () => {
+		const wrapper = mount(IncomeSheet, {
+			props: {
+				income: { name: "INC-1", amount: 200, date: "2025-06-10", source: "SRC-1" },
+			},
+		});
+		expect(wrapper.find('[data-test="external-write-marker"]').exists()).toBe(false);
+	});
 });

@@ -81,7 +81,7 @@ The MCP server (`/api/method/expenso.mcp.handle_mcp`) is reached by adding it as
 2. Desk → **OAuth Client** → New:
    - **App Name**: e.g. `Expenso MCP`
    - **Redirect URIs**: the callback URI the connecting app shows during connector setup. **Verified for Claude (2026-08-22): `https://claude.ai/api/mcp/auth_callback`** — Claude's desktop app routes the OAuth callback through claude.ai's own backend, not a local loopback address, so this is the same value regardless of which of a Member's devices is adding the connector. Add one more per additional connecting app, space-separated on the same line (see caveat below).
-   - **Scopes**: `all openid expenso:read` (space-separated). `expenso:write` is added here once Phase 5's write tools (#81) ship.
+   - **Scopes**: `all openid expenso:read` for read-only access, or `all openid expenso:read expenso:write` (space-separated) to also grant the write tools (`create_expense`, `create_income`) shipped in P5-S2 (#81). Consider a separate `OAuth Client` per scope level so a Family can grant read-only access without also granting write.
    - **Skip Authorization**: leave unchecked — each Member should see the consent screen.
    - Leave **Allowed Roles** at its default (`System User`) unless access should be restricted further.
 3. Share the resulting `client_id`/`client_secret` and the site's OAuth endpoints (discoverable at `/.well-known/oauth-authorization-server`) with Members setting up the connector.

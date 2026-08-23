@@ -234,6 +234,30 @@ class TestMcpWriteTools(FrappeTestCase):
 		self.assertEqual(doc.is_external_write, 1)
 		self.assertEqual(doc.external_write_message, "got paid $1000")
 
+	# I192
+	def test_create_expense_stores_notes_separately_from_message(self):
+		doc = self._call_as_member_with_token(
+			create_expense,
+			self.write_token.access_token,
+			amount=2.75,
+			notes="Nahkauf - Küchentücher",
+			message="Nahkauf receipt line 12 of 12",
+		)
+		self.assertEqual(doc.notes, "Nahkauf - Küchentücher")
+		self.assertEqual(doc.external_write_message, "Nahkauf receipt line 12 of 12")
+
+	# I193
+	def test_create_income_stores_notes_separately_from_message(self):
+		doc = self._call_as_member_with_token(
+			create_income,
+			self.write_token.access_token,
+			amount=500,
+			notes="July freelance payout",
+			message="got $500 for the July freelance gig",
+		)
+		self.assertEqual(doc.notes, "July freelance payout")
+		self.assertEqual(doc.external_write_message, "got $500 for the July freelance gig")
+
 	# I183
 	def test_create_expense_without_amount_raises_mandatory(self):
 		self.assertRaises(

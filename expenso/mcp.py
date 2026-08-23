@@ -180,7 +180,7 @@ def _resolve_family_link_name(doctype: str, name_field: str, value: str | None, 
 	return None
 
 
-def _create_external_write(doctype: str, family: str, amount, date, message, link_fields: dict):
+def _create_external_write(doctype: str, family: str, amount, date, message, notes, link_fields: dict):
 	_check_daily_write_cap(frappe.session.user)
 
 	doc_dict = {
@@ -189,6 +189,7 @@ def _create_external_write(doctype: str, family: str, amount, date, message, lin
 		"family": family,
 		"is_external_write": 1,
 		"external_write_message": message,
+		"notes": notes,
 		**link_fields,
 	}
 	if date:
@@ -203,6 +204,7 @@ def _create_external_write(doctype: str, family: str, amount, date, message, lin
 @require_oauth_scope(WRITE_SCOPE)
 def create_expense(
 	amount: float | None = None,
+	notes: str | None = None,
 	message: str | None = None,
 	date: str | None = None,
 	category: str | None = None,
@@ -211,7 +213,8 @@ def create_expense(
 
 	Args:
 		amount: The Expense amount. Required.
-		message: The Member's original message, stored verbatim for later review.
+		notes: Short description shown on the Expense, same as a manually-entered Note (e.g. "Nahkauf - Küchentücher").
+		message: The Member's original message or context, stored for audit purposes only — never shown in the app.
 		date: Date of the Expense (YYYY-MM-DD). Defaults to today if unstated.
 		category: Category name, matched via `list_categories`. Left unset if it doesn't match an existing Category.
 	"""
@@ -220,13 +223,16 @@ def create_expense(
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
 
 	resolved_category = _resolve_family_link_name("Category", "category_name", category, family)
-	return _create_external_write("Expense", family, amount, date, message, {"category": resolved_category})
+	return _create_external_write(
+		"Expense", family, amount, date, message, notes, {"category": resolved_category}
+	)
 
 
 @mcp.tool()
 @require_oauth_scope(WRITE_SCOPE)
 def create_income(
 	amount: float | None = None,
+	notes: str | None = None,
 	message: str | None = None,
 	date: str | None = None,
 	source: str | None = None,
@@ -235,7 +241,8 @@ def create_income(
 
 	Args:
 		amount: The Income amount. Required.
-		message: The Member's original message, stored verbatim for later review.
+		notes: Short description shown on the Income, same as a manually-entered Note.
+		message: The Member's original message or context, stored for audit purposes only — never shown in the app.
 		date: Date of the Income (YYYY-MM-DD). Defaults to today if unstated.
 		source: Source name, matched via `list_sources`. Left unset if it doesn't match an existing Source.
 	"""
@@ -244,7 +251,7 @@ def create_income(
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
 
 	resolved_source = _resolve_family_link_name("Source", "source_name", source, family)
-	return _create_external_write("Income", family, amount, date, message, {"source": resolved_source})
+	return _create_external_write("Income", family, amount, date, message, notes, {"source": resolved_source})
 
 
 def build_mcp_read_tool_schema() -> list[dict]:

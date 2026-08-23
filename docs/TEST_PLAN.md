@@ -804,7 +804,7 @@ See `docs/GLOSSARY.md` (Chat) and `docs/adr/0005-chat-via-mcp-connector-alternat
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I181 | `create_expense(amount, message)` with a valid `expenso:write` token | creates an Expense with the "unreviewed external write" marker set and `message` stored verbatim |
+| I181 | `create_expense(amount, message)` with a valid `expenso:write` token | creates an Expense with the "unreviewed external write" marker set and `message` stored verbatim in `external_write_message` (audit-only — never rendered in the app) |
 | I182 | `create_income(amount, message)` with a valid `expenso:write` token | creates an Income with the same marker and verbatim-message treatment as `create_expense` |
 | I183 | `create_expense(...)` without `amount` | raises `MandatoryError`; no record created |
 | I184 | `create_expense(...)` without `date` | Expense created with `date` defaulting to today |
@@ -815,14 +815,16 @@ See `docs/GLOSSARY.md` (Chat) and `docs/adr/0005-chat-via-mcp-connector-alternat
 | I189 | `create_expense`/`create_income` call with a token that has `expenso:read` but not `expenso:write` | rejected; no record created |
 | I190 | `list_categories()`/`list_sources()` via MCP | returns the calling Member's Family's Category/Source names, for the calling LLM to validate against before calling `create_expense`/`create_income` |
 | I191 | `create_expense`/`create_income` call | creates no `LLM Call Log` row (Expenso makes no OpenAI call for this path) |
+| I192 | `create_expense(amount, notes, message)` with distinct `notes` and `message` values | `notes` stored on the Expense's own `notes` field (same field a manual entry uses); `message` stored separately in `external_write_message` |
+| I193 | `create_income(amount, notes, message)` with distinct `notes` and `message` values | same `notes`/`external_write_message` separation as `create_expense` |
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F142 | Expense/Income detail view for a record created via `create_expense`/`create_income` | shows the "unreviewed external write" marker and the verbatim source message |
-| F143 | Expense/Income detail view for a normally-created record | no marker, no external message shown |
-| F144 | Feed list row for a record created via `create_expense`/`create_income` | no marker or message shown at the row level (detail view only, to avoid Feed clutter) |
+| F142 | Expense/Income detail view for a record created via `create_expense`/`create_income` | shows the "unreviewed external write" marker as a static label; `notes` (if given) shows in the Notes field like any manual entry; the raw `external_write_message` is never rendered anywhere |
+| F143 | Expense/Income detail view for a normally-created record | no marker shown |
+| F144 | Feed list row for a record created via `create_expense`/`create_income` | no marker or raw message shown at the row level — `notes`, if present, shows normally like any other entry |
 
 ---
 
@@ -924,6 +926,6 @@ Balance figure.
 | Layer | Count |
 |---|---|
 | Backend unit tests | 37 |
-| Backend integration tests | 189 |
+| Backend integration tests | 191 |
 | Frontend unit tests | 160 |
-| **Total** | **386** |
+| **Total** | **388** |

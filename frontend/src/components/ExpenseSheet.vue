@@ -37,12 +37,9 @@
 			<div
 				v-if="isEdit && expense.is_external_write"
 				data-test="external-write-marker"
-				class="mb-4 flex flex-col gap-1 rounded-2xl bg-amber-50 p-3 text-sm text-amber-800"
+				class="mb-4 rounded-2xl bg-amber-50 p-3 text-sm font-semibold text-amber-800"
 			>
-				<span class="font-semibold">💬 Unreviewed external write</span>
-				<span v-if="expense.external_write_message" data-test="external-write-message">
-					"{{ expense.external_write_message }}"
-				</span>
+				💬 Unreviewed external write
 			</div>
 
 			<form class="flex flex-col gap-4" @submit.prevent="submit">

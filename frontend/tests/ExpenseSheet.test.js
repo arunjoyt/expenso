@@ -233,26 +233,30 @@ describe("ExpenseSheet", () => {
 	});
 
 	// F142
-	it("shows the unreviewed-external-write marker and verbatim message for a chat-created Expense", () => {
+	it("shows the unreviewed-external-write marker as a static label, never the raw message, for a chat-created Expense", () => {
 		const wrapper = mount(ExpenseSheet, {
 			props: {
 				expense: {
 					name: "EXP-1",
 					amount: 40,
 					date: "2025-06-10",
+					notes: "Nahkauf - Küchentücher",
 					is_external_write: 1,
 					external_write_message: "add a $40 dinner expense",
 				},
 			},
 		});
-		expect(wrapper.find('[data-test="external-write-marker"]').exists()).toBe(true);
-		expect(wrapper.find('[data-test="external-write-message"]').text()).toContain(
-			"add a $40 dinner expense"
+		expect(wrapper.find('[data-test="external-write-marker"]').text()).toBe(
+			"💬 Unreviewed external write"
+		);
+		expect(wrapper.text()).not.toContain("add a $40 dinner expense");
+		expect(wrapper.find('[data-test="notes-input"]').element.value).toBe(
+			"Nahkauf - Küchentücher"
 		);
 	});
 
 	// F143
-	it("shows no marker or message for a normally-created Expense", () => {
+	it("shows no marker for a normally-created Expense", () => {
 		const wrapper = mount(ExpenseSheet, {
 			props: {
 				expense: { name: "EXP-1", amount: 40, date: "2025-06-10", category: "CAT-1" },

@@ -214,26 +214,30 @@ describe("IncomeSheet", () => {
 	});
 
 	// F142
-	it("shows the unreviewed-external-write marker and verbatim message for a chat-created Income", () => {
+	it("shows the unreviewed-external-write marker as a static label, never the raw message, for a chat-created Income", () => {
 		const wrapper = mount(IncomeSheet, {
 			props: {
 				income: {
 					name: "INC-1",
 					amount: 200,
 					date: "2025-06-10",
+					notes: "Freelance payout",
 					is_external_write: 1,
 					external_write_message: "got paid $200",
 				},
 			},
 		});
-		expect(wrapper.find('[data-test="external-write-marker"]').exists()).toBe(true);
-		expect(wrapper.find('[data-test="external-write-message"]').text()).toContain(
-			"got paid $200"
+		expect(wrapper.find('[data-test="external-write-marker"]').text()).toBe(
+			"💬 Unreviewed external write"
+		);
+		expect(wrapper.text()).not.toContain("got paid $200");
+		expect(wrapper.find('[data-test="income-notes-input"]').element.value).toBe(
+			"Freelance payout"
 		);
 	});
 
 	// F143
-	it("shows no marker or message for a normally-created Income", () => {
+	it("shows no marker for a normally-created Income", () => {
 		const wrapper = mount(IncomeSheet, {
 			props: {
 				income: { name: "INC-1", amount: 200, date: "2025-06-10", source: "SRC-1" },

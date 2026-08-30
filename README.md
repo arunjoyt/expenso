@@ -1,6 +1,8 @@
 # Expenso — Family Expense Tracker
 
-A mobile-first family expense tracker where multiple household members share and record shared spending and income, built on [Frappe](https://frappeframework.com).
+A mobile-first family expense tracker where multiple household members share and record shared spending and income, built on the [Frappe Framework](https://github.com/frappe/frappe).
+
+Expenso pairs a Vue 3 PWA with a guardrailed **MCP server**, so a household Member's Claude or ChatGPT can query and log spending directly. The MCP layer enforces separate `expenso:read` and `expenso:write` OAuth2 scopes, a combined per-Member daily write cap, and create-only access — no edit or delete through an AI client.
 
 ## Screenshots
 

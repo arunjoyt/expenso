@@ -17,7 +17,7 @@ WRITE_SCOPE = "expenso:write"
 # One combined per-Member daily cap across create_expense + create_income,
 # per ADR 0006 — bounds unreviewed-write volume regardless of which tool,
 # or how calls are split between them.
-DAILY_WRITE_CAP = 20
+DAILY_WRITE_CAP = 100
 
 mcp = MCP(name="expenso-mcp")
 

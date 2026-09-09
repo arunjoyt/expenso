@@ -102,12 +102,12 @@ Shipped: `Expense`/`Income` carry `is_external_write` + `external_write_message`
 | Streak | Repo | Issue | Title |
 |--------|------|-------|-------|
 | P6-S1 | `[F]` | #66 (reused) | `LLM Call Log` DocType + `record_llm_call` + `get_my_llm_cost` + `entry_method` field & backfill patch + `list_categories`/`list_sources` in `api.py` + `if_modified_since` concurrency guard on `update_*`/`delete_*` |
-| P6-S2 | `[F]` | new | Assistant token mint endpoint (`mint_assistant_token`) + proactive scheduler stubs in `hooks.py` |
-| P6-S3 | `[A]` | new | `expenso-assistant` repo scaffold (compose: app + Postgres + `langfuse:2` + nginx) + FastMCP server (mirrors today's `mcp.py` tools, Frappe-REST-backed, elicitation on every write) + PKCE auth for external connectors |
-| P6-S4 | `[F]` | new | Cutover: delete `expenso/mcp.py`, drop `frappe-mcp` from `pyproject.toml`, update DEPLOYMENT, re-point `OAuth Client` redirect URI, close #86/#88/#89 |
-| P6-S5 | `[A]` | new | LangGraph agent (read-only): graph over the FastMCP read tools; Postgres checkpointer; hand-rolled `astream_events`→SSE + `/resume` FastAPI; Langfuse callback; per-run + monthly + daily cap checks; `record_llm_call` write-back |
+| P6-S2 | `[F]` | #91 | Assistant token mint endpoint (`mint_assistant_token`) + proactive scheduler stubs in `hooks.py` |
+| P6-S3 | `[A]` | #92 | `expenso-assistant` repo scaffold (compose: app + Postgres + `langfuse:2` + nginx) + FastMCP server (mirrors today's `mcp.py` tools, Frappe-REST-backed, elicitation on every write) + PKCE auth for external connectors |
+| P6-S4 | `[F]` | #93 | Cutover: delete `expenso/mcp.py`, drop `frappe-mcp` from `pyproject.toml`, update DEPLOYMENT, re-point `OAuth Client` redirect URI, close #86/#88/#89 |
+| P6-S5 | `[A]` | #94 | LangGraph agent (read-only): graph over the FastMCP read tools; Postgres checkpointer; hand-rolled `astream_events`→SSE + `/resume` FastAPI; Langfuse callback; per-run + monthly + daily cap checks; `record_llm_call` write-back |
 | P6-S6 | `[FE]` | #70 (reused) | Chat surface: bubble + full-screen overlay on every screen; FAB extracted from `Feed.vue` into a global `Fab.vue`; SSE step log + streamed prose; history from the thread; "Clear chat" |
-| P6-S7 | `[A]`+`[FE]` | new | Agent writes + confirm-card flow (elicitation → interrupt, batched per turn, before→after diff, deselect/cancel) + concurrency guard wired + `entry_method=assistant` + daily write cap |
+| P6-S7 | `[A]`+`[FE]` | #95 | Agent writes + confirm-card flow (elicitation → interrupt, batched per turn, before→after diff, deselect/cancel) + concurrency guard wired + `entry_method=assistant` + daily write cap |
 
 **Incremental value:** P6-S1→S4 restore the connector on the new stack and clear the `frappe-mcp` debt (no regression). P6-S5→S6 is the first milestone with new user value (read-only in-app Assistant). P6-S7 adds agentic ledger management.
 
@@ -119,6 +119,6 @@ Shipped: `Expense`/`Income` carry `is_external_write` + `external_write_message`
 
 | Streak | Repo | Issue | Title |
 |--------|------|-------|-------|
-| P7-S1 | `[A]`+`[FE]` | new | Receipts conversational: image attached in chat → multimodal agent → `create_expense` proposal in the confirm card; no image storage; `LLM Call Log` `feature:"receipt"` with proposed-vs-confirmed accuracy round-trip; `entry_method=receipt` |
-| P7-S2 | `[F]`+`[A]` | new | Proactive Insights: `hooks.py` `scheduler_events` (monthly 1st, weekly) → per-Member read-token → `/run/proactive` → read-only graph → Insight messages / pending proposals in the thread; drift dedup marker; frontend unread badge |
+| P7-S1 | `[A]`+`[FE]` | #96 | Receipts conversational: image attached in chat → multimodal agent → `create_expense` proposal in the confirm card; no image storage; `LLM Call Log` `feature:"receipt"` with proposed-vs-confirmed accuracy round-trip; `entry_method=receipt` |
+| P7-S2 | `[F]`+`[A]` | #97 | Proactive Insights: `hooks.py` `scheduler_events` (monthly 1st, weekly) → per-Member read-token → `/run/proactive` → read-only graph → Insight messages / pending proposals in the thread; drift dedup marker; frontend unread badge |
 | P7-S3 | `[F]`+`[FE]` | #68 (reused) | Consolidated reporting: Workspace Number Cards + daily-trend Script Report over `LLM Call Log` (feature breakdown); "Cost by Member by Month" report (#72); Settings "your usage this month" breakdown (#73); Desk→Langfuse jump via `langfuse_trace_id`. Absorbs #71. |

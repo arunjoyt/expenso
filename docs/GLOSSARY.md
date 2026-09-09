@@ -20,13 +20,13 @@ _Avoid_: Group, household, account
 
 ## Expenses
 
-**Expense**: A single spending record entered by a Member. `amount` and `date` are required (`date` defaults to today). `category` and `notes` are optional. The app is a shared ledger: both Members can see all Expenses in their Family. From Phase 5, an Expense may instead be created by the `create_expense` MCP tool (see **Chat**) — such a record carries a visible "unreviewed external write" marker in its detail view and may have `notes` set by the calling LLM, same as a manual entry; the original request text is stored separately (audit-only, never shown in the app).
+**Expense**: A single spending record entered by a Member. `amount` and `date` are required (`date` defaults to today). `category` and `notes` are optional. The app is a shared ledger: both Members can see all Expenses in their Family. An Expense also carries an `entry_method` — `manual`, `assistant` (created via the in-app Assistant, always Member-confirmed), `connector` (created via the external MCP connector), or `receipt` (extracted from a photo in the Assistant chat). Only `connector` records carry the visible "unreviewed external write" marker and the audit-only stored request text — in-app Assistant writes are confirmed by the Member and look exactly like manual entries.
 _Avoid_: Transaction, entry, payment, Spent
 
 **Notes**: An optional free-text field on an Expense or Income capturing what it was specifically for, beyond its Category/Source (e.g. "Dinner with the Smiths"). On the Feed, Notes is the primary (bold) line of a row when present, with Category/Source demoted to a smaller caption below it; a row with no Notes falls back to showing Category/Source alone as the primary line. In the Add/Edit Expense and Income sheets, Notes is field-ordered ahead of Category/Source (after Amount and Date).
 _Avoid_: Description, memo, comment
 
-**Receipt**: A photo of proof-of-purchase (camera capture or gallery upload) that a Member submits to have Expense fields (Amount, Date, Category, Notes) pre-filled automatically, via a vision LLM, into the same Add Expense sheet used for manual entry — the Member still reviews and confirms before saving. One Receipt produces at most one Expense per pass (no batch import). The original image is kept as an attachment on the created Expense for later reference.
+**Receipt**: A photo of proof-of-purchase a Member attaches in the **Assistant** chat. The multimodal agent reads it and proposes an Expense (Amount, Date, Category, Notes) in a confirm card the Member edits and approves before anything is saved. The Assistant chat is the only receipt path — there is no camera affordance on the Add Expense sheet. One Receipt produces at most one Expense (a line-item split only if the Member asks). The image is **not stored anywhere** — it is discarded after processing; the thread keeps a short text marker.
 _Avoid_: Bill, invoice, scan
 
 ---
@@ -42,17 +42,17 @@ _Avoid_: Dashboard, reports, insights; Balance (this term is reserved for the Fa
 **Budget** (screen): A bottom-nav screen, alongside Feed and Analytics, for setting each Category's Budget amount for the selected month. A summary tile at the top, labeled "Budget", shows the total Budget for the month (sum of each Category's effective Budget) — spend and Budget Status are not shown here, see Analytics. Prev/next month navigation is available, sharing the same selected month as Feed and Analytics. The Category list itself (renaming, deleting) is managed on Settings, not here — this screen only uses it to render one row per Category.
 _Avoid_: Budgets, Spending, Caps
 
-**FAB (Floating Action Button)**: The persistent primary action button — visible on Feed only until Phase 6 widens it to every screen — that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB. Sits bottom-right; from Phase 6 onward, the in-app Chat bubble stacks directly above it in the same corner, both within single-hand thumb reach. Phase 5's MCP-connector Chat has no in-app surface and does not affect the FAB.
+**FAB (Floating Action Button)**: The persistent primary action button that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB. Sits bottom-right. Visible on Feed only until the Assistant ships, which widens it to every screen; from then on the **Chat** bubble stacks directly above it in the same corner, both within single-hand thumb reach.
 _Avoid_: Add button, create button
 
-**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here. Phase 4 adds a "Your usage this month" section showing the logged-in Member's own Receipt API cost for the current month; Phase 6 extends it with an in-app Chat cost breakdown once that phase's OpenAI calls start producing `LLM Call Log` rows (Phase 5's MCP-connector Chat makes no such calls, so it never appears here) — their own usage only, never another Member's or the Family's total.
+**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here. It has a "Your usage this month" section showing the logged-in Member's own LLM cost for the current month, broken down by feature (receipt, chat, insights) — their own usage only, never another Member's or the Family's total. The external MCP connector makes no call Expenso pays for, so it never appears here.
 _Avoid_: Profile, preferences, configuration
 
 ---
 
 ## Income
 
-**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` and `notes` are optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income is recorded via the Feed FAB (Income tab), appears alongside Expenses in the Feed list (shown in green with a leading "+"), and its monthly total/Balance are reviewed from the Feed banner and the Analytics screen. From Phase 5, an Income may instead be created by the `create_income` MCP tool (see **Chat**) — same "unreviewed external write" marker and `notes` treatment as Expense.
+**Income**: A single earning record entered by a Member on behalf of the Family. `amount` and `date` are required (`date` defaults to today). `source` and `notes` are optional. Income belongs to the Family's shared pool — it is not attributed to an individual Member. Income is recorded via the Feed FAB (Income tab), appears alongside Expenses in the Feed list (shown in green with a leading "+"), and its monthly total/Balance are reviewed from the Feed banner and the Analytics screen. Income also carries an `entry_method` and the same marker rules as **Expense** — only `connector` records are marked "unreviewed external write".
 _Avoid_: Revenue, credit, earning
 
 **Source**: A Member-defined label that classifies an Income record (e.g. Salary, Freelance, Rental). Sources belong to a Family — each Family manages its own list. Any Member may add, rename, or delete a Source — adding can happen on Settings or inline from the Add Income sheet, rename/delete only on Settings; deleting is blocked while any Income record still references it.
@@ -82,7 +82,7 @@ _Avoid_: Alert, notification, flag
 
 ## Delivery
 
-**Phase**: A major milestone tracked as a GitHub Milestone. Three phases planned (see `docs/PLAN.md`).
+**Phase**: A major milestone tracked as a GitHub Milestone (see `docs/IMPLEMENTATION_PLAN.md`). Phases 1–3 (ledger, income, budgeting) and 5 (MCP connector) shipped; Phase 4 (standalone receipt extraction) was folded into the Assistant; Phase 6 (Assistant core) and Phase 7 (Proactive & Reporting) are the remaining roadmap.
 
 **Streak**: A small, shippable slice of work within a Phase — completable in one sitting, tracked as a single GitHub Issue assigned to its Phase milestone. Each Streak ends with a commit and a Frappe app version bump.
 _Avoid_: Sprint, task, ticket
@@ -91,21 +91,20 @@ _Avoid_: Sprint, task, ticket
 
 ## Realtime
 
-The Feed silently refreshes via Frappe's WebSocket when any Member adds, edits, or deletes an Expense or Income — no manual refresh needed, no push notifications.
+The Feed silently refreshes via Frappe's WebSocket when any Member adds, edits, or deletes an Expense or Income — no manual refresh needed, no push notifications. The only proactive nudge is the **Chat** bubble's unread badge, shown when the Assistant has posted an Insight or a pending proposal the Member hasn't seen — still no push notifications.
 
 ---
 
-## Chat
+## Assistant
 
-**Chat**: Ships in two phases, decided 2026-08-11 (issues #78, #79) to build both rather than choose one:
+**Assistant**: The AI capability of the app — an agent that answers questions about the Family's Expenses, Income, and Budgets, manages the ledger on request (create/edit/delete entries, add Categories/Sources, set Budgets), extracts Expenses from receipt photos, and runs on a schedule to surface **Insights**. It runs in a standalone service (`expenso-assistant`), not in Frappe. Reached in-app through the **Chat** surface; also reachable from a Member's own ChatGPT/Claude app via the MCP connector, which exposes the same tools. Every write the in-app Assistant makes is confirmed by the Member before it happens; the external connector's writes are immediate and carry an "unreviewed external write" marker (see **Expense**, **Income**). See `docs/adr/0008-in-app-assistant-architecture.md`.
+_Avoid_: bot, AI, copilot
 
-- **Phase 5 — MCP connector** (current plan of record, ships first): a remote MCP server, added as a connector inside a Member's own ChatGPT/Claude app — not reachable from inside Expenso itself. Exposes read tools (`get_expenses`, `get_analytics`, `get_income`, `get_budgets`, `list_categories`, `list_sources`) answering questions about the Family's data, and write tools (`create_expense`, `create_income`) that create records directly with no in-app review step. Auth is Frappe's built-in OAuth2 (`expenso:read` / `expenso:write` scopes); Expenso never sees or stores the conversation — ChatGPT/Claude hold it client-side. Every write carries a visible "unreviewed external write" marker and may set `notes` like a manual entry (see **Expense**, **Income**); the original request text is also stored, audit-only, never shown in the app. Bounded by a combined per-Member daily write cap. See `docs/adr/0005-chat-via-mcp-connector-alternative.md` and `docs/adr/0006-chat-driven-manual-entry-mcp-connector.md`.
-- **Phase 6 — in-app Chat** (deferred, not dropped): a read-only Q&A assistant reachable via a floating bubble on every screen — stacked directly above the FAB in the bottom-right corner, both reachable with one thumb — answering the same kinds of questions via the same whitelisted read APIs, but cannot create, edit, or delete records. Each Member has exactly one continuous, ever-growing Chat thread, private to them, stored in Expenso as **Chat Message** rows. A Member may clear their own thread at any time ("Clear chat"). See `docs/adr/0004-chat-via-tool-calling.md`.
+**Chat**: The interactive thread surface of the **Assistant** — a floating bubble on every screen, stacked directly above the FAB in the bottom-right corner (both reachable with one thumb), opening a full-screen conversation. Each Member has exactly one continuous, ever-growing thread, private to them; a Member may clear their own thread at any time ("Clear chat"). Thread history is stored by the Assistant service, not in Frappe. As the Assistant works, its steps stream in as a humanized activity log; a proposed write appears as a confirm card the Member edits and approves. See `docs/adr/0008-in-app-assistant-architecture.md`.
+_Avoid_: chatbot, AI, ChatGPT
 
-_Avoid_: Assistant, chatbot, AI
-
-**Chat Message**: A single message within a Member's Phase 6 in-app Chat thread — either from the Member or from Chat. Ordered chronologically; only the most recent messages are sent to the LLM as context on each turn (older ones remain stored and viewable but drop out of context). Does not exist for Phase 5's MCP connector, where ChatGPT/Claude hold history client-side instead.
-_Avoid_: Prompt, turn, reply
+**Insights**: What the Assistant's proactive scheduled runs produce — a monthly spending summary (1st of the month) and a weekly budget-drift check. Each lands as an Assistant message in the Member's Chat thread; the chat bubble shows an unread badge until the Member opens it (no push notifications). A proactive run has read-only access to the ledger — if it wants an action taken, it queues a **pending proposal** (the same confirm card, waiting for the Member's next visit) rather than acting.
+_Avoid_: alert, notification, digest
 
 ---
 

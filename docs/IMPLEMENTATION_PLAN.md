@@ -1,8 +1,15 @@
 # Implementation Plan
 
-Ordered phases and streaks. Each streak depends on the ones before it within its phase. Each streak maps to one GitHub Issue.
+Ordered phases and streaks. Each streak depends on the ones before it within its phase. Each streak maps to one GitHub Issue (all tracked in the `expenso` repo).
 
 See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layout. See `docs/DEPLOYMENT.md` for production setup and the end-to-end verification checklist. See `docs/TEST_PLAN.md` for the complete numbered test tables — each streak section there lists every unit and integration test to implement alongside the feature.
+
+## Repositories
+
+From Phase 6 onward, work spans two repos. Streaks are tagged with the repo they land in:
+
+- **`expenso`** — the Frappe app + Vue frontend (this repo). Tag `[F]` (backend) / `[FE]` (frontend).
+- **`expenso-assistant`** — a standalone service (FastMCP server + LangGraph agent + Postgres + Langfuse), structured like the sibling `contract-intelligence` project. Tag `[A]`. See `docs/adr/0008-in-app-assistant-architecture.md`.
 
 ---
 
@@ -61,49 +68,57 @@ See `docs/ARCHITECTURE.md` for the full data model, screen specs, and file layou
 
 ---
 
-## Phase 4 — Receipt-to-Expense
+## Phase 4 — Receipt-to-Expense — ~~standalone~~ **folded into Phase 6/7**
 
-**Goal:** Members can create an Expense from a photo of a Receipt instead of typing it manually. See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-llm.md`, and `docs/adr/0003-receipt-extraction-tracking.md` for the settled design.
+**Superseded 2026-09-09 ([ADR 0008](adr/0008-in-app-assistant-architecture.md)).** Receipt extraction is no longer a standalone feature — it is a capability of the in-app Assistant (attach a photo in the Assistant chat, the agent proposes an Expense in a confirm card). What remains of the old plan:
 
-**New DocType:** `LLM Call Log` — one row per OpenAI call (`feature` discriminator, latency, tokens, cost, model, per-field accuracy), System Manager-only. Named feature-agnostic rather than Receipt-specific since the planned chat feature (issue #44) will also need this tracking. The extracted image itself is stored as a standard Frappe File attached to the created Expense; no schema changes to Expense are needed.
-
-P4-S4 and P4-S5 span both features (Receipt + in-app Chat) via the shared `LLM Call Log`; both ship functionally once P4-S1 lands (Receipt-only data). Phase 5's MCP-connector Chat makes no OpenAI calls of its own (see ADR 0005/0006) and so contributes no `LLM Call Log` rows; P4-S4/P4-S5 pick up Chat's contribution only once Phase 6's in-app Chat (#69) ships — no rework needed either way.
-
-| Streak | Issue | Title | Scope |
-|--------|-------|-------|-------|
-| P4-S1 | #66 | Receipt extraction: OpenAI vision endpoint + LLM Call Log (config, prompt, rate limit, cost/latency tracking) | Backend |
-| P4-S2 | #67 | Receipt capture flow: Add Expense sheet + image attachment + accuracy linking | Full-stack |
-| P4-S3 | #68 | Receipt extraction: admin cost/accuracy reporting (Workspace Number Cards + daily-trend report) | Backend |
-| P4-S4 | #72 | LLM Call Log: Cost by Member by Month report (admin) | Backend |
-| P4-S5 | #73 | Settings: your usage this month (Member-facing cost) | Full-stack |
+- The `LLM Call Log` DocType → built in **P6-S1** (feature-agnostic; the Assistant writes its rows via a whitelisted `record_llm_call`). No `content` field (the trace lives in Langfuse). Adds a `langfuse_trace_id` column.
+- Receipt extraction itself → **P7-S1** (in `expenso-assistant`). No image storage anywhere; no camera on the Add Expense sheet. #67 dropped.
+- Admin cost/accuracy reporting, Cost-by-Member report, "your usage this month" → **P7-S3** (consolidated across receipt / chat / insights).
 
 ---
 
-## Phase 5 — Chat via MCP connector (read + write)
+## Phase 5 — Chat via MCP connector (read + write) — **shipped**
 
-**Goal:** Members ask questions about their Family's Expenses, Income, and Budgets, and create Expense/Income entries (typed or photo-derived), through their own ChatGPT/Claude app via a remote MCP connector — no in-app UI in this phase. See `docs/adr/0005-chat-via-mcp-connector-alternative.md` (read) and `docs/adr/0006-chat-driven-manual-entry-mcp-connector.md` (write) for the settled design. Decided 2026-08-11 (issues #78, #79) to build this **before** Phase 6's in-app Chat, not instead of it.
+**Goal:** Members ask questions about their Family's Expenses, Income, and Budgets, and create Expense/Income entries, through their own ChatGPT/Claude app via a remote MCP connector. See `docs/adr/0005-chat-via-mcp-connector-alternative.md` and `docs/adr/0006-chat-driven-manual-entry-mcp-connector.md`.
 
-**New DocType:** none. Schema additions: `Expense`/`Income` gain a verbatim-message field and an "unreviewed external write" marker (ADR 0006), populated only by the write tools below. A single admin-configured `OAuth Client` (standard Frappe DocType, no new schema) provides auth for both scopes (`expenso:read`, `expenso:write`).
-
-Independent of Phase 4 — the MCP connector makes no OpenAI/Anthropic calls of its own, so it does not touch `LLM Call Log`.
+Shipped: `Expense`/`Income` carry `is_external_write` + `external_write_message`; a single admin-configured `OAuth Client` provides auth for `expenso:read` / `expenso:write`.
 
 | Streak | Issue | Title | Scope |
 |--------|-------|-------|-------|
-| P5-S1 | #80 | MCP server + OAuth2 (`expenso:read`) + read tools: `get_expenses`, `get_analytics`, `get_income`, `get_budgets` | Backend |
-| P5-S2 | #81 | MCP write tools: `create_expense`, `create_income`, `list_categories`, `list_sources` + `expenso:write` scope + daily write cap + unreviewed-write marker/message fields | Full-stack |
+| P5-S1 | #80 | MCP server + OAuth2 (`expenso:read`) + read tools | Backend — done |
+| P5-S2 | #81 | MCP write tools + `expenso:write` scope + daily write cap + marker/message fields | Full-stack — done |
+
+**Cutover note:** the `frappe-mcp` in-process server this built (`expenso/mcp.py`) is replaced in Phase 6 (P6-S3/P6-S4) by the FastMCP server in `expenso-assistant`. The `OAuth Client`, scopes, `Allowed Roles`, and the `configure_oauth_settings` patch carry forward unchanged; Members re-add the connector once with the new URL.
 
 ---
 
-## Phase 6 — Chat (in-app)
+## Phase 6 — Assistant core
 
-**Goal:** Members can ask read-only questions about their Family's Expenses, Income, and Budgets via an in-app chat assistant, alongside (not instead of) Phase 5's MCP connector. See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design — accepted but deferred until Phase 5 ships (#78).
+**Goal:** A full-agentic in-app Assistant — answers questions, manages the ledger (every write confirmed by the Member), on every screen. Runs in the new `expenso-assistant` service. The external MCP connector is re-pointed at the same service. See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design; ADR 0004 is largely superseded.
 
-**New DocType:** `Chat Message` — one row per message, private per Member (not Family-shared), retained indefinitely unless the Member clears their thread. **Extends** `LLM Call Log` (from Phase 4) with a nullable `content` field, populated only for `feature: "chat"` rows (full tool-calling trace, for admin debugging) — Receipt's rows don't use it. No new tools/actions beyond the existing whitelisted `get_expenses`/`get_analytics`/`get_income`/`get_budgets` methods, which Chat calls directly under their existing Family-scoped permissions.
+**New:** `LLM Call Log` DocType (Frappe); `entry_method` field on Expense/Income; `expenso-assistant` repo (FastMCP server + LangGraph agent + Postgres + Langfuse v2). No `Chat Message` DocType — threads live in the LangGraph checkpointer's Postgres. `expenso/mcp.py` + the `frappe-mcp` dependency are deleted.
 
-Depends on Phase 4 (P4-S1 creates `LLM Call Log`; P4-S3's report pattern is extended, not duplicated) and follows Phase 5 by decision, not technical necessity.
+| Streak | Repo | Issue | Title |
+|--------|------|-------|-------|
+| P6-S1 | `[F]` | #66 (reused) | `LLM Call Log` DocType + `record_llm_call` + `get_my_llm_cost` + `entry_method` field & backfill patch + `list_categories`/`list_sources` in `api.py` + `if_modified_since` concurrency guard on `update_*`/`delete_*` |
+| P6-S2 | `[F]` | new | Assistant token mint endpoint (`mint_assistant_token`) + proactive scheduler stubs in `hooks.py` |
+| P6-S3 | `[A]` | new | `expenso-assistant` repo scaffold (compose: app + Postgres + `langfuse:2` + nginx) + FastMCP server (mirrors today's `mcp.py` tools, Frappe-REST-backed, elicitation on every write) + PKCE auth for external connectors |
+| P6-S4 | `[F]` | new | Cutover: delete `expenso/mcp.py`, drop `frappe-mcp` from `pyproject.toml`, update DEPLOYMENT, re-point `OAuth Client` redirect URI, close #86/#88/#89 |
+| P6-S5 | `[A]` | new | LangGraph agent (read-only): graph over the FastMCP read tools; Postgres checkpointer; hand-rolled `astream_events`→SSE + `/resume` FastAPI; Langfuse callback; per-run + monthly + daily cap checks; `record_llm_call` write-back |
+| P6-S6 | `[FE]` | #70 (reused) | Chat surface: bubble + full-screen overlay on every screen; FAB extracted from `Feed.vue` into a global `Fab.vue`; SSE step log + streamed prose; history from the thread; "Clear chat" |
+| P6-S7 | `[A]`+`[FE]` | new | Agent writes + confirm-card flow (elicitation → interrupt, batched per turn, before→after diff, deselect/cancel) + concurrency guard wired + `entry_method=assistant` + daily write cap |
 
-| Streak | Issue | Title | Scope |
-|--------|-------|-------|-------|
-| P6-S1 | #69 | Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content | Backend |
-| P6-S2 | #70 | Chat UI: floating bubble, full-screen thread, Clear chat | Full-stack |
-| P6-S3 | #71 | Chat: admin cost/latency reporting | Backend |
+**Incremental value:** P6-S1→S4 restore the connector on the new stack and clear the `frappe-mcp` debt (no regression). P6-S5→S6 is the first milestone with new user value (read-only in-app Assistant). P6-S7 adds agentic ledger management.
+
+---
+
+## Phase 7 — Proactive & Reporting
+
+**Goal:** Receipts in the Assistant, proactive Insights, and consolidated LLM cost/accuracy reporting.
+
+| Streak | Repo | Issue | Title |
+|--------|------|-------|-------|
+| P7-S1 | `[A]`+`[FE]` | new | Receipts conversational: image attached in chat → multimodal agent → `create_expense` proposal in the confirm card; no image storage; `LLM Call Log` `feature:"receipt"` with proposed-vs-confirmed accuracy round-trip; `entry_method=receipt` |
+| P7-S2 | `[F]`+`[A]` | new | Proactive Insights: `hooks.py` `scheduler_events` (monthly 1st, weekly) → per-Member read-token → `/run/proactive` → read-only graph → Insight messages / pending proposals in the thread; drift dedup marker; frontend unread badge |
+| P7-S3 | `[F]`+`[FE]` | #68 (reused) | Consolidated reporting: Workspace Number Cards + daily-trend Script Report over `LLM Call Log` (feature breakdown); "Cost by Member by Month" report (#72); Settings "your usage this month" breakdown (#73); Desk→Langfuse jump via `langfuse_trace_id`. Absorbs #71. |

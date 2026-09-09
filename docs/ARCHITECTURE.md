@@ -7,10 +7,20 @@ Browser (PWA)
   └── Vue 3 SPA (frappe-ui + Tailwind)
         ├── /api/method/*        → Frappe whitelisted methods
         ├── /api/resource/*      → Frappe REST API
-        └── WebSocket (Redis)    → realtime Feed refresh
-              └── Frappe (Gunicorn)
-                    └── MariaDB
+        ├── WebSocket (Redis)    → realtime Feed refresh
+        │     └── Frappe (Gunicorn) ── MariaDB
+        └── SSE  → expenso-assistant service (Assistant chat stream + /resume)
+                     ├── FastMCP server ──┐
+                     ├── LangGraph agent ─┤ (also consumed by external ChatGPT/Claude connectors)
+                     │      └── OpenAI    │
+                     ├── Postgres (LangGraph checkpointer + Langfuse DB)
+                     ├── Langfuse v2 (loopback only)
+                     └── Frappe REST /api/method/*  ← as the Member (OAuth bearer passthrough)
+
+Frappe scheduler ──(per-Member read token)──> expenso-assistant /run/proactive
 ```
+
+Frappe stays the OAuth **authorization server** and the system of record for the ledger + `LLM Call Log`. It holds **no** LLM dependency or key. Conversation threads live in the service's Postgres; full agent traces live in Langfuse. See `docs/adr/0008-in-app-assistant-architecture.md`.
 
 ---
 
@@ -20,7 +30,7 @@ Browser (PWA)
 - Custom Frappe app (`expenso`): all DocTypes, APIs, and business logic
 - MariaDB (Frappe default)
 - Redis for caching + Frappe realtime (WebSocket) for live Feed updates
-- Frappe's built-in session auth — no separate auth service
+- Frappe's built-in session auth for the app; Frappe's built-in OAuth2 provider is the authorization server for the MCP connector and the in-app Assistant (`expenso-assistant` service). No separate auth service.
 
 ### Frontend — Vue 3 SPA (frappe-ui)
 - Custom Vue 3 SPA in `frontend/` — **not** the Frappe Desk UI
@@ -132,6 +142,63 @@ later months resumes from whatever row precedes it. Independent of Income.
 
 ---
 
+### Phase 5 additions (shipped) — external MCP connector
+
+`Expense` and `Income` each gain:
+
+| Field | Type | Notes |
+|---|---|---|
+| `is_external_write` | Check | set only by the `connector` write path (ADR 0006); drives the "unreviewed external write" marker in the detail view |
+| `external_write_message` | Small Text | the calling LLM's verbatim request text; stored for audit, never rendered in the app |
+
+Auth: a single admin-configured `OAuth Client` (standard Frappe DocType) with scopes `expenso:read` / `expenso:write`. No new expenso DocType.
+
+---
+
+### Phase 6 additions — the Assistant
+
+#### `LLM Call Log` (Frappe DocType, System-Manager-only)
+
+One row per LLM call made by the `expenso-assistant` service (chat, insights, or receipt extraction). Written via a whitelisted `record_llm_call` (the service calls it with the Member's bearer token); everything else on the DocType is System-Manager-only.
+
+| Field | Type | Notes |
+|---|---|---|
+| `feature` | Select | `receipt` / `chat` / `insights` |
+| `member` / `family` | Link | who the call was for |
+| `model` | Data | the pinned OpenAI model id |
+| `input_tokens` / `output_tokens` | Int | |
+| `cost` | Currency | computed from the service's hardcoded pricing constant |
+| `latency_ms` | Int | |
+| `status` | Select | `ok` / `error` (an error call still writes a row) |
+| `langfuse_trace_id` | Data | Desk → Langfuse jump |
+| per-field accuracy (`amount`/`date`/`category`/`notes` agreement) | — | `receipt` rows only; proposed-vs-confirmed (ADR 0003) |
+
+No `content` field — the full step trace lives in Langfuse only.
+
+#### `Expense` / `Income` — new field
+
+| Field | Type | Notes |
+|---|---|---|
+| `entry_method` | Select | `manual` / `assistant` / `connector` / `receipt` — provenance, orthogonal to `is_external_write`. Only `connector` records are marked "unreviewed". |
+
+#### Not in Frappe
+
+Conversation threads (LangGraph checkpointer's Postgres, in the `expenso-assistant` stack) and full agent traces (Langfuse). "Clear chat" deletes the LangGraph thread. There is **no `Chat Message` and no `Chat Run` DocType.**
+
+---
+
+## Assistant Service Architecture
+
+The `expenso-assistant` repo is a standalone service (structured like the sibling `contract-intelligence` project). See `docs/adr/0008-in-app-assistant-architecture.md` for the full rationale.
+
+- **FastMCP server** — defines the tool set once (reads: `get_expenses`/`get_analytics`/`get_income`/`get_budgets`/`list_categories`/`list_sources`; writes: `create/update/delete_expense`, `create/update/delete_income`, `add_category`, `add_source`, `set_budget`). Every write tool uses MCP **elicitation** to confirm. Tools call Frappe's REST API as the Member (bearer passthrough). Consumed by the co-located LangGraph agent (`langchain[mcp]`) and by external ChatGPT/Claude connectors.
+- **LangGraph agent** — MIT framework; the Elastic-licensed `langgraph-api` server is not used. Two hand-rolled FastAPI endpoints serve it: `astream_events()` → SSE, and `/resume` → `Command(resume=…)`. Postgres checkpointer. Interactive turns bind read+write tools; scheduled (proactive) runs bind read-only tools.
+- **Auth** — validates the Frappe OAuth bearer, scopes the thread to the owning Member.
+- **Observability** — Langfuse v2, self-hosted, Postgres-only, loopback + SSH tunnel.
+- **Cost bounds** — per-run `recursion_limit` / tool-call / wall-clock caps; a monthly spend cap (sum of `LLM Call Log.cost`); per-Member daily caps (chat / receipt / write).
+
+---
+
 ## Permissions
 
 Pattern is identical for `Expense`, `Income`, and `Expenso Budget`:
@@ -146,12 +213,13 @@ Pattern is identical for `Expense`, `Income`, and `Expenso Budget`:
 
 ## Navigation (mobile)
 
-Bottom navigation bar with 4 tabs + FAB:
+Bottom navigation bar with 4 tabs + FAB + Chat bubble:
 - **Feed tab** — home screen, unified monthly Expense + Income ledger
 - **Analytics tab** — monthly financial summary (read-only), including Budget Status per Category
 - **Budget tab** — set each Category's Budget amount for the selected month (editing only)
-- **Settings tab** — Category/Source list management, logout, version
-- **FAB** — visible on Feed only; tapping it opens the Add Expense bottom sheet directly (default tab); an Expense/Income tab switcher inside the sheet swaps it for the Add Income sheet without an extra tap on the FAB
+- **Settings tab** — Category/Source list management, logout, version, "your usage this month"
+- **FAB** — bottom-right, on **every** screen (was Feed-only until the Assistant shipped); opens the Add Expense bottom sheet directly, with an Expense/Income tab switcher inside
+- **Chat bubble** — bottom-right, on every screen, stacked directly above the FAB with a gap; opens the full-screen Assistant chat overlay. Carries an unread badge when the Assistant has posted an unseen Insight or pending proposal
 
 No Family Switcher — a Member belongs to exactly one Family.
 
@@ -206,7 +274,18 @@ No Family Switcher — a Member belongs to exactly one Family.
 - **Phase 1:** Category list — rename, delete (delete blocked while an Expense references the Category; also removes its Budgets). Adding a new Category can be done here too, or inline from the Add Expense sheet.
 - **Phase 2:** Source list — rename, delete (delete blocked while an Income references the Source). Adding a new Source can be done here too, or inline from the Add Income sheet.
 - Budget amounts are managed on the Budget tab, not here
+- **Phase 7:** "Your usage this month" — the logged-in Member's own LLM cost for the current month, broken down by feature (receipt / chat / insights). Own usage only.
 - App version displayed in footer (read from a whitelisted API method at runtime)
+
+### Chat overlay (Assistant) — Phase 6
+- Opened by tapping the Chat bubble (present on every screen, stacked above the FAB)
+- Full-screen overlay (not a bottom sheet) — scrolling message history + a pinned input
+- One continuous private thread per Member; history read from the `expenso-assistant` service
+- Sending a message opens an SSE stream: a humanized step log ("Reading March expenses…") streams first, then the answer as prose
+- A proposed write appears as a **confirm card** — the literal row(s), a before→after diff for edits, confirm-all / deselect / cancel. Batched: one card per turn for the whole proposed action set
+- Attaching a photo → the agent proposes an Expense in a confirm card (receipts). The image is not stored
+- "Clear chat" in the header (behind a confirmation) deletes the thread
+- Proactive Insights and pending proposals appear inline as Assistant messages
 
 ---
 
@@ -231,39 +310,37 @@ expenso/                            ← Frappe app root (git repo)
 ├── docs/
 │   ├── ARCHITECTURE.md             ← this file
 │   ├── IMPLEMENTATION_PLAN.md
-│   └── DEPLOYMENT.md
+│   ├── DEPLOYMENT.md
+│   └── adr/
 ├── expenso/                        ← Python package
 │   ├── __init__.py                 ← __version__ bumped on every commit
-│   ├── hooks.py                    ← permission_query_conditions, doc_events
+│   ├── hooks.py                    ← permission_query_conditions, scheduler_events (Phase 7)
+│   ├── assistant/                  ← Phase 6: auth.py (mint_assistant_token), proactive.py, logging.py (record_llm_call, get_my_llm_cost)
+│   ├── expenso/api.py              ← whitelisted ledger methods (the Assistant's tools call these via REST)
 │   └── doctype/
-│       ├── family/
-│       ├── family_member/          ← Child DocType
-│       ├── expense/
-│       ├── category/               ← CAT-.####
-│       ├── income/                 ← Phase 2
-│       ├── source/                 ← Phase 2, SRC-.####
-│       └── expenso_budget/         ← Phase 3 (renamed from budget/, see ADR 0007)
+│       ├── family/ · family_member/ · expense/ · category/ · income/ · source/ · expenso_budget/
+│       └── llm_call_log/           ← Phase 6 (System-Manager-only)
+│   (expenso/mcp.py — deleted in P6-S4, replaced by the FastMCP server in expenso-assistant)
 └── frontend/                       ← Vue 3 SPA
     ├── src/
-    │   ├── pages/
-    │   │   ├── Login.vue
-    │   │   ├── Feed.vue
-    │   │   ├── Analytics.vue
-    │   │   ├── Budget.vue
-    │   │   └── Settings.vue
+    │   ├── App.vue                 ← mounts BottomNav + Fab + ChatBubble globally
+    │   ├── pages/                  ← Login · Feed · Analytics · Budget · Settings
     │   ├── components/
-    │   │   ├── ExpenseSheet.vue    ← bottom sheet add/edit Expense
-    │   │   ├── IncomeSheet.vue     ← Phase 2
-    │   │   ├── BudgetSheet.vue     ← bottom sheet set/remove monthly Budget
-    │   │   └── MonthNav.vue        ← shared month nav header (Feed, Analytics, Budget)
-    │   ├── stores/
-    │   │   └── month.js            ← Pinia store for selected month
+    │   │   ├── ExpenseSheet.vue · IncomeSheet.vue · BudgetSheet.vue · MonthNav.vue
+    │   │   ├── Fab.vue             ← Phase 6: extracted from Feed.vue, global
+    │   │   ├── ChatBubble.vue · ChatOverlay.vue · ConfirmCard.vue   ← Phase 6
+    │   ├── stores/month.js
     │   ├── composables/
-    │   │   ├── useExpenses.js
-    │   │   ├── useCategories.js
-    │   │   ├── useIncome.js        ← Phase 2
-    │   │   └── useBudgets.js       ← Phase 3
+    │   │   ├── useExpenses.js · useCategories.js · useIncome.js · useBudgets.js
+    │   │   └── useAssistant.js     ← Phase 6: token mint + SSE stream handling
     │   └── main.js
-    ├── vite.config.js
-    └── package.json
+    └── vite.config.js · package.json
+
+expenso-assistant/                  ← separate repo (Phase 6+); see its own docs/ and ADR 0008
+├── docker-compose.yml              ← app + postgres + langfuse:2 + nginx
+├── config.py                      ← OPENAI_MODEL + pricing + caps (env-driven)
+├── mcp_server/tools.py            ← FastMCP tools (ported from expenso/mcp.py)
+├── frappe_client.py               ← thin REST client, bearer passthrough
+├── agent/                          ← graph.py · tools.py · observability.py
+└── api/main.py                    ← /health · SSE run endpoint · /resume · /run/proactive
 ```

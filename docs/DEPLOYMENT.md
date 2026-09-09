@@ -4,12 +4,16 @@
 
 ```
 Internet → Nginx (SSL termination, static frontend)
-              └── Gunicorn (Frappe workers)
-                    ├── MariaDB
-                    └── Redis (cache + realtime WebSocket)
+              ├── Gunicorn (Frappe workers)
+              │     ├── MariaDB
+              │     └── Redis (cache + realtime WebSocket)
+              └── expenso-assistant  (Phase 6+, separate docker-compose stack)
+                    ├── app (FastMCP server + LangGraph agent, uvicorn)
+                    ├── Postgres (LangGraph checkpointer + Langfuse DB)
+                    └── Langfuse v2 (loopback only — browse via SSH tunnel)
 ```
 
-`bench setup production` generates the Nginx config, systemd units, and wires up Let's Encrypt SSL.
+`bench setup production` generates the Nginx config, systemd units, and wires up Let's Encrypt SSL for the Frappe app. The `expenso-assistant` stack is deployed separately (`docker compose up -d`) — see its section below.
 
 ---
 
@@ -65,13 +69,21 @@ Nginx serves the built frontend bundle as static files at the site root. The Fra
 
 ## Environment
 
-No `.env` file — all configuration lives in the site's `site_config.json` (managed by bench). Frappe's built-in session auth is used for the app itself; no external auth service or API keys required. From Phase 5, the MCP connector reuses Frappe's built-in OAuth2 provider (see below) — still no external auth service.
+**Frappe side:** no `.env` file — all configuration lives in the site's `site_config.json` (managed by bench). Frappe's built-in session auth is used for the app; the MCP connector and the in-app Assistant reuse Frappe's built-in OAuth2 provider (see below). **Frappe holds no OpenAI key and no LLM dependency** — every LLM call originates in the `expenso-assistant` service.
+
+Phase 6 additions on the Frappe side:
+- The whitelisted `expenso.assistant.auth.mint_assistant_token` endpoint mints short-lived `OAuth Bearer Token` rows for the logged-in Member (the frontend calls it; the token is passed to the service).
+- The scheduler **must be enabled** (`bench --site <site> enable-scheduler`) for proactive Insight runs (Phase 7) — the scheduled jobs mint per-Member read tokens and POST the `expenso-assistant` service.
+
+**Assistant service side:** configuration is env-driven (`config.py` reads it) — `OPENAI_API_KEY`, `OPENAI_MODEL` (+ its pricing constant), `FRAPPE_URL`, `LANGFUSE_*`, `MONTHLY_SPEND_CAP`, per-Member daily caps, Postgres DSN.
 
 ---
 
-## MCP Connector Setup (Phase 5, admin one-time)
+## MCP Connector Setup (admin one-time)
 
-The MCP server (`/api/method/expenso.mcp.handle_mcp`) is reached by adding it as a connector inside a Member's own ChatGPT/Claude app. Auth is a standard OAuth2 Authorization Code flow against one admin-configured `OAuth Client` — there is no self-service UI in Expenso for this. Each Member individually completes login+consent when they add the connector, so their token still resolves to their own Frappe user via Frappe's existing `validate_oauth()` → `frappe.set_user()` path.
+> **From Phase 6, the MCP server moves.** It is no longer the in-process `frappe-mcp` server at `/api/method/expenso.mcp.handle_mcp` — that and the `frappe-mcp` dependency are deleted (P6-S4). The MCP server is now the **FastMCP server in the `expenso-assistant` service**, reached at that service's URL (e.g. `https://assistant.<site>/mcp`). **Frappe stays the OAuth authorization server**, so the OAuth flow, the `OAuth Client`, the scopes, `Allowed Roles`, and every caveat below are unchanged — only the connector URL changes. Members re-add the connector once with the new URL. The historical `frappe-mcp` pin/build notes (Werkzeug/pydantic, #86/#88/#89) are moot and those issues close on cutover.
+
+The MCP server is reached by adding it as a connector inside a Member's own ChatGPT/Claude app. Auth is a standard OAuth2 Authorization Code flow against one admin-configured `OAuth Client` — there is no self-service UI in Expenso for this. Each Member individually completes login+consent when they add the connector, so their token still resolves to their own Frappe user via Frappe's existing `validate_oauth()` → `frappe.set_user()` path.
 
 **Plan requirement on the Member's side (verified 2026-08-12):** Claude supports custom remote-MCP connectors on every plan, including Free (Free is capped at one custom connector — fine here since Expenso would be it). ChatGPT does **not** support custom remote-MCP connectors on its Free plan at all — it requires Plus, Pro, Business, Enterprise, or Edu with Developer Mode enabled; Free ChatGPT can only use local MCP servers via JSON config. A Member on ChatGPT Free cannot use this connector until they upgrade.
 
@@ -91,6 +103,24 @@ The MCP server (`/api/method/expenso.mcp.handle_mcp`) is reached by adding it as
 **Note:** if a connecting app's authorize request omits an explicit `scope=` parameter, Frappe grants the token *every* scope configured on the client (`get_default_scopes()` behavior) — if a Member's connector app doesn't let you set `scope=expenso:read` explicitly, use a separate `OAuth Client` per scope level rather than relying on the client's default falling back correctly.
 
 **Known caveat — prefer PKCE, not `Authorization: Basic`, for client auth at the token step.** Frappe's `get_token` endpoint (`frappe/integrations/oauth2.py`) only reads `client_id`/`client_secret` from the POST body, never from an `Authorization: Basic base64(client_id:client_secret)` header — confirmed by reading `OAuthWebRequestValidator.authenticate_client` (`frappe/oauth.py:94-119`), and previously reported upstream as [frappe/frappe#33395](https://github.com/frappe/frappe/issues/33395), closed "won't implement" (body-parameter client auth is equally RFC 6749 §2.3.1-valid, and Frappe steers static-credential integrations toward API Key/Secret instead). A connecting app that sends `client_id` **only** via the Basic header (omitting it from the body) will fail to authenticate. If a Member's connector errors out at the token step, this is the first thing to check — most MCP clients default to PKCE with `client_id` in the body precisely because it doesn't require a static secret at all, which sidesteps this entirely.
+
+---
+
+## Assistant Service (`expenso-assistant`) — Phase 6+
+
+A separate repo and a separate `docker-compose` stack, deployed alongside (not inside) the Frappe bench. See `docs/adr/0008-in-app-assistant-architecture.md`.
+
+**Stack:** `app` (FastMCP server + LangGraph agent, uvicorn) · `postgres` (LangGraph checkpointer **and** the Langfuse DB) · `langfuse` (pinned `langfuse/langfuse:2`, Postgres-only, bound to `127.0.0.1`) · `nginx` (TLS for the public `app` endpoint; the Langfuse UI is **not** exposed).
+
+**Deploy:** on the VPS, `git pull && docker compose up -d --build` in the `expenso-assistant` checkout. `/health` must return green before the Frappe-side cutover (P6-S4) deletes `expenso/mcp.py`.
+
+**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `MONTHLY_SPEND_CAP`, daily caps, `POSTGRES_*`.
+
+**Browse Langfuse:** SSH tunnel — `ssh -L 3000:127.0.0.1:3000 <vps>`, then `http://localhost:3000`.
+
+**Backups:** both Postgres roles must be in the backup script — the LangGraph checkpointer DB (conversation threads — "Clear chat" is the only other way they go away) and the Langfuse DB (agent traces, retention-windowed).
+
+**Cutover order (P6-S3 → P6-S4):** the connector is briefly unavailable between the old server being deleted and the new one being live. Sequence: stand up and verify the `expenso-assistant` FastMCP server (P6-S3) → then delete `expenso/mcp.py` and re-point the `OAuth Client` redirect URI (P6-S4).
 
 ---
 
@@ -135,9 +165,31 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] Analytics: a Category with a Budget set but no spend this month still appears, at $0
 - [ ] Analytics: Budget stat tile shows the sum of every visible Category's effective Budget
 
+### Phase 6 — Assistant core
+
+- [ ] `bench --site <site> migrate` after the `LLM Call Log` DocType + `entry_method` field + backfill patch
+- [ ] `expenso-assistant` stack up; `/health` green; Langfuse reachable via SSH tunnel
+- [ ] Re-add the MCP connector in Claude against the new service URL; OAuth consent completes; `get_expenses` returns the right Family's data; a `create_expense` lands with `is_external_write=1` and `entry_method=connector`
+- [ ] `expenso/mcp.py` deleted, `frappe-mcp` gone from `pyproject.toml`, a fresh `bench build`/install resolves cleanly
+- [ ] Chat bubble + FAB visible on Feed, Analytics, Budget, Settings — stacked with a gap
+- [ ] Ask "what did I spend on groceries in March" → step log streams, then the answer; one `LLM Call Log` row (`feature: chat`) with a `langfuse_trace_id` that opens in Langfuse
+- [ ] Ask to add an expense → confirm card shows the concrete values; confirm → Expense created with `entry_method=assistant`, **no** "unreviewed external write" marker
+- [ ] Ask to recategorize several expenses → one batched confirm card lists every row; deselect one → only the rest are changed; cancel → nothing changes
+- [ ] Edit a target row from a second session before confirming → the write is rejected and the agent re-proposes with the new values
+- [ ] Seed `LLM Call Log` past `MONTHLY_SPEND_CAP` → the Assistant returns "paused until next month"; hit a per-Member daily cap → refused with a clear message, no OpenAI call
+
+### Phase 7 — Proactive & Reporting
+
+- [ ] `bench --site <site> enable-scheduler`; `bench execute expenso.assistant.proactive.run_monthly_summary` posts an Insight into each Member's thread; the bubble shows an unread badge
+- [ ] Run the budget-drift job twice with unchanged data → no duplicate warning
+- [ ] Attach a receipt photo in chat → Expense proposed in a confirm card; confirm → `entry_method=receipt`, `LLM Call Log` `feature: receipt` with per-field accuracy; **no** Frappe `File`, no image on the Expense
+- [ ] Attach a non-receipt photo → the agent asks what to do, no proposal
+- [ ] Workspace Number Cards + daily-trend report show the feature breakdown; Settings "your usage this month" shows receipt/chat/insights
+
 ### Production (all phases)
 
 - [ ] `bench setup production` completes; Nginx and systemd units are active
 - [ ] Site is reachable over HTTPS with valid Let's Encrypt certificate
 - [ ] WebSocket realtime refresh works over HTTPS
 - [ ] Frontend PWA is installable from the browser on Android and iOS
+- [ ] `expenso-assistant` stack survives a host reboot (`restart: unless-stopped`); both Postgres DBs are in the backup script

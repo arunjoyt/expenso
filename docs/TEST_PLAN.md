@@ -1,6 +1,6 @@
 # Expenso — Test Plan
 
-Complete unit and integration test plan across all three phases. Backend tests use Frappe's `UnitTestCase` (no DB) and `IntegrationTestCase` (DB, auto-rollback). Frontend tests use Vitest.
+Complete unit and integration test plan. Backend tests use Frappe's `UnitTestCase` (no DB) and `IntegrationTestCase` (DB, auto-rollback). Frontend tests use Vitest. Phases 6–7 also have `[A]` tests that live in the `expenso-assistant` repo's own pytest suite (sketched here for completeness).
 
 ---
 
@@ -646,127 +646,12 @@ fields to Amount → Date → Notes → Category/Source, matching the new row hi
 
 ---
 
-## Phase 4 — Receipt-to-Expense
+## Phase 4 — Receipt-to-Expense — superseded
 
-See `docs/GLOSSARY.md` (Receipt), `docs/adr/0002-receipt-extraction-via-vision-llm.md`, and `docs/adr/0003-receipt-extraction-tracking.md` for the settled design this phase implements.
+**Folded into Phase 6/7 on 2026-09-09 ([ADR 0008](adr/0008-in-app-assistant-architecture.md)).** Receipt extraction is now a capability of the in-app Assistant (attach a photo in the Assistant chat), the vision call runs in the `expenso-assistant` service, and the image is never stored. The old streaks map as follows:
 
-### P4-S1 · Receipt extraction: OpenAI vision endpoint + LLM Call Log (issue #66)
-
-**Unit tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| U22 | `build_extraction_prompt(category_names=["Groceries", "Dining"])` | prompt/payload includes both Category names |
-| U23 | `parse_extraction_response(json_with_all_fields)` | returns dict with `amount`, `date`, `category`, `notes` all populated |
-| U24 | `parse_extraction_response(json_missing_amount)` | returns dict with `amount: None`; other fields still populated |
-| U25 | `parse_extraction_response(...)` with `category` not in the allowed list | returns `category: None` (suggestion discarded, never invented) |
-| U26 | `check_rate_limit(count=20, cap=20)` | not allowed |
-| U27 | `check_rate_limit(count=19, cap=20)` | allowed |
-| U28 | `compute_cost(input_tokens=1000, output_tokens=200, model="gpt-4o-mini")` | matches the hardcoded pricing constant's computed value |
-| U29 | `compute_field_accuracy(extracted={"amount": 12.5}, saved={"amount": 12.5})` | `{"amount": True}` |
-| U30 | `compute_field_accuracy(extracted={"category": None}, saved={"category": "Groceries"})` | `category` key absent from result (excluded, not counted as inaccurate) |
-| U31 | `compute_field_accuracy(extracted={"notes": "Trader Joe's"}, saved={"notes": "Trader Joe's, groceries"})` | `{"notes": False}` (exact match required) |
-
-**Integration tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| I124 | `extract_receipt(image)` by a Member, OpenAI mock returns full valid data | returns dict with `amount`, `date`, `category` (matched to an existing Family Category), `notes` |
-| I125 | `extract_receipt(image)`, OpenAI mock returns a category name not in the Family's list | response `category` is `None` |
-| I126 | `extract_receipt(image)`, OpenAI mock raises an error | request does not raise; returns a response with all fields `None` (graceful fallback, per ADR 0002) |
-| I127 | `extract_receipt(image)` without an `image` param | raises `MandatoryError` |
-| I128 | `extract_receipt(image)` by a Member with no Family | raises `PermissionError` |
-| I129 | `extract_receipt(image)` call | increments that Member's daily extraction count |
-| I130 | `extract_receipt(image)` when Member has reached the daily cap | raises `ValidationError`; OpenAI mock not called |
-| I131 | `extract_receipt(image)` by two different Members on the same day | each Member's count tracked independently |
-| I132 | `extract_receipt(image)` — Member's count from a previous day | doesn't count toward today's cap |
-| I133 | `extract_receipt(image)` success | creates a `LLM Call Log` row with `latency_ms`, `input_tokens`, `output_tokens`, `cost`, `model` populated; accuracy fields unset |
-| I134 | `extract_receipt(image)` response | includes the created log row's `name` |
-| I135 | `extract_receipt(image)` when the daily cap is already reached | no `LLM Call Log` row created (rate-limited attempts aren't logged) |
-| I136 | `extract_receipt(image)`, OpenAI mock raises an error | log row still created, with `status: "error"` and latency recorded |
-| I137 | `extract_receipt(image)` success | created `LLM Call Log` row has `feature: "receipt_extraction"` |
-| I138 | Non-System-Manager user lists `LLM Call Log` | returns no rows / raises `PermissionError` |
-
----
-
-### P4-S2 · Receipt capture flow: Add Expense sheet + image attachment + accuracy linking (issue #67)
-
-**Integration tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| I139 | `create_expense(..., receipt_image=<file>)` | Expense created; File attachment linked to the new Expense via `attached_to_doctype`/`attached_to_name` |
-| I140 | `create_expense(...)` without `receipt_image` | Expense created as before; no File attachment created |
-| I141 | `create_expense(..., receipt_extraction_log=<name>)` where saved values match the extraction | log row updated with final values, all gradeable fields marked accurate, linked to the created Expense |
-| I142 | `create_expense(..., receipt_extraction_log=<name>)` where saved `amount` differs from the extracted `amount` | log row's `amount` accuracy is `False` |
-| I143 | `create_expense(..., receipt_extraction_log=<name>)` where extracted `category` was `None` | log row's `category` accuracy field stays unset (excluded, not graded) |
-| I144 | `create_expense(...)` without a `receipt_extraction_log` param (plain manual entry) | no `LLM Call Log` row is touched |
-
-**Frontend unit tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| F110 | ExpenseSheet in add mode | "Scan receipt" (camera/upload) entry point visible |
-| F111 | Selecting an image via camera or gallery input | client-side compression runs before the extraction call fires |
-| F112 | Extraction call in flight | loading state shown in the sheet |
-| F113 | Extraction succeeds with all fields | amount, date, category, and notes pre-filled in the form |
-| F114 | Extraction returns partial data (e.g. no category) | only the successfully extracted fields are pre-filled; the rest left blank |
-| F115 | Extraction fails entirely (API error) | sheet still opens, all fields blank, non-blocking warning message shown |
-| F116 | Fields pre-filled after extraction | remain editable; Member can change any field before saving |
-| F117 | Saving after a successful extraction | `create_expense` called with the edited/confirmed fields, with the receipt image attached |
-| F118 | Daily scan cap reached (backend error) | warning message shown; sheet still usable for manual entry |
-| F119 | Selecting an image, then dismissing the sheet before saving | no Expense created; no image uploaded |
-| F120 | Saving after a successful extraction | `create_expense` is called with the `receipt_extraction_log` id returned by the earlier `extract_receipt` call |
-
----
-
-### P4-S3 · Receipt extraction: admin cost/accuracy reporting (issue #68)
-
-**Integration tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| I145 | "Total Cost This Month" Number Card | targets `LLM Call Log`, `Sum` of `cost`, filtered to the current month |
-| I146 | "Avg Latency" Number Card | targets `LLM Call Log`, `Average` of `latency_ms` |
-| I147 | "Accuracy Rate" Number Card | computes percentage of graded fields (non-null extraction) that matched, across the current month |
-| I148 | Daily-trend Script Report | exists, System Manager-only, mirroring the "Family Members" Script Report pattern |
-| I149 | Daily-trend Script Report with log rows spanning two different days | returns one aggregated row per day (`cost`, `count`, avg `latency_ms`, accuracy) |
-
----
-
-### P4-S4 · LLM Call Log: Cost by Member by Month report (issue #72)
-
-**Integration tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| I168 | "Cost by Member by Month" Script Report | exists, System Manager-only |
-| I169 | Report with one Member's `LLM Call Log` rows spanning two different months | returns one row per (Member, Month), each with the correct summed cost |
-| I170 | Report with rows from both features (`receipt_extraction` and `chat`) for the same Member/Month — `chat` rows only exist once Phase 6's in-app Chat ships, but the report's per-feature breakdown is exercised now with synthetic rows | separate Receipt-cost and Chat-cost columns present, summing to the row's total cost |
-| I171 | Report with rows for two different Members in the same month | returns separate rows per Member, not merged |
-
----
-
-### P4-S5 · Settings: your usage this month (issue #73)
-
-**Integration tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| I172 | `get_my_llm_cost()` (defaults to current month) by a Member with both Receipt and Chat `LLM Call Log` rows this month — `chat` rows only exist once Phase 6 ships, exercised now with synthetic rows | returns `{total, receipt_extraction, chat}` matching the sum of that Member's own rows |
-| I173 | `get_my_llm_cost()` by a Member with no `LLM Call Log` rows this month | returns `{total: 0, receipt_extraction: 0, chat: 0}` |
-| I174 | `get_my_llm_cost()` — Member and another Member of the same Family both have rows this month | response never includes the other Member's rows |
-| I175 | `get_my_llm_cost()` response | contains only the aggregated dollar figures — no raw `LLM Call Log` fields, no `content`, nothing identifying another Member |
-
-**Frontend unit tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| F134 | Settings screen | shows a "Your usage this month" section with a total cost figure |
-| F135 | "Your usage this month" section | shows a Receipt cost breakdown beneath the total now; gains a Chat row once Phase 6's in-app Chat ships (component built to break down by feature generically, not hardcoded to Receipt-only) |
-| F136 | Member with no usage this month | section shows $0 (or equivalent), not hidden or broken |
-
----
+- **P4-S1** (`extract_receipt` endpoint) → the `LLM Call Log` DocType survives in **P6-S1** below; the vision call itself moves to the service and is tested in the `expenso-assistant` repo (`build_extraction_prompt` / `parse_extraction_response` / `compute_cost` / `compute_field_accuracy` become service unit tests). #67's ExpenseSheet-scan tests (F110–F120) are dropped — there is no camera on the sheet.
+- **P4-S3 / P4-S4 / P4-S5** (admin + Member reporting) → **P7-S3** below, generalised to the `receipt` / `chat` / `insights` feature breakdown.
 
 ## Phase 5 — Chat via MCP connector (read + write)
 
@@ -828,73 +713,164 @@ See `docs/GLOSSARY.md` (Chat) and `docs/adr/0005-chat-via-mcp-connector-alternat
 
 ---
 
-## Phase 6 — Chat (in-app)
+## Phase 6 — Assistant core
 
-See `docs/GLOSSARY.md` (Chat, Chat Message) and `docs/adr/0004-chat-via-tool-calling.md` for the settled design this phase implements — accepted but deferred until Phase 5 ships (#78).
+See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design. ADR 0004 is largely superseded. `[F]`/`[FE]` tests live in this repo; `[A]` tests live in the `expenso-assistant` repo's own suite and are sketched here for completeness.
 
-### P6-S1 · Chat: send-message endpoint with tool-calling + Chat Message + LLM Call Log content (issue #69)
-
-**Unit tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| U32 | `build_chat_context(messages=<25 rows>, limit=20)` | returns only the most recent 20 |
-| U33 | `build_chat_context(messages=<5 rows>, limit=20)` | returns all 5 |
-| U34 | `build_tool_schema()` | includes exactly `get_expenses`, `get_analytics`, `get_income`, `get_budgets`; no write-capable tool |
+### P6-S1 · `[F]` `LLM Call Log` + `record_llm_call` + `entry_method` + `api.py` plumbing (reuses #66)
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I150 | `send_message(text)` by a Member, OpenAI mock calls `get_expenses` then returns a final answer | tool executed under the Member's normal permissions; final answer returned; both the Member's message and Chat's answer persisted as `Chat Message` rows |
-| I151 | `send_message(text)` — OpenAI mock requests data belonging to a different Family | tool execution stays scoped to the calling Member's own Family regardless of what the LLM requests (existing `has_permission`/`permission_query_conditions` enforcement, no new access path) |
-| I152 | `send_message(text)` without a `text` param | raises `MandatoryError` |
-| I153 | `send_message(text)` by a Member with no Family | raises `PermissionError` |
-| I154 | `send_message(text)` call | increments that Member's daily chat count, independent of the Receipt extraction daily count |
-| I155 | `send_message(text)` when Member has reached the daily chat cap | raises `ValidationError`; OpenAI mock not called |
-| I156 | `send_message(text)`, OpenAI mock raises an error | request does not raise; returns a transient error response; no `Chat Message` row created for the attempt |
-| I157 | `send_message(text)` success | creates an `LLM Call Log` row with `feature: "chat"`, `latency_ms`, `input_tokens`, `output_tokens`, `cost`, `model` populated, and `content` containing the full tool-calling trace (message, tool calls, results, final answer) |
-| I158 | `get_chat_history()` | returns only the calling Member's `Chat Message` rows, ordered chronologically |
-| I159 | `get_chat_history()` for a Member with no messages | returns empty list |
-| I160 | Two different Members each with `Chat Message` rows | each Member's `get_chat_history()` excludes the other's messages (private, not Family-shared) |
-| I161 | `clear_chat()` | deletes all of the calling Member's `Chat Message` rows |
-| I162 | `clear_chat()` | does not delete or modify any `LLM Call Log` rows |
-| I163 | `send_message(text)` immediately after `clear_chat()` | context assembled for the LLM call contains no prior messages (fresh context) |
+| I150 | `record_llm_call(feature="chat", tokens…, cost…, model…, latency_ms…)` by a Family Member | inserts one `LLM Call Log` row with those values and `member`/`family` set from the caller |
+| I151 | `record_llm_call(status="error", …)` | row still created with `status: "error"` and latency recorded |
+| I152 | Non-System-Manager user lists / reads `LLM Call Log` directly | returns no rows / raises `PermissionError` (only `record_llm_call` and `get_my_llm_cost` are Member-reachable) |
+| I153 | `get_my_llm_cost()` for a Member with `receipt` + `chat` + `insights` rows this month | returns `{total, receipt, chat, insights}` matching the sum of that Member's own rows only |
+| I154 | `get_my_llm_cost()` — another Member of the same Family has rows | response never includes the other Member's rows or any raw field |
+| I155 | `update_expense(name, …, if_modified_since=<stale timestamp>)` | raises a distinct conflict error; the row is not changed |
+| I156 | `update_expense(name, …, if_modified_since=<current timestamp>)` | write succeeds |
+| I157 | `create_expense(…, entry_method="assistant")` | Expense created with `entry_method="assistant"` and **no** `is_external_write` |
+| I158 | `list_categories()` / `list_sources()` in `api.py` by a Member | returns that Family's Category / Source names only |
+| I159 | Migration patch `add_entry_method` | existing `is_external_write=1` rows backfill to `entry_method="connector"`, the rest to `"manual"` |
 
 ---
 
-### P6-S2 · Chat UI: floating bubble, full-screen thread, Clear chat (issue #70)
+### P6-S3 · `[A]` FastMCP server (Frappe-REST-backed, elicitation on writes)
+
+**Service tests** (`expenso-assistant` repo)
+
+| Test | Assertion |
+|------|-----------|
+| A read tool (`get_expenses`) called with a Member's bearer token | calls Frappe REST as that Member; returns only that Family's rows |
+| A read tool called with a token for a different Family, crafted params | still scoped to the token's Family (Frappe `permission_query_conditions` enforce it, not the tool) |
+| A write tool (`create_expense`) | issues an MCP elicitation request before any Frappe write |
+| Elicitation accepted | Frappe REST `create_expense` fires with `entry_method` set by the caller path |
+| Elicitation declined | no Frappe write |
+| Token missing the `expenso:write` scope calls a write tool | rejected before elicitation |
+| `build_read_tool_schema()` / `build_write_tool_schema()` | read set has no write-capable tool; write set is exactly the D2 list |
+
+---
+
+### P6-S4 · `[F]` Cutover: delete `expenso/mcp.py`, drop `frappe-mcp`
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I160 | `expenso/mcp.py` removed | no import of `frappe_mcp` anywhere in the app; `pyproject.toml` has no `frappe-mcp` dependency |
+| I161 | `test_mcp.py` | replaced or removed — the in-process MCP handler no longer exists |
+| I162 | OAuth discovery metadata (`/.well-known/oauth-authorization-server`) | still served (Frappe stays the authorization server) |
+
+---
+
+### P6-S5 · `[A]` LangGraph agent (read-only) + SSE/resume FastAPI
+
+**Service tests** (`expenso-assistant` repo)
+
+| Test | Assertion |
+|------|-----------|
+| Agent given "what did I spend on groceries in March", OpenAI mock | calls the right read tool(s) with month/year params; returns a final answer; one `LLM Call Log` row written via `record_llm_call` with a `langfuse_trace_id` |
+| Per-run `recursion_limit` / max-tool-calls / wall-clock cap exceeded | run ends in error; caller sees an error; `LLM Call Log` row `status: "error"`; no partial answer emitted |
+| Monthly spend cap already exceeded (mock `LLM Call Log` sum) | run refused with "paused until next month"; OpenAI not called |
+| Per-Member daily chat cap reached | refused; OpenAI not called |
+| SSE stream | emits humanized step events then the streamed answer; ends with `done` |
+| Bearer token for Member A used to open Member B's thread | rejected by the custom auth |
+
+---
+
+### P6-S6 · `[FE]` Chat surface: bubble + overlay on every screen, global FAB (reuses #70)
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F121 | Chat bubble | visible on Feed, Analytics, Budget, and Settings screens |
-| F122 | FAB | now visible on Analytics, Budget, and Settings too (previously Feed-only); same Add Expense sheet behavior on every screen |
-| F123 | Chat bubble and FAB together, any screen | both bottom-right; Chat bubble stacked directly above the FAB, with a clear gap (no overlapping tap targets) |
-| F124 | Tapping the chat bubble | opens the full-screen chat overlay |
-| F125 | Chat overlay on open | renders message history from `get_chat_history()` |
-| F126 | Sending a message | input cleared; loading state shown while `send_message` is in flight |
-| F127 | Successful `send_message` response | Member's message and Chat's answer both appended to the visible thread |
-| F128 | Failed `send_message` call | transient error notice shown; message list unchanged (nothing appended) |
-| F129 | Daily chat cap reached (backend error) | warning message shown; input remains usable |
-| F130 | "Clear chat" action | confirmation prompt shown before clearing |
-| F131 | Confirmed "Clear chat" | `clear_chat` called; message list becomes empty |
-| F132 | Cancelled "Clear chat" confirmation | `clear_chat` not called; message list unchanged |
-| F133 | Chat overlay closed (back/close action) | returns to the underlying screen; thread still present on reopen |
+| F121 | Chat bubble | visible on Feed, Analytics, Budget, and Settings |
+| F122 | FAB | now visible on Analytics, Budget, and Settings too (was Feed-only); extracted from `Feed.vue` into a global `Fab.vue`; same Add Expense sheet behaviour everywhere |
+| F123 | Chat bubble + FAB together, any screen | both bottom-right; bubble stacked directly above the FAB with a clear gap (no overlapping tap targets) |
+| F124 | Tapping the bubble | opens the full-screen chat overlay |
+| F125 | Overlay on open | fetches an Assistant token, renders thread history from the service |
+| F126 | Sending a message | opens the SSE stream; humanized step log renders, then the answer streams in |
+| F127 | Failed stream | transient error notice; nothing appended to the thread |
+| F128 | Daily cap error from the service | warning shown; input remains usable |
+| F129 | "Clear chat" | confirmation prompt; confirmed → service call deletes the thread and the visible list empties; cancelled → no call |
+| F130 | Overlay closed | returns to the underlying screen; thread present on reopen; unread badge cleared once seen |
 
 ---
 
-### P6-S3 · Chat: admin cost/latency reporting (issue #71)
+### P6-S7 · `[A]`+`[FE]` Agent writes + confirm-card flow + concurrency guard
+
+**Integration / service tests**
+
+| Test | Assertion |
+|------|-----------|
+| Write prompt → one batched confirm card | payload lists every proposed action with concrete values; updates show a before→after diff |
+| Card confirmed | each Frappe write fires with `entry_method="assistant"`, no `is_external_write` |
+| Card with one row deselected | only the selected rows are written |
+| Card cancelled | nothing is written |
+| Target row edited from a second session between the agent's read and the resume | write rejected via `if_modified_since`; the agent re-reads and re-proposes with the new values |
+| Multi-step: step 2 needs step 1's created row | two confirm cards in the turn, each batched for its step |
+| Per-Member daily write cap reached | write path refused with a clear message |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F131 | Confirm card | renders concrete rows and a before→after diff for edits; confirm / per-row deselect / cancel controls present |
+| F132 | Confirm / deselect / cancel | send the matching resume payload to the service |
+
+---
+
+## Phase 7 — Proactive & Reporting
+
+### P7-S1 · `[A]`+`[FE]` Receipts conversational in the Assistant
+
+**Service / integration tests**
+
+| Test | Assertion |
+|------|-----------|
+| A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values |
+| Confirm the proposal (unedited) | Expense created with `entry_method="receipt"`; `LLM Call Log` `feature: "receipt"` row has proposed values recorded, then confirmed values + per-field accuracy after save |
+| Edit the amount in the card, then confirm | Expense saved with the edited amount; that field marked corrected in the accuracy round-trip |
+| Reject the proposal | no Expense; `LLM Call Log` row stays unlinked (still valid for latency/cost) |
+| Non-receipt photo | agent asks what the Member wants; no proposal |
+| After processing | no Frappe `File` created, no image on the Expense, no image in the thread — only a text marker |
+| Vision mock returns a category not in the Family list | proposed `category` is `None` |
+
+---
+
+### P7-S2 · `[F]`+`[A]` Proactive Insights
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I164 | "Total Cost This Month (Chat)" Number Card | targets `LLM Call Log`, `Sum` of `cost`, filtered to `feature: "chat"` and the current month |
-| I165 | "Avg Latency (Chat)" Number Card | targets `LLM Call Log`, `Average` of `latency_ms`, filtered to `feature: "chat"` |
-| I166 | Daily-trend Script Report | breaks out rows by `feature` (or accepts a feature filter), so Receipt and Chat trends are distinguishable rather than conflated |
-| I167 | Daily-trend Script Report with both Receipt and Chat log rows on the same day | each feature's aggregates (cost, count, avg latency) are computed independently |
+| I176 | `run_monthly_summary` scheduled job | mints a per-Member **read-scoped** bearer token and POSTs `/run/proactive` once per Member |
+| I177 | Proactive run | the graph binds the **read-only** toolset (no write tool available) |
+| I178 | Proactive run output | an Insight message is posted into that Member's thread; the bubble unread badge reflects it |
+| I179 | `run_budget_drift` run twice with unchanged data | the second run posts no message (dedup marker) |
+| I180 | `run_budget_drift` when a Category crosses its threshold | exactly one new Insight |
+| I181 | Proactive run wants an action taken | it emits a pending proposal (queued confirm card), never a direct write |
+
+---
+
+### P7-S3 · `[F]`+`[FE]` Consolidated LLM reporting (reuses #68; absorbs #71/#72/#73)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I182 | Workspace Number Cards | "Total Cost This Month" and "Avg Latency" over `LLM Call Log`, filterable/broken out by `feature` (`receipt`/`chat`/`insights`) |
+| I183 | Daily-trend Script Report | one aggregated row per day, broken out by `feature`; System-Manager-only |
+| I184 | "Cost by Member by Month" Script Report | one row per (Member, Month) with per-feature cost columns summing to the total; separate rows per Member |
+| I185 | `LLM Call Log` list view | a `langfuse_trace_id` link opens the corresponding Langfuse trace |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F142 | Settings "Your usage this month" | shows the total and a per-feature breakdown (receipt / chat / insights); own usage only |
+| F143 | Member with no usage this month | section shows $0, not hidden or broken |
 
 ---
 
@@ -923,9 +899,8 @@ Balance figure.
 
 ## Totals
 
-| Layer | Count |
-|---|---|
-| Backend unit tests | 37 |
-| Backend integration tests | 191 |
-| Frontend unit tests | 160 |
-| **Total** | **388** |
+Phases 1–3 and 5 (shipped): **~340** tests (backend unit + integration + frontend). Phase 4's
+count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **70** more:
+`[F]`/`[FE]` tests in this repo (P6-S1 ~9 I + P6-S4 ~3 I + P6-S6 ~10 F + P6-S7 ~2 F + P7-S2 ~6 I
++ P7-S3 ~4 I / ~2 F), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 / P6-S5 /
+P6-S7 / P7-S1). Exact numbered rows are finalised when each streak is implemented.

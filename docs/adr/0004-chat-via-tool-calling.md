@@ -1,6 +1,22 @@
 # Chat via tool-calling on existing whitelisted methods, read-only, per-Member private
 
-**Status: accepted, deferred (2026-08-11).** #78 decided to build **both** this ADR's in-app design and [ADR 0005](0005-chat-via-mcp-connector-alternative.md)'s MCP connector — not one instead of the other — sequenced with the MCP connector shipping first (ADR 0005 + ADR 0006). This ADR's plan (issues #69/#70/#71) is not rejected, just deferred until the MCP connector work lands; it remains the design to build for the in-app surface when that phase is picked up.
+**Status: largely superseded by [ADR 0008](0008-in-app-assistant-architecture.md) (2026-09-09).** When Phase 6 was picked up, the decision was to build a full-agentic Assistant instead of this read-only design. This ADR is retained for the history of the shallow design and why it was reopened — ADR 0004's own closing line ("revisit if the tool count or interaction complexity actually grows — write actions, multi-agent handoffs") named the trigger that fired.
+
+| This ADR said | ADR 0008 |
+|---|---|
+| Hand-rolled OpenAI tool-calling loop, **no agent framework** | LangGraph state-graph agent |
+| **Read-only** for v1 | Full ledger writes (create/update/delete Expense & Income, add Category/Source, set Budget), multi-step workflows |
+| `Chat Message` DocType + last-N-message context window | The LangGraph checkpointer's Postgres owns thread state outright — **no `Chat Message` DocType** |
+| Synchronous, no streaming | SSE streaming + first-class `interrupt`/resume |
+| `gpt-4o-mini` | A pinned current OpenAI model |
+| `LLM Call Log` `feature:"chat"` captures the full trace in a `content` field; "Clear chat" leaves it in the admin log | Full trace lives in Langfuse (bounded retention); "Clear chat" = delete the LangGraph thread |
+| Runs inside Frappe | Runs in the standalone `expenso-assistant` service; Frappe holds no LLM deps or keys |
+
+**What still holds:** the tools wrap the app's existing whitelisted methods rather than text-to-SQL or prompt-stuffing the ledger — the MCP tools call the same `api.py` functions, so Family-scoping is still free and the agent still has no path to a self-constructed query. One continuous thread per Member, private, not Family-shared. "Clear chat" is a genuine fresh start (mechanism changed, semantics kept). A failed turn is not persisted.
+
+---
+
+**Original (superseded) design, 2026-08-11:** #78 decided to build **both** this ADR's in-app design and [ADR 0005](0005-chat-via-mcp-connector-alternative.md)'s MCP connector — not one instead of the other — sequenced with the MCP connector shipping first (ADR 0005 + ADR 0006).
 
 Chat (issue #44) needed a way to let the LLM answer questions about a Family's Expenses, Income, and Budgets. We chose **tool-calling against the app's existing whitelisted API methods** (`get_expenses`, `get_analytics`, `get_income`, `get_budgets`) over text-to-SQL or stuffing the Family's full transaction history into every prompt. The LLM picks which method to call and with what params (e.g. month/year); the backend executes it exactly as it does today, under the same Family-scoped permission checks every other caller goes through. This means Chat gets Family-scoping for free and never has a path to construct its own query — a hallucinated tool call fails the same way a hallucinated frontend request would, rather than opening a new class of cross-Family data leak that a generated SQL/filter approach would require re-proving safe.
 

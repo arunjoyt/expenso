@@ -67,7 +67,12 @@ describe("useAssistant — SSE parser (F134)", () => {
 
 		expect(steps).toEqual(["Reading expenses for March"]);
 		expect(tokens).toEqual(["You ", "spent $12."]);
-		expect(message).toEqual({ id: "m-1", role: "assistant", content: "You spent $12." });
+		expect(message).toEqual({
+			kind: "message",
+			id: "m-1",
+			role: "assistant",
+			content: "You spent $12.",
+		});
 	});
 
 	it("buffers a frame split across two stream chunks", async () => {
@@ -96,6 +101,50 @@ describe("useAssistant — SSE parser (F134)", () => {
 			code: "tool_cap",
 		});
 	});
+
+	// F135
+	it("resolves as a confirm result when the leg ends on needs_confirmation", async () => {
+		const actions = [{ id: "a1", tool: "update_expense", kind: "update", summary: "Coffee" }];
+		fetch.mockResolvedValueOnce(
+			sseResponse([
+				frame("step", { text: "Reading expenses for March" }),
+				frame("needs_confirmation", { actions }),
+			])
+		);
+		const result = await useAssistant().sendMessage("bump the coffee", {});
+		expect(result).toEqual({ kind: "confirm", actions });
+	});
+});
+
+describe("useAssistant — resume (F136)", () => {
+	it("POSTs /resume with the decision and streams the continuation to done", async () => {
+		fetch.mockResolvedValueOnce(
+			sseResponse([
+				frame("token", { text: "Updated it." }),
+				frame("done", { message_id: "m9" }),
+			])
+		);
+		const result = await useAssistant().resume({ selected: ["a1"] }, {});
+
+		const [url, options] = fetch.mock.calls[0];
+		expect(url).toBe(`${SERVICE}/resume`);
+		expect(options.method).toBe("POST");
+		expect(options.headers.Authorization).toBe("Bearer tok-1");
+		expect(JSON.parse(options.body)).toEqual({ decision: { selected: ["a1"] } });
+		expect(result).toEqual({
+			kind: "message",
+			id: "m9",
+			role: "assistant",
+			content: "Updated it.",
+		});
+	});
+
+	it("can resolve into a second confirm card", async () => {
+		const actions = [{ id: "b1", tool: "update_expense", kind: "update", summary: "Retry" }];
+		fetch.mockResolvedValueOnce(sseResponse([frame("needs_confirmation", { actions })]));
+		const result = await useAssistant().resume({ selected: ["a1"] }, {});
+		expect(result).toEqual({ kind: "confirm", actions });
+	});
 });
 
 describe("useAssistant — token lifecycle (F129)", () => {
@@ -106,8 +155,9 @@ describe("useAssistant — token lifecycle (F129)", () => {
 		await useAssistant().sendMessage("one", {});
 		await useAssistant().sendMessage("two", {});
 		expect(call).toHaveBeenCalledTimes(1);
+		// F138 — P6-S7 raised the mint to write scope for the confirm-gated tools.
 		expect(call).toHaveBeenCalledWith("expenso.assistant.auth.mint_assistant_token", {
-			write: false,
+			write: true,
 		});
 	});
 

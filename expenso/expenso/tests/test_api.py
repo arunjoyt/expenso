@@ -129,6 +129,16 @@ class TestGetExpenses(FrappeTestCase):
 		row = next(r for r in result if r.name == self.expense_with_notes.name)
 		self.assertEqual(row.notes, "Dinner with the Smiths")
 
+	# P6-S7: the Assistant reads `modified` here and passes it back as
+	# `if_modified_since` on an edit/delete.
+	def test_get_expenses_includes_modified_for_the_concurrency_guard(self):
+		frappe.set_user(self.member)
+		row = next(r for r in get_expenses(month=6, year=2025) if r.name == self.june_expense.name)
+		self.assertEqual(
+			str(row.modified),
+			str(frappe.db.get_value("Expense", self.june_expense.name, "modified")),
+		)
+
 
 class TestExpenseCrudApi(FrappeTestCase):
 	def setUp(self):

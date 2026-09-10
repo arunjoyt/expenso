@@ -5,12 +5,16 @@ const assistant = {
 	isConfigured: vi.fn(() => true),
 	fetchHistory: vi.fn(),
 	sendMessage: vi.fn(),
+	resume: vi.fn(),
 	clearChat: vi.fn(),
 	markAllSeen: vi.fn(),
 };
 vi.mock("@/composables/useAssistant", () => ({
 	useAssistant: () => assistant,
 }));
+
+const message = (content, id = "a1") => ({ kind: "message", id, role: "assistant", content });
+const confirm = (actions) => ({ kind: "confirm", actions });
 
 import Assistant from "@/pages/Assistant.vue";
 
@@ -22,6 +26,7 @@ beforeEach(() => {
 	assistant.isConfigured.mockReturnValue(true);
 	assistant.fetchHistory.mockResolvedValue([]);
 	assistant.sendMessage.mockReset();
+	assistant.resume.mockReset();
 	assistant.clearChat.mockReset();
 	assistant.clearChat.mockResolvedValue();
 	assistant.markAllSeen.mockClear();
@@ -84,7 +89,7 @@ describe("Assistant screen", () => {
 			});
 			onToken("You spent ");
 			onToken("$412.");
-			return { id: "a1", role: "assistant", content: "You spent $412." };
+			return message("You spent $412.");
 		});
 
 		const wrapper = mountAssistant();
@@ -172,5 +177,79 @@ describe("Assistant screen", () => {
 		await wrapper.find('[data-test="clear-chat-confirm"]').trigger("click");
 		await flushPromises();
 		expect(confirmSpy).not.toHaveBeenCalled();
+	});
+
+	const ACTIONS = [
+		{
+			id: "a1",
+			tool: "update_expense",
+			kind: "update",
+			entity: "expense",
+			summary: "Coffee",
+			changes: [{ field: "amount", from: 4.5, to: 6 }],
+		},
+	];
+
+	// F137
+	it("renders the confirm card inline and drives resume on Confirm", async () => {
+		assistant.sendMessage.mockResolvedValue(confirm(ACTIONS));
+		assistant.resume.mockResolvedValue(message("Updated the coffee to 6."));
+
+		const wrapper = mountAssistant();
+		await flushPromises();
+		await typeAndSend(wrapper, "bump the coffee to 6");
+		await flushPromises();
+
+		expect(wrapper.find('[data-test="confirm-card"]').exists()).toBe(true);
+
+		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
+		await flushPromises();
+
+		expect(assistant.resume).toHaveBeenCalledWith({ selected: ["a1"] }, expect.any(Object));
+		expect(wrapper.find('[data-test="assistant-message"]').text()).toContain(
+			"Updated the coffee to 6."
+		);
+		expect(wrapper.find('[data-test="confirm-card"]').exists()).toBe(false);
+	});
+
+	// F137
+	it("Cancel resumes with an empty selection", async () => {
+		assistant.sendMessage.mockResolvedValue(confirm(ACTIONS));
+		assistant.resume.mockResolvedValue(message("Okay, left it as is."));
+
+		const wrapper = mountAssistant();
+		await flushPromises();
+		await typeAndSend(wrapper, "bump the coffee");
+		await flushPromises();
+		await wrapper.find('[data-test="confirm-cancel"]').trigger("click");
+		await flushPromises();
+
+		expect(assistant.resume).toHaveBeenCalledWith({ selected: [] }, expect.any(Object));
+	});
+
+	// F137
+	it("a second needs_confirmation replaces the card", async () => {
+		const RETRY = [
+			{
+				id: "b1",
+				tool: "update_expense",
+				kind: "update",
+				entity: "expense",
+				summary: "Retry",
+				changes: [{ field: "amount", from: 5, to: 6 }],
+			},
+		];
+		assistant.sendMessage.mockResolvedValue(confirm(ACTIONS));
+		assistant.resume.mockResolvedValue(confirm(RETRY));
+
+		const wrapper = mountAssistant();
+		await flushPromises();
+		await typeAndSend(wrapper, "bump it");
+		await flushPromises();
+		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
+		await flushPromises();
+
+		expect(wrapper.find('[data-test="confirm-card"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="confirm-card"]').text()).toContain("Retry");
 	});
 });

@@ -121,6 +121,9 @@ def get_expenses(month: int, year: int):
 			"notes",
 			"is_external_write",
 			"external_write_message",
+			# The Assistant captures `modified` at read and passes it back as
+			# `if_modified_since` on an edit/delete (P6-S7 concurrency guard).
+			"modified",
 		],
 		order_by="date desc, `tabExpense`.creation desc",
 	)
@@ -458,6 +461,8 @@ def get_income(month: int, year: int):
 			"notes",
 			"is_external_write",
 			"external_write_message",
+			# See get_expenses — `modified` feeds the P6-S7 concurrency guard.
+			"modified",
 		],
 		order_by="date desc, `tabIncome`.creation desc",
 	)

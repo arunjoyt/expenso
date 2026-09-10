@@ -911,7 +911,7 @@ opens its own `feature:chat` trace and the chat cap is not re-checked; `resume_t
 | F137 | `Assistant.vue` confirm flow | a `needs_confirmation` turn renders `ConfirmCard` inline; Confirm drives `resume` and the streamed follow-up answer is appended; a second `needs_confirmation` replaces the card |
 | F138 | Token scope | the Assistant screen mints with `write=true` (P6-S7 raised it from read-only) |
 
-**Frappe-side:** the `if_modified_since` guard and `entry_method` plumbing shipped in P6-S1 — no new Frappe tests here.
+**Frappe-side:** the `if_modified_since` guard and `entry_method` plumbing shipped in P6-S1. P6-S7 adds `modified` to the `get_expenses` / `get_income` field lists so the agent can capture it at read and pass it back — one test: `get_expenses` rows carry `modified`.
 
 ---
 

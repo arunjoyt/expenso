@@ -32,6 +32,7 @@ export function useAssistant() {
 		),
 		fetchHistory,
 		sendMessage,
+		resume,
 		clearChat,
 		recordHistory,
 		markAllSeen,
@@ -61,10 +62,22 @@ async function fetchHistory() {
 }
 
 // Runs one turn. `onStep` gets each humanized activity line; `onToken` gets
-// each answer delta. Resolves with the committed assistant message once `done`
-// arrives; rejects with an Error carrying `.code` on an `error` event.
-async function sendMessage(text, { onStep, onToken } = {}) {
-	const response = await request("POST", "/chat", { message: text }, { raw: true });
+// each answer delta. Resolves with either
+//   { kind: "message", id, content }  — a `done` leg, or
+//   { kind: "confirm", actions }      — the leg ended on a confirm card;
+// rejects with an Error carrying `.code` on an `error` event.
+function sendMessage(text, handlers) {
+	return runLeg("/chat", { message: text }, handlers);
+}
+
+// The member's decision on a pending confirm card. `decision` is
+// `{ selected: [actionId, …] }` — an empty list cancels.
+function resume(decision, handlers) {
+	return runLeg("/resume", { decision }, handlers);
+}
+
+async function runLeg(path, body, { onStep, onToken } = {}) {
+	const response = await request("POST", path, body, { raw: true });
 	const result = await consumeSSE(response, { onStep, onToken });
 
 	if (result.error) {
@@ -72,12 +85,15 @@ async function sendMessage(text, { onStep, onToken } = {}) {
 		error.code = result.error.code;
 		throw error;
 	}
+	if (result.confirm) {
+		return { kind: "confirm", actions: result.confirm.actions ?? [] };
+	}
 
 	const message = { id: result.messageId, role: "assistant", content: result.text };
 	// A live turn is on screen already — never let it badge itself.
 	recordHistory([message]);
 	markAllSeen();
-	return message;
+	return { kind: "message", ...message };
 }
 
 async function clearChat() {
@@ -131,11 +147,10 @@ async function mintToken({ force = false } = {}) {
 	const fresh = cachedToken && Date.now() < tokenExpiresAt - REMINT_MARGIN_MS;
 	if (fresh && !force) return cachedToken;
 
+	// write scope: the confirm-gated tools run on the member's approval (P6-S7).
 	const { access_token, expires_in } = await call(
 		"expenso.assistant.auth.mint_assistant_token",
-		{
-			write: false,
-		}
+		{ write: true }
 	);
 	cachedToken = access_token;
 	tokenExpiresAt = Date.now() + expires_in * 1000;
@@ -174,6 +189,8 @@ function drainFrames(state, { onStep, onToken }) {
 			onToken?.(frame.data.text);
 		} else if (frame.event === "done") {
 			state.messageId = frame.data.message_id;
+		} else if (frame.event === "needs_confirmation") {
+			return { confirm: frame.data };
 		} else if (frame.event === "error") {
 			return { error: frame.data };
 		}

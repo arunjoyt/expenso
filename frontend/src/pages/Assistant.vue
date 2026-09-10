@@ -72,6 +72,15 @@
 					>
 				</div>
 
+				<ConfirmCard
+					v-if="card"
+					:key="card.actions.map((a) => a.id).join(',')"
+					:actions="card.actions"
+					:pending="card.pending"
+					@confirm="onConfirm"
+					@cancel="onCancel"
+				/>
+
 				<div
 					v-if="steps.length"
 					data-test="assistant-step-log"
@@ -113,8 +122,9 @@
 import { onMounted, ref } from "vue";
 import { Button, Input, ErrorMessage } from "frappe-ui";
 import { useAssistant } from "@/composables/useAssistant";
+import ConfirmCard from "@/components/ConfirmCard.vue";
 
-const { isConfigured, fetchHistory, sendMessage, clearChat, markAllSeen } = useAssistant();
+const { isConfigured, fetchHistory, sendMessage, resume, clearChat, markAllSeen } = useAssistant();
 
 const configured = isConfigured();
 const messages = ref([]);
@@ -125,6 +135,8 @@ const loading = ref(false);
 const sending = ref(false);
 const confirmingClear = ref(false);
 const clearing = ref(false);
+// The pending confirm card, or null. { actions, pending }.
+const card = ref(null);
 
 onMounted(async () => {
 	if (!configured) return;
@@ -147,35 +159,70 @@ async function send() {
 	draft.value = "";
 	notice.value = "";
 	steps.value = [];
+	card.value = null;
 	sending.value = true;
 
-	// Everything this turn adds sits past `baseline`, so a failed turn is undone
-	// with a single splice — matching the service, which rolls the turn back.
+	// Everything the turn adds sits past `baseline`; a failed turn is undone
+	// with one splice, matching the service rolling it back.
 	const baseline = messages.value.length;
 	messages.value.push({ id: null, role: "user", content: text });
+	await runLeg((handlers) => sendMessage(text, handlers), baseline);
+}
+
+async function onConfirm(selectedIds) {
+	if (!card.value) return;
+	card.value.pending = true;
+	await runResume({ selected: selectedIds });
+}
+
+async function onCancel() {
+	if (!card.value) return;
+	card.value.pending = true;
+	await runResume({ selected: [] });
+}
+
+async function runResume(decision) {
+	notice.value = "";
+	steps.value = [];
+	sending.value = true;
+	await runLeg((handlers) => resume(decision, handlers));
+}
+
+// Streams one SSE leg into the thread. `rollbackTo` (send only) is the message
+// count to splice back to if the leg errors.
+async function runLeg(runner, rollbackTo) {
 	let streamIndex = -1;
+	const onToken = (delta) => {
+		if (streamIndex === -1) {
+			streamIndex =
+				messages.value.push({
+					id: null,
+					role: "assistant",
+					content: "",
+					streaming: true,
+				}) - 1;
+		}
+		messages.value[streamIndex].content += delta;
+	};
 
 	try {
-		const committed = await sendMessage(text, {
-			onStep: (line) => steps.value.push(line),
-			onToken: (delta) => {
-				if (streamIndex === -1) {
-					streamIndex =
-						messages.value.push({
-							id: null,
-							role: "assistant",
-							content: "",
-							streaming: true,
-						}) - 1;
-				}
-				messages.value[streamIndex].content += delta;
-			},
-		});
-		const final = { id: committed.id, role: "assistant", content: committed.content };
+		const result = await runner({ onStep: (line) => steps.value.push(line), onToken });
+
+		if (result.kind === "confirm") {
+			if (streamIndex !== -1 && !messages.value[streamIndex].content) {
+				messages.value.splice(streamIndex, 1);
+			}
+			card.value = { actions: result.actions, pending: false };
+			return;
+		}
+
+		const final = { id: result.id, role: "assistant", content: result.content };
 		if (streamIndex === -1) messages.value.push(final);
 		else messages.value[streamIndex] = final;
+		card.value = null;
 	} catch (error) {
-		messages.value.splice(baseline);
+		if (rollbackTo !== undefined) messages.value.splice(rollbackTo);
+		if (card.value) card.value.pending = false;
 		notice.value =
 			error.code === "daily_cap"
 				? "You've reached today's Assistant limit. Try again tomorrow."
@@ -191,6 +238,7 @@ async function confirmClear() {
 	try {
 		await clearChat();
 		messages.value = [];
+		card.value = null;
 		confirmingClear.value = false;
 	} catch {
 		notice.value = "Couldn't clear the chat. Try again.";

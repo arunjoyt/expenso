@@ -116,7 +116,7 @@ A separate repo ([`arunjoyt/expenso-assistant`](https://github.com/arunjoyt/expe
 
 **Deploy:** on the VPS, `git pull && docker compose up -d --build` in the `expenso-assistant` checkout. `/health` must return green before the Frappe-side cutover (P6-S4) deletes `expenso/mcp.py`.
 
-**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, per-Member daily caps, `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
+**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `SERVICE_TIMEZONE` (the Family's tz — used for "today" in the daily caps and the agent's date reasoning), `RUN_RECURSION_LIMIT` / `RUN_MAX_TOOL_CALLS` / `RUN_WALL_CLOCK_SECONDS` (per-run runaway guard), per-Member daily caps, `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
 
 **Browse Langfuse:** SSH tunnel — `ssh -L 3000:127.0.0.1:3000 <vps>`, then `http://localhost:3000`.
 
@@ -220,11 +220,14 @@ Run these in order after deploying a new phase or to the production site.
 
 - [ ] `bench --site <site> migrate` after the `entry_method` field + backfill patch (existing `is_external_write=1` rows → `connector`, the rest → `manual`)
 - [ ] `expenso-assistant` stack up; `/health` green; Langfuse reachable via SSH tunnel
+- [ ] The `assistant` Postgres DB exists before the `app` container starts (the checkpointer runs its `setup()` DDL on boot); `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` and `SERVICE_TIMEZONE` set in `.env`
 - [ ] A hard monthly spend limit is set on the OpenAI account dashboard
 - [ ] Re-add the MCP connector in Claude against the new service URL; OAuth consent completes; `get_expenses` returns the right Family's data; a `create_expense` lands with `is_external_write=1` and `entry_method=connector`
 - [ ] `expenso/mcp.py` deleted, `frappe-mcp` gone from `pyproject.toml`, a fresh `bench build`/install resolves cleanly
 - [ ] Chat bubble + FAB visible on Feed, Analytics, Budget, Settings — stacked with a gap
-- [ ] Ask "what did I spend on groceries in March" → step log streams, then the answer; in Langfuse, one trace tagged `user_id=<member>`, `feature=chat`, `session_id=<thread>`, with the generation cost recorded
+- [ ] Ask "what did I spend on groceries in March" → step log streams (`event: step`), then the answer streams (`event: token`), then `event: done`; in Langfuse, one trace tagged `user_id=<member>`, `metadata.feature=chat` + a `feature:chat` tag, `session_id=<thread>`, with the generation cost recorded on it (no `metadata.family` — dropped in the P6-S5 grill)
+- [ ] Reload the chat → `GET /history` returns the turn; "Clear chat" (`DELETE /history`) empties it; a second Member's `/history` never shows the first Member's thread
+- [ ] Force a per-run cap (e.g. a low `RUN_WALL_CLOCK_SECONDS`) → the stream ends with `event: error`, and the failed turn leaves nothing in `/history`
 - [ ] Ask to add an expense → confirm card shows the concrete values; confirm → Expense created with `entry_method=assistant`, **no** "unreviewed external write" marker
 - [ ] Ask to recategorize several expenses → one batched confirm card lists every row; deselect one → only the rest are changed; cancel → nothing changes
 - [ ] Edit a target row from a second session before confirming → the write is rejected and the agent re-proposes with the new values

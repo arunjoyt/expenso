@@ -71,14 +71,14 @@ Both jobs are scheduled **off-hours** (e.g. early-morning cron), deliberately: a
 
 - **Conversation threads** live in the **LangGraph checkpointer's Postgres**, outright. There is **no `Chat Message` DocType** — this reverses ADR 0004's persistence model. The frontend reads history and streams from the service. "Clear chat" deletes the LangGraph thread.
 - **Full step traces** live in **Langfuse only** (retention ~30–60 days). There is no `Chat Run` / `Assistant Run` DocType.
-- **Every LLM call is recorded only as a Langfuse trace** — tagged with the Member (`user_id`), Family, `feature`, and thread, with cost attached explicitly. **There is no `LLM Call Log` DocType and Frappe stores nothing about the Assistant** (this reverses an earlier version of this bullet — see the 2026-09-10 update). Admin cost/latency visibility is the Langfuse dashboards; receipt-accuracy is a Langfuse score.
+- **Every LLM call is recorded only as a Langfuse trace** — tagged with the Member (`user_id`), `feature`, and thread, with cost attached explicitly. (`metadata.family` was dropped — see the 2026-09-10 P6-S5 update.) **There is no `LLM Call Log` DocType and Frappe stores nothing about the Assistant** (this reverses an earlier version of this bullet — see the 2026-09-10 update). Admin cost/latency visibility is the Langfuse dashboards; receipt-accuracy is a Langfuse score.
 - **Receipt images are never stored** — not on the Expense, not in the thread, no Frappe `File`. The image is transient in the browser/run state during the session and discarded after processing; the thread keeps a text marker.
 
 ### Observability
 
 **Langfuse v2, self-hosted, Postgres-only** (as `contract-intelligence` runs it), loopback-bound and browsed via SSH tunnel. This reverses ADR 0003's "no third-party observability" **for the self-hosted case only** — the data stays on our infra and the UI is never publicly exposed. Hosted-SaaS observability (LangSmith, Helicone proxy) stays rejected for the data-residency reason ADR 0003 gave.
 
-Langfuse is not just the trace viewer — it is the **only** record of every LLM call (there is no `LLM Call Log`; see the 2026-09-10 update). Every trace is tagged `user_id` = Member / `metadata.family` / `metadata.feature` / `session_id` = thread, with the generation cost set explicitly from the `config.py` pricing constant. Admin cost/latency/token dashboards, per-Member daily-cap counts, and receipt-accuracy scores all read from this.
+Langfuse is not just the trace viewer — it is the **only** record of every LLM call (there is no `LLM Call Log`; see the 2026-09-10 update). Every trace is tagged `user_id` = Member / `metadata.feature` / `session_id` = thread, with the generation cost set explicitly from the `config.py` pricing constant. Admin cost/latency/token dashboards, per-Member daily-cap counts, and receipt-accuracy scores all read from this. (`metadata.family` was dropped — see the 2026-09-10 P6-S5 update.)
 
 ### Cost bounds
 
@@ -105,9 +105,9 @@ Per-run: LangGraph `recursion_limit` + a max-tool-calls cap + a wall-clock cap. 
 Revisiting P6-S1 before any Phase 6 code: `LLM Call Log` was the *only* Frappe-resident Assistant artifact, and every reason [ADR 0003](0003-receipt-extraction-tracking.md) gave for putting call-tracking in Frappe was already reversed by this ADR — a second container stack now exists, Langfuse is now the admin trace surface, and every LLM call (vision included) moved to the service. Keeping the DocType meant the service POSTing every call into Frappe over `record_llm_call` *and* reading those rows back to enforce its own caps — Frappe sitting on the Assistant's own rate-limiting hot path.
 
 - **No `LLM Call Log` DocType, no `record_llm_call`, no `get_my_llm_cost`.** Frappe stores nothing about the Assistant. The `langfuse_trace_id` round-trip and the Desk → Langfuse jump are gone — there is no Desk list to jump from.
-- **Langfuse is the sole record of every call.** Each trace the service emits carries `user_id` = the Member, `metadata.family`, `metadata.feature` (`chat` / `receipt` / `insights`), `session_id` = the thread id, and **cost attached explicitly on the generation** from the `config.py` pricing constant — not Langfuse's built-in model-price table. This tagging is a P6-S5 requirement.
+- **Langfuse is the sole record of every call.** Each trace the service emits carries `user_id` = the Member, `metadata.feature` (`chat` / `receipt` / `insights`), `session_id` = the thread id, and **cost attached explicitly on the generation** from the `config.py` pricing constant — not Langfuse's built-in model-price table. This tagging is a P6-S5 requirement. (`metadata.family` was in the original list and was dropped — see the 2026-09-10 P6-S5 update.)
   - The OpenAI API returns **token counts, not a cost** — `prompt_tokens` / `completion_tokens` plus `prompt_tokens_details.cached_tokens` and `completion_tokens_details.reasoning_tokens`. The service computes cost itself, so the `config.py` "pricing constant" is a small per-model rate table — `{input, cached_input, output}` per 1M tokens — with cached input billed at its discounted rate and reasoning tokens billed as output. A model swap is one reviewed commit to that table (the ADR 0003 audit-trail-via-code-diff reasoning).
-- **Admin cost/latency/token visibility is the Langfuse dashboards.** No Frappe Number Cards, no Script Reports. `#68` / `#72` are dropped; standing up the saved Langfuse views folds into P6-S5.
+- **Admin cost/latency/token visibility is the Langfuse dashboards.** No Frappe Number Cards, no Script Reports. `#68` / `#72` are dropped. P6-S5 ships the trace tagging + explicit cost that the dashboards read; standing up the saved views themselves is **deferred to P7-S2** (2026-09-10 P6-S5 update), where reporting is the focus.
 - **Receipt extraction accuracy is a Langfuse score.** At `/resume` the service diffs the proposed field values (held in the checkpointed `interrupt` payload) against what the Member confirmed and posts `receipt_accuracy_{amount,date,category,notes}` scores on the receipt trace. ADR 0003's `null`-field exclusion and exact-string `notes` rule are unchanged. Nothing is stored for this outside Langfuse.
 - **Caps.** The per-run `recursion_limit` / max-tool-calls / wall-clock caps stay in-process and are the real runaway guard. Per-Member daily caps (chat / receipt / write) are computed from Langfuse for that `user_id` and day — chat and receipt by trace `feature`, writes by counting confirmed write tool-call spans; **the check fails open if Langfuse is unreachable.** Daily and month-to-date windows sit well inside Langfuse's retention, so retention is not a constraint here.
 - **No app-level `MONTHLY_SPEND_CAP`.** The money backstop is a hard monthly spend limit set on the OpenAI account dashboard, which shuts the key off. Removed from `config.py` and the service env.
@@ -132,6 +132,18 @@ The 2026-09-09 design routed the co-located agent to its own FastMCP server via 
 The one accepted cost: the confirm-gate logic exists in two forms — a graph `interrupt` for in-app, MCP elicitation for connectors — but they are genuinely different surfaces with different UIs, and both call the same underlying write functions.
 
 Recorded in place for the same reason as the block above: pre-code, a direct refinement of "One tool definition, two consumers" and "Capabilities and the confirm step".
+
+---
+
+**Update (2026-09-10, P6-S5): `metadata.family` is dropped from the trace tags.**
+
+Every trace tag needs a source the service can reach. `user_id`, `feature` and `session_id` all come from the run's own inputs (the introspected token's Member, the endpoint, the thread id). `metadata.family` does not — Frappe's token introspection returns `sub` only when a `User Social Login` row exists and never returns the Family, so the tag would force a new cross-repo identity path (a whitelisted `assistant_context` endpoint, or extending the mint response) for a v1 with one Family and two Members.
+
+- **The tag set is now `user_id` = Member / `metadata.feature` / `session_id` = thread.** No `metadata.family`.
+- **Nothing in v1 consumes per-Family attribution.** Daily caps key on `user_id` + `feature`; receipt-accuracy is per-trace; the only consumer that would slice by Family is an admin dashboard, and an admin can map Member → Family in Desk out-of-band the rare times that matters. Trace retention is 30–60 days, so there is no long-lived history to lose.
+- **Revisit if** `expenso-assistant` grows a need to know the Family for *behaviour* (not just telemetry) — at that point the service has a real reason to resolve it and the tag is nearly free to re-add. P7-S2's proactive runs are explicitly one-per-Member and do not create that need.
+
+Recorded in place: pre-code, a direct correction to "Observability" and the "Persistence boundary" telemetry bullet.
 
 ---
 

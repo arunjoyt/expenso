@@ -795,18 +795,40 @@ guards every whitelisted read (`expenso:read`) and write (`expenso:write`).
 
 ### P6-S5 · `[A]` LangGraph agent (read-only) + SSE/resume FastAPI
 
+Decisions taken while implementing (grill 2026-09-10): `metadata.family` dropped
+(above); Member id resolved via `frappe.auth.get_logged_user` after introspection;
+`thread_id = "member:" + sha256(email)` **derived server-side** — no client-supplied
+thread id anywhere; hand-rolled `StateGraph` (`agent` ⇄ `tools`, `tool_call_count`
+in state); `build_model()` is the one place OpenAI is named; custom LangChain
+callback owns the explicit cost (not the stock Langfuse handler); `feature:chat`
+added as a trace **tag** so the daily-cap query is a tag filter, checked *before*
+this run's trace opens; on any cap error the turn is rolled back to the
+pre-run checkpoint (no orphaned user message); `/resume` ships as an
+endpoint+SSE shell (interrupt semantics are P6-S7); endpoints require
+`expenso:read`; saved Langfuse dashboards deferred to P7-S2.
+
 **Service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
 |------|-----------|
-| Agent binds tools | the graph's tool list is the `tools.py` read fns bound directly — no `langchain[mcp]` import, no MCP client in the agent path |
-| Agent given "what did I spend on groceries in March", OpenAI mock | calls the right read tool(s) with month/year params; returns a final answer; one Langfuse trace emitted, tagged `user_id`=<member> / `metadata.family` / `metadata.feature="chat"` / `session_id`=<thread>, generation cost set from the `config.py` pricing constant |
-| Cost is computed from returned token usage | mock OpenAI returns known `prompt_tokens` / `completion_tokens` (+ `cached_tokens`); the trace's cost = the `config.py` rate table applied per token class (cached input discounted, reasoning as output) — not Langfuse's own estimate |
-| Per-run `recursion_limit` / max-tool-calls / wall-clock cap exceeded | run ends in error; caller sees an error; no partial answer emitted |
-| Per-Member daily chat cap reached (mock Langfuse trace count) | refused; OpenAI not called |
-| Langfuse unreachable during the daily-cap check | the check fails open — the run proceeds; a warning is logged |
-| SSE stream | emits humanized step events then the streamed answer; ends with `done` |
-| Bearer token for Member A used to open Member B's thread | rejected by the custom auth |
+| Agent binds tools | `build_graph()` binds the `tools.py` `READ_TOOLS` directly (`model.bind_tools(READ_TOOLS)`); no `langchain[mcp]` / `langchain_mcp` import anywhere in `agent/`; no MCP client in the agent path |
+| Read-only graph never binds a write tool | `WRITE_TOOLS` names are absent from the compiled graph's tool set |
+| Agent given "what did I spend on groceries in March", fake tool-calling model | calls a read tool with `month=3` and the current year (date from the per-run system prompt); returns a final answer |
+| One Langfuse trace per turn, tagged | exactly one trace; `user_id`=<member email>, `metadata.feature="chat"`, tag `feature:chat`, `session_id`=<derived thread id>; no `metadata.family` |
+| Generation cost is the service's number | fake model reports known `prompt_tokens`/`completion_tokens` (+ `cached_tokens`, `reasoning_tokens`); the generation's recorded cost == `config.cost_for(...)` per token class (cached input discounted, reasoning as output) — Langfuse's own model-price estimate is not used |
+| `recursion_limit` exceeded | `GraphRecursionError` caught; SSE ends with `error` `{code:"recursion"}`; no `token` event was emitted; thread history unchanged (rolled back) |
+| max-tool-calls cap exceeded | routes to the terminal cap node, not `tools`; SSE `error` `{code:"tool_cap"}`; history unchanged |
+| wall-clock cap exceeded | `asyncio.wait_for` times out; SSE `error` `{code:"wall_clock"}`; history unchanged |
+| Per-Member daily chat cap reached (mock Langfuse count ≥ cap) | run refused with `error` `{code:"daily_cap"}` before the trace opens; the model is never called |
+| Langfuse unreachable during the daily-cap check | check fails open — run proceeds; a `warning` is logged |
+| Daily-cap query shape | counts today's traces (service tz) for `user_id` + tag `feature:chat`; this run's own trace is not counted (checked first) |
+| SSE happy path | `step` events (humanized from tool name/args) then `token` deltas then `done` `{message_id}` |
+| History endpoint | returns human + assistant messages in checkpoint order as `{id, role, content}`; tool messages and tool-call-only assistant messages omitted |
+| "Clear chat" | deletes the derived thread from the checkpointer; history then empty |
+| Client-supplied thread id is ignored | run / `/resume` / history / clear all operate on the id derived from the token's Member — a body/query `thread_id` for another Member has no effect |
+| Inactive or unintrospectable bearer | every endpoint returns 401; the graph is not invoked |
+| Token missing `expenso:read` | 401 (endpoints require the read scope) |
+| `/resume` with no pending interrupt | clean response (no 500); read-only graph has nothing to resume — full interrupt/resume path is P6-S7 |
 
 ---
 
@@ -887,7 +909,7 @@ guards every whitelisted read (`expenso:read`) and write (`expenso:write`).
 
 ### P7-S3 — removed
 
-Consolidated LLM reporting (old #68, absorbing #71/#72/#73) is dropped by ADR 0008's 2026-09-10 update. There is no `LLM Call Log` DocType and no Frappe reporting surface — cost / latency / token visibility is the Langfuse dashboards (saved views set up in P6-S5), and receipt-extraction accuracy is a Langfuse score on the receipt trace. No Frappe integration or frontend tests here. The Member-facing "your usage this month" (#73) is deferred out of v1.
+Consolidated LLM reporting (old #68, absorbing #71/#72/#73) is dropped by ADR 0008's 2026-09-10 update. There is no `LLM Call Log` DocType and no Frappe reporting surface — cost / latency / token visibility is the Langfuse dashboards (P6-S5 ships the trace tagging + explicit cost; the saved views are built in P7-S2), and receipt-extraction accuracy is a Langfuse score on the receipt trace. No Frappe integration or frontend tests here. The Member-facing "your usage this month" (#73) is deferred out of v1.
 
 ---
 

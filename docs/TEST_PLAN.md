@@ -733,6 +733,22 @@ No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 000
 
 ---
 
+### P6-S2 · `[F]` Assistant token mint endpoint + proactive scheduler stubs (reuses #91)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I160 | `mint_assistant_token()` by a Member | returns `access_token` + `token_type="Bearer"` + `expires_in`; the token resolves to that Member via `validate_oauth` and carries `expenso:read` but **not** `expenso:write` |
+| I161 | `mint_assistant_token(write=True)` (incl. the string `"true"` from an HTTP call) | the minted token carries both `expenso:read` and `expenso:write` |
+| I162 | Minted token's `expiration_time` | short-lived — within `ASSISTANT_TOKEN_TTL_MINUTES` of now, and `expires_in` matches |
+| I163 | `mint_assistant_token()` by a signed-in user with no Family | raises `frappe.PermissionError`; no token row created |
+| I164 | `mint_assistant_token()` as `Guest` | raises `frappe.PermissionError` |
+| I165 | First mint on a site with no `Expenso Assistant` OAuth Client | creates one internal `OAuth Client` (scopes cover `expenso:read`+`expenso:write`); a second mint reuses it, not a duplicate |
+| I166 | `run_monthly_summary` / `run_budget_drift` | importable, registered in `hooks.scheduler_events["cron"]`, and a no-op call raises nothing (bodies are P7-S2) |
+
+---
+
 ### P6-S3 · `[A]` `tools.py` + FastMCP external adapter (Frappe-REST-backed)
 
 **Service tests** (`expenso-assistant` repo)
@@ -756,9 +772,9 @@ No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 000
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I160 | `expenso/mcp.py` removed | no import of `frappe_mcp` anywhere in the app; `pyproject.toml` has no `frappe-mcp` dependency |
-| I161 | `test_mcp.py` | replaced or removed — the in-process MCP handler no longer exists |
-| I162 | OAuth discovery metadata (`/.well-known/oauth-authorization-server`) | still served (Frappe stays the authorization server) |
+| I167 | `expenso/mcp.py` removed | no import of `frappe_mcp` anywhere in the app; `pyproject.toml` has no `frappe-mcp` dependency |
+| I168 | `test_mcp.py` | replaced or removed — the in-process MCP handler no longer exists |
+| I169 | OAuth discovery metadata (`/.well-known/oauth-authorization-server`) | still served (Frappe stays the authorization server) |
 
 ---
 
@@ -886,7 +902,7 @@ Balance figure.
 ## Totals
 
 Phases 1–3 and 5 (shipped): **~340** tests (backend unit + integration + frontend). Phase 4's
-count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **55** more:
-`[F]`/`[FE]` tests in this repo (P6-S1 ~4 I + P6-S4 ~3 I + P6-S6 ~10 F + P6-S7 ~2 F + P7-S2 ~6 I;
-P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 / P6-S5 /
-P6-S7 / P7-S1). Exact numbered rows are finalised when each streak is implemented.
+count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **62** more:
+`[F]`/`[FE]` tests in this repo (P6-S1 ~8 I + P6-S2 ~7 I + P6-S4 ~3 I + P6-S6 ~10 F + P6-S7 ~2 F +
+P7-S2 ~6 I; P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 /
+P6-S5 / P6-S7 / P7-S1). Exact numbered rows are finalised when each streak is implemented.

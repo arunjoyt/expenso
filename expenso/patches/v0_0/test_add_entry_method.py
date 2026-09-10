@@ -32,9 +32,7 @@ class TestAddEntryMethod(FrappeTestCase):
 
 		execute()
 
-		self.assertEqual(
-			frappe.db.get_value("Expense", connector_expense, "entry_method"), "connector"
-		)
+		self.assertEqual(frappe.db.get_value("Expense", connector_expense, "entry_method"), "connector")
 		self.assertEqual(frappe.db.get_value("Expense", manual_expense, "entry_method"), "manual")
 		self.assertEqual(frappe.db.get_value("Income", connector_income, "entry_method"), "connector")
 		self.assertEqual(frappe.db.get_value("Income", manual_income, "entry_method"), "manual")
@@ -46,7 +44,5 @@ class TestAddEntryMethod(FrappeTestCase):
 		execute()
 		execute()
 
-		self.assertEqual(
-			frappe.db.get_value("Expense", connector_expense, "entry_method"), "connector"
-		)
+		self.assertEqual(frappe.db.get_value("Expense", connector_expense, "entry_method"), "connector")
 		self.assertEqual(frappe.db.get_value("Expense", manual_expense, "entry_method"), "manual")

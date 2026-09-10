@@ -170,23 +170,20 @@ has_permission = {
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"expenso.tasks.all"
-# 	],
-# 	"daily": [
-# 		"expenso.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"expenso.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"expenso.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"expenso.tasks.monthly"
-# 	],
-# }
+# Proactive Assistant runs — off-hours cron slots (03:00 server time) so a
+# batch graph can't stall a live chat SSE stream. Bodies land in P7-S2 (#97).
+scheduler_events = {
+	"cron": {
+		# 1st of the month, 03:00 — monthly spending summary
+		"0 3 1 * *": [
+			"expenso.assistant.proactive.run_monthly_summary",
+		],
+		# every Monday, 03:00 — weekly budget-drift check
+		"0 3 * * 1": [
+			"expenso.assistant.proactive.run_budget_drift",
+		],
+	},
+}
 
 # Testing
 # -------

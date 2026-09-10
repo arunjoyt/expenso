@@ -19,5 +19,8 @@ def get_boot():
 			"default_route": "/expenso",
 			"socketio_port": frappe.conf.socketio_port,
 			"app_version": expenso.__version__,
+			# Base URL of the expenso-assistant service; empty when unset, which
+			# makes the Assistant tab show an "isn't configured" notice (P6-S6).
+			"assistant_url": frappe.conf.get("expenso_assistant_url") or "",
 		}
 	)

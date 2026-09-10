@@ -66,7 +66,11 @@
 						:key="`${entry.type}-${entry.name}`"
 						:data-test="entry.type === 'income' ? 'income-row' : 'expense-row'"
 						class="flex cursor-pointer items-center gap-3 rounded-2xl bg-white p-3 shadow-sm transition active:scale-[0.98]"
-						@click="entry.type === 'income' ? openEditIncome(entry) : openEdit(entry)"
+						@click="
+							entry.type === 'income'
+								? openEditIncome(entry)
+								: openEditExpense(entry)
+						"
 					>
 						<span
 							v-if="entry.type === 'income'"
@@ -111,85 +115,28 @@
 			</div>
 		</div>
 	</div>
-
-	<button
-		type="button"
-		data-test="fab"
-		aria-label="Add"
-		class="fixed bottom-20 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-accent-500 to-purple-600 text-2xl text-white shadow-lg shadow-blue-300 transition hover:scale-105 active:scale-90"
-		@click="openAdd"
-	>
-		+
-	</button>
-
-	<ExpenseSheet
-		v-if="sheetOpen && sheetType === 'expense'"
-		:expense="editingExpense"
-		@close="closeSheet"
-		@switch-mode="switchMode"
-	/>
-	<IncomeSheet
-		v-if="sheetOpen && sheetType === 'income'"
-		:income="editingIncome"
-		@close="closeSheet"
-		@switch-mode="switchMode"
-	/>
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { useMonthStore } from "@/stores/month";
 import { useExpenses } from "@/composables/useExpenses";
 import { useIncome } from "@/composables/useIncome";
 import { useFamily } from "@/composables/useFamily";
+import { useEntrySheet } from "@/composables/useEntrySheet";
 import { dateGroupLabel } from "@/utils/dateGroup";
 import { getCategoryVisual } from "@/utils/categoryStyle";
-import ExpenseSheet from "@/components/ExpenseSheet.vue";
-import IncomeSheet from "@/components/IncomeSheet.vue";
 import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
-const { expenses, loading: expensesLoading, reload: reloadExpenses } = useExpenses(monthStore);
-const { incomes, loading: incomeLoading, reload: reloadIncomes } = useIncome(monthStore);
+const { expenses, loading: expensesLoading } = useExpenses(monthStore);
+const { incomes, loading: incomeLoading } = useIncome(monthStore);
 const { familyName } = useFamily();
+// The Add/Edit sheet is global (App.vue); a row tap just opens it. After a save
+// the realtime socket events refresh the lists, so Feed no longer reloads here.
+const { openEditExpense, openEditIncome } = useEntrySheet();
 
 const loading = computed(() => expensesLoading.value || incomeLoading.value);
-
-const sheetOpen = ref(false);
-const sheetType = ref("expense");
-const editingExpense = ref(null);
-const editingIncome = ref(null);
-
-function openAdd() {
-	sheetType.value = "expense";
-	editingExpense.value = null;
-	editingIncome.value = null;
-	sheetOpen.value = true;
-}
-
-function openEdit(expense) {
-	sheetType.value = "expense";
-	editingExpense.value = expense;
-	sheetOpen.value = true;
-}
-
-function openEditIncome(income) {
-	sheetType.value = "income";
-	editingIncome.value = income;
-	sheetOpen.value = true;
-}
-
-function switchMode(mode) {
-	sheetType.value = mode;
-}
-
-function closeSheet() {
-	sheetOpen.value = false;
-	editingExpense.value = null;
-	editingIncome.value = null;
-	reloadExpenses();
-	reloadIncomes();
-}
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);

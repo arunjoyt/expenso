@@ -218,7 +218,7 @@ The `expenso-assistant` repo is a standalone service (structured like the siblin
 
 - **`tools.py`** — one module of typed async functions, the single tool definition (reads: `get_expenses`/`get_analytics`/`get_income`/`get_budgets`/`list_categories`/`list_sources`; writes: `create/update/delete_expense`, `create/update/delete_income`, `add_category`, `add_source`, `set_budget`). Each calls Frappe's REST API as the Member (bearer passthrough).
 - **LangGraph agent** — MIT framework; the Elastic-licensed `langgraph-api` server is not used. Two hand-rolled FastAPI endpoints serve it: `astream_events()` → SSE, and `/resume` → `Command(resume=…)`. Postgres checkpointer. **Binds the `tools.py` functions directly** — no MCP in the agent's path. Interactive turns bind read+write tools (writes go through a proposal node → `interrupt()` → confirm card); scheduled (proactive) runs bind read-only tools.
-- **FastMCP server (`/mcp`)** — registers the same `tools.py` functions for external ChatGPT/Claude connectors, with MCP elicitation on the writes. A **pure external adapter**, config-flag gated — disabling it does not affect the in-app Assistant.
+- **FastMCP server (`/mcp`)** — registers the same `tools.py` functions for external ChatGPT/Claude connectors, gating every write behind an SEP-2322 input-required confirmation (the `2026-07-28` MCP era replacement for server-initiated elicitation; the connector renders its own confirm UI). A **pure external adapter**, config-flag gated — disabling it does not affect the in-app Assistant.
 - **Auth** — validates the Frappe OAuth bearer, scopes the thread to the owning Member.
 - **Observability** — Langfuse v2, self-hosted, Postgres-only, loopback + SSH tunnel. Every trace is tagged `user_id` (Member) / `metadata.family` / `metadata.feature` / `session_id`, with generation cost attached explicitly. This is the only record of a call.
 - **Cost bounds** — per-run `recursion_limit` / tool-call / wall-clock caps (the runaway guard); per-Member daily caps (chat / receipt / write) counted from Langfuse, failing open if Langfuse is down. No app-level monthly spend cap — the OpenAI account's hard spend limit is the money backstop.
@@ -256,7 +256,7 @@ flowchart TB
         direction TB
         FastAPI["FastAPI — api/main.py<br/>/health · SSE run · /resume · /run/proactive"]
         Auth["Auth — validates Frappe OAuth bearer,<br/>scopes thread to the Member"]
-        MCPsrv["FastMCP server /mcp<br/>(external adapter, config-flag gated,<br/>MCP elicitation on writes)"]
+        MCPsrv["FastMCP server /mcp<br/>(external adapter, config-flag gated,<br/>SEP-2322 confirm on writes)"]
         Agent["LangGraph agent — agent/graph.py<br/>state graph · proposal node -> interrupt()<br/>interactive: read + write tools<br/>proactive: read-only tools<br/>caps: recursion / tool-call / wall-clock"]
         Tools["tools.py — one tool definition<br/>reads: get_expenses · get_analytics · get_income ·<br/>get_budgets · list_categories · list_sources<br/>writes: create/update/delete_expense ·<br/>create/update/delete_income · add_category ·<br/>add_source · set_budget"]
         FClient["frappe_client.py — thin REST client,<br/>bearer passthrough"]
@@ -286,7 +286,7 @@ flowchart TB
     Obs -->|"daily-cap counts"| LF
     LF --> PG
     Agent -->|"needs_confirmation -> confirm card"| PWA
-    MCPsrv -->|"elicitation -> connector's own confirm UI"| Ext
+    MCPsrv -->|"input-required -> connector's own confirm UI"| Ext
 ```
 
 ---

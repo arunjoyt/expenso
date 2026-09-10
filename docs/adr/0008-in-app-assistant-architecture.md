@@ -132,3 +132,17 @@ The 2026-09-09 design routed the co-located agent to its own FastMCP server via 
 The one accepted cost: the confirm-gate logic exists in two forms — a graph `interrupt` for in-app, MCP elicitation for connectors — but they are genuinely different surfaces with different UIs, and both call the same underlying write functions.
 
 Recorded in place for the same reason as the block above: pre-code, a direct refinement of "One tool definition, two consumers" and "Capabilities and the confirm step".
+
+---
+
+**Update (2026-09-10, P6-S3): the connector write-confirm is the SEP-2322 guard pattern, not server-initiated elicitation.**
+
+The MCP `2026-07-28` spec era (which FastMCP 4.x negotiates by default) **removed server-initiated elicitation** — a tool can no longer push a prompt to the client mid-call. The sanctioned replacement is the SEP-2322 **guard pattern**: on first invocation a write tool returns an `InputRequiredResult` ("confirm this change?"); the connector renders its own confirm UI, re-invokes the tool with the answer, and the tool reads `ctx.input_responses` before touching Frappe. `request_state` carries the proposed-action summary across the round-trip.
+
+- **The intent is unchanged** — every external-connector write is confirmed by the Member before it fires. Only the wire mechanism moved. Everywhere this ADR (and ARCHITECTURE / IMPLEMENTATION_PLAN / TEST_PLAN) says "MCP elicitation on the writes", read "SEP-2322 input-required confirmation".
+- **The in-app path is untouched** — it never used MCP; it raises LangGraph `interrupt()` from a proposal node (the block above).
+- **`langchain[mcp]` is no longer implied anywhere.** The agent binds `tools.py` directly (previous update); the FastMCP adapter registers the same functions and gates writes with the guard pattern. No beta MCP bridge in the product.
+- **Scope check still precedes the confirm round-trip** — a token missing `expenso:write` is rejected before the first `InputRequiredResult`.
+- If a connector only speaks a pre-`2026-07-28` era (classic `elicitation/create`), its writes degrade to "not supported"; reads are unaffected and `MCP_ENABLED=false` disables the adapter entirely. Revisit only if a connector we care about is stuck on the old era.
+
+Recorded in place: pre-cutover, a direct correction to "Capabilities and the confirm step" forced by an external spec change.

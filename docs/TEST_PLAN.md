@@ -757,12 +757,15 @@ No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 000
 |------|-----------|
 | `tools.py` read fn (`get_expenses`) called with a Member's bearer token | calls Frappe REST as that Member; returns only that Family's rows |
 | `tools.py` read fn called with a token for a different Family, crafted params | still scoped to the token's Family (Frappe `permission_query_conditions` enforce it, not the fn) |
-| FastMCP `create_expense` tool | issues an MCP elicitation request before any Frappe write |
-| Elicitation accepted | Frappe REST `create_expense` fires with `entry_method="connector"` |
-| Elicitation declined | no Frappe write |
-| Token missing the `expenso:write` scope calls a FastMCP write tool | rejected before elicitation |
+| FastMCP `create_expense` tool, first call | returns an SEP-2322 `InputRequiredResult` (confirm request), no Frappe write yet |
+| confirmation accepted (re-invoked with `confirm=true`) | Frappe REST `create_expense` fires with `entry_method="connector"` |
+| confirmation declined, or `confirm=false` | no Frappe write; tool returns `status="cancelled"` |
+| Token missing the `expenso:write` scope calls a FastMCP write tool | rejected before the confirm round-trip starts |
+| read tool via FastMCP | no confirm round-trip — returns straight away |
 | `MCP_ENABLED=false` | `/mcp` is not mounted; the agent's own endpoints and tool binding are unaffected |
-| the read fn set / write fn set exposed to the agent | read set has no write-capable fn; write set is exactly the D2 list |
+| the read fn set / write fn set exposed to the agent | read set has no write-capable fn; write set is exactly the D2 list (no `rename/delete_category`, no `rename/delete_source`) |
+| `FrappeTokenVerifier` against Frappe's RFC 7662 introspection | active token → `AccessToken` with its scopes; inactive/unreachable → `None` |
+| model/pricing constant (`cost_for`) | applies the `config.py` rate table per token class — cached input discounted, reasoning billed as output; unknown model → `None` |
 
 ---
 

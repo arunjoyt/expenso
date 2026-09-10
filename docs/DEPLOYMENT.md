@@ -13,7 +13,7 @@ Internet → Nginx (SSL termination, static frontend)
                     └── Langfuse v2 (loopback only — browse via SSH tunnel)
 ```
 
-`bench setup production` generates the Nginx config, systemd units, and wires up Let's Encrypt SSL for the Frappe app. The `expenso-assistant` stack is deployed separately (`docker compose up -d`) — see its section below.
+`bench setup production` generates the Nginx config, systemd units, and wires up Let's Encrypt SSL for the Frappe app. The `expenso-assistant` stack is deployed separately (`docker compose up -d`) **on the same VPS** as the Frappe bench — one box, deliberate (budget). See its section below for host-capacity notes.
 
 ---
 
@@ -122,6 +122,55 @@ A separate repo and a separate `docker-compose` stack, deployed alongside (not i
 
 **Cutover order (P6-S3 → P6-S4):** the connector is briefly unavailable between the old server being deleted and the new one being live. Sequence: stand up and verify the `expenso-assistant` FastMCP server (P6-S3) → then delete `expenso/mcp.py` and re-point the `OAuth Client` redirect URI (P6-S4).
 
+### Host capacity — co-located on the Frappe VPS
+
+The `expenso-assistant` stack runs on the **same** VPS as the Frappe bench — a
+Contabo Cloud VPS 4 (2026): **4 vCPU / 8 GB RAM / 96 GB disk**, shared with the
+Frappe stack that also serves `kido` and `flashcard` on `22logic.com`. A second
+box is out of scope (budget); ADR 0008's sizing ("two Members", proactive runs
+scheduled off-hours) is written for exactly this constraint.
+
+Baseline on that box (observed 2026-09-10, **Frappe stack only**): container RSS
+~1.5 GB, `free -m` `available` ~4.6 GB, swap 2 GB (~760 MB already touched at
+deploy peaks), disk 65/96 GB used — of which ~47 GB is stale pre-CD Docker
+images that will never be reused now that builds happen in CI.
+
+**Approach: deploy the full stack untuned first; tune only if it misbehaves.**
+The full ADR 0008 stack (`app` + `postgres` + `langfuse` + `nginx`) adds roughly
+0.9–1.5 GB resident, ~2 GB at peak (a chat run and a Langfuse trace flush at the
+same time). On paper that fits the ~4.6 GB headroom — confirm it in practice
+rather than pre-optimising.
+
+**Prerequisite before the first deploy** (disk hygiene, not tuning): reclaim the
+stale images so Langfuse's Postgres has room to grow within its retention
+window — `docker image prune -a` (keep the live `frappebench` tag + 1–2 recent
+as rollback points), then `docker builder prune -af`. Frees ~50 GB.
+
+**Watch for a week of normal use, plus one proactive-run window:**
+
+- `free -m` — `available` stays above ~300 MB; `Swap` `used` does **not** climb
+  during normal (non-deploy) operation.
+- `docker stats --no-stream` — no container pinned at a ceiling; Langfuse RSS
+  not growing unbounded day over day.
+- `journalctl -k | grep -i oom` — any OOM kill is an immediate escalation
+  trigger.
+- The off-hours proactive Insights run completes without restarting a container.
+
+**Escalation ladder** — apply in order, only as far as a tripped signal
+requires:
+
+1. Swap 2 GB → 4–6 GB; `vm.swappiness=10`.
+2. `mem_limit` on the three new containers (`app` 768m, `postgres` 384m,
+   `langfuse` 768m) — stops an assistant-side leak from OOM-killing the Frappe
+   stack.
+3. Cap Langfuse's Node heap: `NODE_OPTIONS=--max-old-space-size=512`.
+4. Tune Postgres small: `shared_buffers=128MB`, `work_mem=4MB`,
+   `max_connections=20`, `effective_cache_size=256MB`.
+5. Pin MariaDB `innodb_buffer_pool_size` ≈ 1.5 GB explicit, so it cannot expand
+   into the assistant's space.
+6. Sustained swap thrash under normal load after all of the above → 8 GB is
+   genuinely undersized; upgrade the Contabo plan.
+
 ---
 
 ## Verification Checklist
@@ -195,3 +244,5 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] WebSocket realtime refresh works over HTTPS
 - [ ] Frontend PWA is installable from the browser on Android and iOS
 - [ ] `expenso-assistant` stack survives a host reboot (`restart: unless-stopped`); both Postgres DBs are in the backup script
+- [ ] Stale pre-CD Docker images pruned before the assistant stack goes up (`docker image prune -a` + `docker builder prune -af`)
+- [ ] After the stack is live, a week of `free -m` / `docker stats` under normal load shows `available` stable above ~300 MB and **no** OOM kills (`journalctl -k | grep -i oom`) — otherwise start the capacity escalation ladder in the Assistant Service section

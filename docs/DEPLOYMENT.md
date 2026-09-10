@@ -108,7 +108,7 @@ The MCP server is reached by adding it as a connector inside a Member's own Chat
 
 ## Assistant Service (`expenso-assistant`) — Phase 6+
 
-A separate repo and a separate `docker-compose` stack, deployed alongside (not inside) the Frappe bench. See `docs/adr/0008-in-app-assistant-architecture.md`.
+A separate repo ([`arunjoyt/expenso-assistant`](https://github.com/arunjoyt/expenso-assistant), private) and a separate `docker-compose` stack, deployed alongside (not inside) the Frappe bench. See `docs/adr/0008-in-app-assistant-architecture.md`. The streak issues (P6-S3/S5/S7, P7-S1) are tracked in **this** repo; that repo's CI runs `ruff` + `pytest` via `uv`.
 
 **Stack:** `app` (one uvicorn process: FastAPI endpoints + the LangGraph agent, which binds the `tools.py` functions directly; the FastMCP server mounts at `/mcp` only when `MCP_ENABLED`) · `postgres` (LangGraph checkpointer **and** the Langfuse DB) · `langfuse` (pinned `langfuse/langfuse:2`, Postgres-only, bound to `127.0.0.1`) · `nginx` (TLS for the public `app` endpoint; the Langfuse UI is **not** exposed).
 

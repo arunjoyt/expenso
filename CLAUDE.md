@@ -25,17 +25,24 @@ git log --oneline -20             # recent commits for context — this is now t
 
 ## Commit Workflow
 
-**Commit directly to `develop` for every streak — no feature branches, no PRs.** Matches kido and flashcard's workflow.
+**Phases 1–5: commit directly to `develop` for every streak — no feature branches, no PRs.** Matches kido and flashcard's workflow.
+
+**Phases 6–7 (the Assistant): commit to the long-lived `phase-6-7` integration branch, not `develop`.** This is a multi-day build spanning two repos; `develop` must stay release-ready the whole time so a hotfix to the currently-deployed app can ship without dragging half-finished Assistant work with it. The `phase-6-7` branch is itself deployable — it may be tagged and tested in prod before it merges back. When Phases 6–7 are complete and verified, merge `phase-6-7` → `develop` and tag.
 
 ### Rules
 
-1. Work directly on `develop`; do not create a branch for streak work.
-2. Make sure `develop` is up to date (`git pull`) before starting a streak.
+1. Phase 1–5 streak work: on `develop`. Phase 6–7 streak work: on `phase-6-7`.
+2. Make sure the working branch is up to date (`git pull`) before starting a streak.
 3. Bump `__version__` in every commit (see above).
+4. **Hotfixes for the deployed app go on `develop`** (branch `hotfix/<x>` off the last `v*` tag if `develop` has drifted), then get cherry-picked onto `phase-6-7`.
+
+### Releasing
+
+Production deploys on a `v*` tag push (`.github/workflows/notify-deploy.yml` dispatches to the infra repo) — **not** on a push to `develop` or `phase-6-7`. Nothing reaches prod until a tag is cut.
 
 ### Cross-referencing on GitHub
 
-- **Commit → Issue**: include `Refs #<N>` or `Closes #<N>` in the commit message body when the commit addresses an open issue. Since `develop` is this repo's default branch, `Closes #<N>` auto-closes the issue as soon as the commit is pushed — no PR needed. `Refs` links without closing.
+- **Commit → Issue**: include `Refs #<N>` or `Closes #<N>` in the commit message body when the commit addresses an open issue. On `develop` (the default branch) `Closes #<N>` auto-closes on push. On `phase-6-7`, `Closes #<N>` only closes the issue when the branch merges to `develop` — until then use `Refs #<N>` for in-progress streaks and let the merge do the closing, or close the issue manually with the commit SHA once the streak is verified.
 - **Issue updates**: when posting a progress comment on an issue, include the commit SHA so the issue thread tells the full story.
 
 ---
@@ -43,7 +50,7 @@ git log --oneline -20             # recent commits for context — this is now t
 ## Workflow checklist (per streak)
 
 1. Check GitHub state: `gh issue list` + `git log --oneline -20`
-2. `git checkout develop && git pull`
+2. `git checkout <branch> && git pull` — `<branch>` is `phase-6-7` for Phase 6–7 streaks, `develop` otherwise
 3. Implement the streak **and** write all tests listed for it in `docs/TEST_PLAN.md`
 4. Run tests: `bench --site expenso1.test run-tests --app expenso`
 5. Run linter (auto-fixes in place, then re-run to confirm clean):
@@ -56,7 +63,7 @@ git log --oneline -20             # recent commits for context — this is now t
    > wrapped in `_("...")` (Frappe's translate function), e.g. `frappe.throw(_("msg"), exc)`.
    > Always add `from frappe import _` to any file that calls `frappe.throw/msgprint`
    > (ruff also flags `_` as undefined without the explicit import).
-6. Commit with `Refs #<streak-issue>` or `Closes #<streak-issue>` in each commit message body; bump `__version__`
-7. `git push origin develop`
+6. Commit with `Refs #<streak-issue>` (or `Closes #<streak-issue>` on `develop`) in each commit message body; bump `__version__`
+7. `git push origin <branch>`
 8. Once pushed, move on to the next streak per `docs/IMPLEMENTATION_PLAN.md`'s ordering (repeat from step 1), continuing into the next phase when the current one's streaks are all done.
 

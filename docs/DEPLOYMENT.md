@@ -75,7 +75,7 @@ Phase 6 additions on the Frappe side:
 - The whitelisted `expenso.assistant.auth.mint_assistant_token` endpoint mints short-lived `OAuth Bearer Token` rows for the logged-in Member (the frontend calls it; the token is passed to the service).
 - The scheduler **must be enabled** (`bench --site <site> enable-scheduler`) for proactive Insight runs (Phase 7) — the scheduled jobs mint per-Member read tokens and POST the `expenso-assistant` service. Keep these in an **off-hours slot**: a proactive run is a long batch graph and the `app` process also serves live chat streams.
 
-**Assistant service side:** configuration is env-driven (`config.py` reads it) — `OPENAI_API_KEY`, `OPENAI_MODEL` (+ its per-model `{input, cached_input, output}` rate table; the API returns tokens, the service computes cost), `FRAPPE_URL`, `LANGFUSE_*`, per-Member daily caps, `MCP_ENABLED`, Postgres DSN. There is no app-level monthly spend cap — **set a hard monthly spend limit on the OpenAI account dashboard** (Settings → Limits); that is the money backstop.
+**Assistant service side:** configuration is env-driven (`config.py` reads it) — `OPENAI_API_KEY`, `OPENAI_MODEL` (+ its per-model `{input, cached_input, output}` rate table; the API returns tokens, the service computes cost), `FRAPPE_URL`, `LANGFUSE_*`, `DAILY_CHAT_CAP`, `MAX_PROPOSED_WRITES_PER_TURN` (P6-S7 — the confirm-card batch cap that replaced the daily write cap), `MCP_ENABLED`, Postgres DSN. There is no app-level monthly spend cap — **set a hard monthly spend limit on the OpenAI account dashboard** (Settings → Limits); that is the money backstop.
 
 ---
 
@@ -116,7 +116,7 @@ A separate repo ([`arunjoyt/expenso-assistant`](https://github.com/arunjoyt/expe
 
 **Deploy:** on the VPS, `git pull && docker compose up -d --build` in the `expenso-assistant` checkout. `/health` must return green before the Frappe-side cutover (P6-S4) deletes `expenso/mcp.py`.
 
-**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `SERVICE_TIMEZONE` (the Family's tz — used for "today" in the daily caps and the agent's date reasoning), `RUN_RECURSION_LIMIT` / `RUN_MAX_TOOL_CALLS` / `RUN_WALL_CLOCK_SECONDS` (per-run runaway guard), per-Member daily caps, `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `ALLOWED_CORS_ORIGINS` (P6-S6 — comma-separated; the Frappe app's public origin, e.g. `https://<site>`, so the in-app Assistant tab can call `/chat` cross-origin), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
+**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `SERVICE_TIMEZONE` (the Family's tz — used for "today" in the daily caps and the agent's date reasoning), `RUN_RECURSION_LIMIT` / `RUN_MAX_TOOL_CALLS` / `RUN_WALL_CLOCK_SECONDS` (per-run runaway guard), `DAILY_CHAT_CAP` (per-Member, counted from Langfuse, fail-open), `MAX_PROPOSED_WRITES_PER_TURN` (P6-S7 — confirm-card batch cap; replaced the daily write cap), `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `ALLOWED_CORS_ORIGINS` (P6-S6 — comma-separated; the Frappe app's public origin, e.g. `https://<site>`, so the in-app Assistant tab can call `/chat` cross-origin), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
 
 **Frappe side (P6-S6):** set `expenso_assistant_url` in the site's `site_config.json` to the service's public base URL (e.g. `https://assistant.<site>`). The frontend reads it from the boot context (`window.assistant_url`); if unset, the Assistant tab shows an "isn't configured" notice rather than erroring.
 
@@ -230,10 +230,12 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] Ask "what did I spend on groceries in March" → step log streams (`event: step`), then the answer streams (`event: token`), then `event: done`; in Langfuse, one trace tagged `user_id=<member>`, `metadata.feature=chat` + a `feature:chat` tag, `session_id=<thread>`, with the generation cost recorded on it (no `metadata.family` — dropped in the P6-S5 grill)
 - [ ] Reload the chat → `GET /history` returns the turn; "Clear chat" (`DELETE /history`) empties it; a second Member's `/history` never shows the first Member's thread
 - [ ] Force a per-run cap (e.g. a low `RUN_WALL_CLOCK_SECONDS`) → the stream ends with `event: error`, and the failed turn leaves nothing in `/history`
-- [ ] Ask to add an expense → confirm card shows the concrete values; confirm → Expense created with `entry_method=assistant`, **no** "unreviewed external write" marker
-- [ ] Ask to recategorize several expenses → one batched confirm card lists every row; deselect one → only the rest are changed; cancel → nothing changes
-- [ ] Edit a target row from a second session before confirming → the write is rejected and the agent re-proposes with the new values
-- [ ] Hit a per-Member daily cap (chat / receipt / write) → refused with a clear message, no OpenAI call
+- [ ] Ask to add an expense → the stream ends with `event: needs_confirmation`; the confirm card shows the concrete values; confirm → Expense created with `entry_method=assistant`, **no** "unreviewed external write" marker; the follow-up answer streams on the `/resume` leg
+- [ ] Ask to recategorize several expenses → one batched confirm card lists every row (a diff per row); uncheck one → only the rest are changed; Cancel → nothing changes
+- [ ] Edit a target row from a second session before confirming → that row's write is rejected, the others still apply, and the agent re-proposes the rejected one with the new values (a second card)
+- [ ] Send a new chat message while a confirm card is open → the card is discarded (a transient step) and the new message is answered
+- [ ] Ask for more than `MAX_PROPOSED_WRITES_PER_TURN` changes at once → the card is capped and the agent offers to continue with the rest
+- [ ] Hit the per-Member daily **chat** cap → refused with a clear message, no OpenAI call
 - [ ] Stop the Langfuse container, then send a chat message → the daily-cap check fails open and the run proceeds (a warning is logged); per-run caps still bound it
 
 ### Phase 7 — Proactive & Reporting

@@ -868,24 +868,50 @@ _(F129/F133/F134 added beyond the original F121–F130; F131/F132 stay reserved 
 
 ### P6-S7 · `[A]`+`[FE]` Agent writes + confirm-card flow + concurrency guard
 
-**Integration / service tests**
+Decisions taken while implementing (grill 2026-09-10, recorded in ADR 0008's P6-S7 update):
+`route()` sends a message with any **write** tool-call to a `propose` node (reads still go
+to `tools`); `propose` raises `interrupt({actions:[…]})` — the real `tools.py` write fns
+never run inline; `/resume` body is `{decision:{selected:[id,…]}}` (empty = cancel) and
+`propose` **re-derives** the action list from the still-pending `tool_calls` + tool history;
+the diff's "before" and `if_modified_since` come from the `ToolMessage`s already in state
+(no re-read); a per-action `TimestampMismatchError` doesn't abort the batch; the daily
+*write* cap is dropped for `max_proposed_writes_per_turn` (25, local check); `/resume`
+opens its own `feature:chat` trace and the chat cap is not re-checked; `resume_turn` binds
+`entry_method="assistant"` and re-mints the token; wall-clock resets per SSE leg.
+
+**Integration / service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
 |------|-----------|
-| Write prompt → the proposal node raises `interrupt()` (no MCP elicitation on this path) → one batched confirm card | payload lists every proposed action with concrete values; updates show a before→after diff; no `tools.py` write fn has run yet |
-| Card confirmed → `/resume` | the graph calls the `tools.py` write fns for the approved set; each Frappe write fires with `entry_method="assistant"`, no `is_external_write` |
-| Card with one row deselected | only the selected rows are written |
-| Card cancelled | nothing is written |
-| Target row edited from a second session between the agent's read and the resume | write rejected via `if_modified_since`; the agent re-reads and re-proposes with the new values |
-| Multi-step: step 2 needs step 1's created row | two confirm cards in the turn, each batched for its step |
-| Per-Member daily write cap reached | write path refused with a clear message |
+| Write prompt, scripted model emits one `update_expense` call | `route()` goes to `propose`, not `tools`; the graph interrupts; `astream` ends the leg with `needs_confirmation`, no `done`; no `tools.py` write fn ran |
+| Read-only call still routes to `tools` | a message with only `get_expenses` calls never reaches `propose` (regression) |
+| `needs_confirmation` payload shape | `actions[]` — each `{id:"a1"…, tool, kind, entity, summary}`; `update` carries `changes:[{field,from,to}]` from the tool history; `create`/`delete` carry `values`; `name`/`if_modified_since` are **not** in the payload |
+| Target row not in the tool history | `propose` returns a `ToolMessage` nudge ("re-read … first"), does **not** interrupt |
+| Card confirmed → `POST /resume` `{selected:["a1","a2"]}` | the `tools.py` write fns run for a1+a2; each Frappe call carries `entry_method="assistant"`, no `is_external_write`, and `if_modified_since` = the value the agent read; the continuation streams `token` then `done` |
+| One action deselected | `{selected:["a1"]}` → only a1 is written; a2's original `tool_call` gets a "skipped by the member" `ToolMessage` |
+| Cancelled | `{selected:[]}` (and `{}`) → nothing is written; the model is told the member cancelled |
+| Per-action conflict | 3 actions, a2's target changed underneath (`TimestampMismatchError`) → a1+a3 applied, a2 → `ToolMessage` → model re-reads and re-proposes → a **second** `needs_confirmation` with the new current values |
+| `max_proposed_writes_per_turn` exceeded | model proposes 30 writes in one message → card carries the first 25; after resume a `ToolMessage` says 5 remain → model proposes them → second card |
+| Multi-step: step 2 needs step 1's row | model creates a Category (card 1), resumes, then proposes an Expense using it (card 2) — two cards in the one turn |
+| New `POST /chat` while an interrupt is pending | the pending interrupt is discarded (a transient `step` "Discarded the unconfirmed changes"), the new message proceeds; `/history` shows no orphaned proposal |
+| `POST /resume` with nothing pending | clean response (no 500, no write), same as the P6-S5 shell |
+| `tool_call_count` persists across the interrupt | a turn that used N-1 tool cycles before proposing hits `run_max_tool_calls` on the post-resume cycle → `error` `{code:"tool_cap"}` |
+| Resume accounting | `/resume` opens its own trace tagged `feature:chat`; `within_daily_chat_cap` is **not** called on the resume path |
+| `set_budget` kind | `update` when a budget row for that category/month is in the tool history, else `create`; `add_category`/`add_source` always `create`, no `if_modified_since` |
+| Read-only (proactive) graph | built without `WRITE_TOOLS`, `route()` never reaches `propose`; `interrupt` is unreachable |
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F131 | Confirm card | renders concrete rows and a before→after diff for edits; confirm / per-row deselect / cancel controls present |
-| F132 | Confirm / deselect / cancel | send the matching resume payload to the service |
+| F131 | `ConfirmCard` | renders each action's concrete `values` (create/delete) or `changes` before→after rows (update); a checkbox per action, checked by default; Confirm + Cancel present; goes read-only once `resume` starts |
+| F132 | Confirm / deselect / cancel | Confirm → `resume({selected:[checked ids]})`; unchecking a row drops its id; Cancel → `resume({selected:[]})` |
+| F135 | `useAssistant` parser | a `needs_confirmation` frame resolves `sendMessage`/`resume` with `{kind:"confirm", actions}` (vs `{kind:"message"}` on `done`) |
+| F136 | `useAssistant.resume` | `POST /resume` with the bearer and `{decision}` body; parses the continuation stream; a `done` commits the follow-up assistant message |
+| F137 | `Assistant.vue` confirm flow | a `needs_confirmation` turn renders `ConfirmCard` inline; Confirm drives `resume` and the streamed follow-up answer is appended; a second `needs_confirmation` replaces the card |
+| F138 | Token scope | the Assistant screen mints with `write=true` (P6-S7 raised it from read-only) |
+
+**Frappe-side:** the `if_modified_since` guard and `entry_method` plumbing shipped in P6-S1 — no new Frappe tests here.
 
 ---
 

@@ -178,3 +178,31 @@ Frontend mechanics settled here (were "resolved during implementation" open deta
 - **Token.** P6-S6 mints **read-only** (`mint_assistant_token(write=False)`); the `expenso:write` scope is added in P6-S7 with the confirm card. Minted lazily on first tab open, cached in composable module scope, re-minted on 401 or near-expiry.
 
 Recorded in place: pre-code, a direct reversal of the bubble/overlay presentation in "Terminology" and "Proactive Insights" and a resolution of the "Token lifetime" open detail. The agent/service architecture is unchanged.
+
+---
+
+**Update (2026-09-10, P6-S7): the write leg — confirm mechanics, and the daily write cap becomes a per-turn batch cap.**
+
+Building P6-S7 (agent writes + confirm card), these details of "Capabilities and the confirm step" were settled, and one decision from the "Cost bounds" section reversed.
+
+**Confirm mechanics (refinements, not reversals):**
+
+- **Interception is by tool-call kind.** The real `WRITE_TOOLS` are bound to the model (so it produces correctly-typed args). `route()` sends a message with **any** write tool-call to a new `propose` node; read-only calls still go to `tools`. The `propose` node gathers every write call in that message, raises `interrupt(payload)`, and on `Command(resume=…)` calls the `tools.py` write functions for the approved subset — one `ToolMessage` per original call (approved → result, deselected → "skipped by the member"). The system prompt tells the model to read targets first and put all writes for a request in one message with no reads mixed in.
+- **The diff's "before" comes from the tool history.** The `propose` node reads each `update`/`delete` target's current field values **and its `modified` timestamp** out of the `get_expenses`/`get_income`/`get_analytics` `ToolMessage`s already in state — it does not re-read. A target not present in history → a `ToolMessage` nudge ("re-read EXP-17 first"), no interrupt. So `if_modified_since` is always the value the agent actually saw, and an edit between the agent's read and the member's confirm is caught by `_guard_not_stale`.
+- **Payload / decision shapes.** Interrupt payload (and the `needs_confirmation` SSE data, and `ConfirmCard.vue` props): `{ actions: [{ id, tool, kind, entity, summary, changes | values }] }` — `id` is `a1`, `a2`… by proposal order; `kind` ∈ `create` / `update` / `delete`; `changes` is `[{field, from, to}]` for updates, `values` is the row for create/delete. `name` and `if_modified_since` stay server-side. Resume body: `{ decision: { selected: [id, …] } }`; an empty `selected` is cancel. The `propose` node **re-derives** the action list from the still-pending `tool_calls` + tool history on resume and filters by `selected` — no side table to keep in sync with the checkpoint.
+- **Conflicts are per-action and recoverable.** A `TimestampMismatchError` on one action does not abort the batch — the non-conflicting actions apply, the conflicted one comes back as a `ToolMessage`, and the model re-reads and re-proposes (a **second** `needs_confirmation` showing the new current values). A conflict is never a turn-killing `error` event.
+- **SSE.** An `interrupt` ends the `/chat` stream with `needs_confirmation` and **no** `done`. The payload is just `{actions}` — **no run id** (the "carrying the run id" phrasing in the "LangGraph framework" section above is superseded): the thread is 1:1 with the Member and derived server-side, so `/resume` resumes whatever interrupt is pending on that thread. `/resume` opens a fresh continuation stream (`step`/`token` → `done` or another `needs_confirmation`). A new `/chat` while an interrupt is pending **discards** it (a transient `step`, "Discarded the unconfirmed changes") and proceeds — the thread is linear; a new message means the member moved on. `/resume` with nothing pending is a clean no-op.
+- **Accounting across the interrupt.** `/resume` opens its own `feature:chat` trace (same `session_id`); the chat cap is **not** re-checked on resume; `tool_call_count` persists in `AgentState` across the interrupt (the `propose` node increments it once per executed batch); the wall-clock cap resets per SSE leg (member think-time is free); `resume_turn` binds `entry_method="assistant"`. **Token lifetime open detail (above) resolved:** `resume_turn` re-mints via the same lazy path as `stream_turn`, so a card that sits for an hour still resumes.
+- **`set_budget`** is `kind: "update"` when a budget row for that category/month is in the tool history, else `create`; `add_category` / `add_source` are always `create` (no `if_modified_since`).
+
+**The daily *assistant* write cap is dropped; a per-turn batch cap replaces it.**
+
+ADR 0008 listed per-Member daily caps as "chat / receipt / write". For the confirmed in-app path the write leg does not earn a daily total:
+
+- LLM spend is already bounded by the **chat cap** — every propose-card costs a turn, and turns are capped per day.
+- Every in-app write is **Member-confirmed** — a human saw the exact rows. A daily total would only ever bite a legitimate bulk recategorise.
+- What the chat cap does **not** bound is the **blast radius of a single confirmation** — one turn could propose "recategorise all 500 expenses", one card, one tap.
+
+So P6-S7 adds **`max_proposed_writes_per_turn`** (default 25): the `propose` node caps the card and tells the model to propose the rest in a follow-up (a second card). It is a **local check** — no Langfuse counting, nothing to keep fail-open. The `daily_write_cap` config key and the unwired `daily_receipt_cap` are removed from `config.py` (receipt caps, if wanted, are P7-S1's call). The connector's Frappe-side `CONNECTOR_DAILY_WRITE_CAP` is **unrelated and unchanged** — it backstops *unreviewed* external-connector writes, which never reach Langfuse.
+
+Recorded in place: pre-code, refining "Capabilities and the confirm step" and reversing the write leg of the "Cost bounds" daily-cap list.

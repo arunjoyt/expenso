@@ -20,6 +20,32 @@ Browser (PWA)
 Frappe scheduler ──(per-Member read token)──> expenso-assistant /run/proactive
 ```
 
+### Flow (not code structure)
+
+```mermaid
+flowchart TD
+    Member["Family Member"]
+    App["Expenso PWA<br/>Feed · Analytics · Budget · Settings"]
+    ChatUI["Assistant chat<br/>(in-app overlay)"]
+    Frappe["Frappe backend<br/>auth + ledger + realtime — system of record"]
+    Assistant["expenso-assistant service<br/>LangGraph agent + tools"]
+    LLM["OpenAI"]
+    Ext["External ChatGPT / Claude connectors"]
+
+    Member --> App
+    Member --> ChatUI
+    App -->|"read / write ledger"| Frappe
+    Frappe -->|"live refresh (WebSocket)"| App
+
+    ChatUI -->|"chat (SSE)"| Assistant
+    Assistant -->|"tool calls as the Member"| Frappe
+    Assistant --> LLM
+    Assistant -->|"proposed writes need confirmation"| ChatUI
+
+    Ext -->|"OAuth (read / write scopes)"| Assistant
+    Frappe -->|"scheduled proactive run"| Assistant
+```
+
 Frappe stays the OAuth **authorization server** and the system of record for the ledger. It holds **no** LLM dependency or key, and stores **nothing** about the Assistant. Conversation threads live in the service's Postgres; every LLM call and its cost live in Langfuse (there is no `LLM Call Log` DocType — ADR 0008's 2026-09-10 update). See `docs/adr/0008-in-app-assistant-architecture.md`.
 
 ---
@@ -197,6 +223,71 @@ The `expenso-assistant` repo is a standalone service (structured like the siblin
 - **Observability** — Langfuse v2, self-hosted, Postgres-only, loopback + SSH tunnel. Every trace is tagged `user_id` (Member) / `metadata.family` / `metadata.feature` / `session_id`, with generation cost attached explicitly. This is the only record of a call.
 - **Cost bounds** — per-run `recursion_limit` / tool-call / wall-clock caps (the runaway guard); per-Member daily caps (chat / receipt / write) counted from Langfuse, failing open if Langfuse is down. No app-level monthly spend cap — the OpenAI account's hard spend limit is the money backstop.
 - **One process, one event loop** — the `app` container runs the FastAPI endpoints + the agent + (optionally) the FastMCP adapter in one uvicorn. Fine at this scale, but proactive runs are scheduled **off-hours** so a tens-of-seconds batch graph can't stall a live chat SSE stream; grow into a separate worker before relaxing that.
+
+### Service internals — components, tools, and interactions
+
+At a glance:
+
+```mermaid
+flowchart LR
+    In["In-app chat · external connectors · scheduler"]
+    subgraph Svc["expenso-assistant"]
+        direction TB
+        Entry["FastAPI + FastMCP<br/>(entrypoints + auth)"]
+        Agent["LangGraph agent<br/>(confirm-gated writes)"]
+        Tools["tools.py<br/>(reads + writes)"]
+        Entry --> Agent --> Tools
+    end
+    In --> Entry
+    Agent <--> OpenAI
+    Tools -->|"as the Member"| Frappe["Frappe REST"]
+    Agent --> Obs["Langfuse + Postgres<br/>(traces, cost, threads)"]
+```
+
+Detail:
+
+```mermaid
+flowchart TB
+    PWA["Expenso PWA — Assistant chat"]
+    Ext["External ChatGPT / Claude connectors"]
+    Sched["Frappe scheduler"]
+
+    subgraph Svc["expenso-assistant service (one uvicorn process)"]
+        direction TB
+        FastAPI["FastAPI — api/main.py<br/>/health · SSE run · /resume · /run/proactive"]
+        Auth["Auth — validates Frappe OAuth bearer,<br/>scopes thread to the Member"]
+        MCPsrv["FastMCP server /mcp<br/>(external adapter, config-flag gated,<br/>MCP elicitation on writes)"]
+        Agent["LangGraph agent — agent/graph.py<br/>state graph · proposal node -> interrupt()<br/>interactive: read + write tools<br/>proactive: read-only tools<br/>caps: recursion / tool-call / wall-clock"]
+        Tools["tools.py — one tool definition<br/>reads: get_expenses · get_analytics · get_income ·<br/>get_budgets · list_categories · list_sources<br/>writes: create/update/delete_expense ·<br/>create/update/delete_income · add_category ·<br/>add_source · set_budget"]
+        FClient["frappe_client.py — thin REST client,<br/>bearer passthrough"]
+        Obs["observability.py — Langfuse trace tagging,<br/>explicit cost, daily-cap query"]
+    end
+
+    Frappe["Frappe REST /api/method/*<br/>(runs as the Member — all permission hooks apply)"]
+    OpenAI["OpenAI"]
+    PG[("Postgres<br/>LangGraph checkpointer — threads<br/>+ Langfuse DB")]
+    LF["Langfuse v2 (loopback only)"]
+
+    PWA -->|"SSE run + /resume"| FastAPI
+    Ext -->|"MCP"| MCPsrv
+    Sched -->|"per-Member read token"| FastAPI
+
+    FastAPI --> Auth
+    MCPsrv --> Auth
+    FastAPI -->|"astream_events / Command(resume)"| Agent
+    Agent -->|"binds directly"| Tools
+    MCPsrv -->|"registers same fns (no agent in this path)"| Tools
+    Agent <-->|"chat completions"| OpenAI
+    Agent -->|"checkpoint / resume"| PG
+    Agent --> Obs
+    Tools --> FClient
+    FClient -->|"bearer passthrough"| Frappe
+    Obs -->|"traces + cost"| LF
+    Obs -->|"daily-cap counts"| LF
+    LF --> PG
+    Agent -->|"needs_confirmation -> confirm card"| PWA
+    MCPsrv -->|"elicitation -> connector's own confirm UI"| Ext
+```
 
 ---
 

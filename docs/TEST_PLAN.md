@@ -832,22 +832,37 @@ endpoint+SSE shell (interrupt semantics are P6-S7); endpoints require
 
 ---
 
-### P6-S6 · `[FE]` Chat surface: bubble + overlay on every screen, global FAB (reuses #70)
+### P6-S6 · `[FE]` Assistant tab (Chat surface) + global FAB (reuses #70)
+
+Chat is the 5th bottom-nav tab, "Assistant" — a routed screen, not a floating bubble/overlay
+(ADR 0008's 2026-09-10 P6-S6 update). FAB extracted from `Feed.vue` into a global `Fab.vue`
+via a shared `useEntrySheet.js`. `useAssistant.js` mints a read-only token, consumes `POST /chat`
+as SSE via `fetch()` + `ReadableStream`, and tracks a dormant unread badge.
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F121 | Chat bubble | visible on Feed, Analytics, Budget, and Settings |
-| F122 | FAB | now visible on Analytics, Budget, and Settings too (was Feed-only); extracted from `Feed.vue` into a global `Fab.vue`; same Add Expense sheet behaviour everywhere |
-| F123 | Chat bubble + FAB together, any screen | both bottom-right; bubble stacked directly above the FAB with a clear gap (no overlapping tap targets) |
-| F124 | Tapping the bubble | opens the full-screen chat overlay |
-| F125 | Overlay on open | fetches an Assistant token, renders thread history from the service |
-| F126 | Sending a message | opens the SSE stream; humanized step log renders, then the answer streams in |
-| F127 | Failed stream | transient error notice; nothing appended to the thread |
-| F128 | Daily cap error from the service | warning shown; input remains usable |
-| F129 | "Clear chat" | confirmation prompt; confirmed → service call deletes the thread and the visible list empties; cancelled → no call |
-| F130 | Overlay closed | returns to the underlying screen; thread present on reopen; unread badge cleared once seen |
+| F121 | `BottomNav` | 5 tabs — Feed, Analytics, Budget, Settings, Assistant (icon 💬); the Assistant tab routes to `pages/Assistant.vue` |
+| F122 | FAB | rendered by a global `Fab.vue` on Feed, Analytics, Budget, and Settings — **not** on the Assistant screen; opens the Add Expense sheet with the Expense/Income switcher, same behaviour on every screen |
+| F123 | `useEntrySheet` | `openAdd` / `openEditExpense` / `openEditIncome` / `close` drive one shared sheet; the sheets are mounted once (in `App.vue`), not per-page; a Feed row tap opens the edit sheet through the composable |
+| F124 | Assistant screen on mount | calls `mint_assistant_token` (read scope), then `GET /history`; renders the returned user + assistant messages in order |
+| F125 | `window.assistant_url` unset | the screen shows an "Assistant isn't configured" notice; no token mint, no fetch |
+| F126 | Sending a message | POSTs `/chat` with the bearer header; `step` events render as a transient humanized log, `token` events stream into the answer bubble, `done` commits the final assistant message; the step log clears after `done` |
+| F127 | Failed stream (`error` event / network failure) | a transient error notice shows; nothing is appended to the visible thread; input stays usable |
+| F128 | `error` `{code:"daily_cap"}` from the service | the cap warning shows; the input remains usable |
+| F129 | Expired token → 401 on a request | `useAssistant` re-mints once and retries; a second 401 surfaces the error notice |
+| F130 | "Clear chat" | inline Confirm/Cancel (no `window.confirm`); confirmed → `DELETE /history`, the visible list empties, `lastSeenMessageId` resets; cancelled → no call |
+| F133 | Unread badge (dormant mechanism) | history whose newest message is an unseen `assistant` message → a dot on the Assistant nav tab; opening the tab sets `lastSeenMessageId` to the newest id → the dot clears; a message received in a live turn never self-badges |
+| F134 | `useAssistant` SSE parser | frames split on `\n\n`, partial frames buffered across chunks, `event:`/`data:` parsed, `token` text accumulated, `done` returns the committed text, `error` returns without committing |
+
+_(F129/F133/F134 added beyond the original F121–F130; F131/F132 stay reserved for P6-S7. The ~10-test estimate in Totals becomes ~13.)_
+
+**Service test (companion `[A]` change, `expenso-assistant` repo)**
+
+| Test | Assertion |
+|------|-----------|
+| CORS preflight | an `OPTIONS` to `/chat` from an allowed origin returns the `Access-Control-Allow-Origin` / `-Headers: authorization` / `-Methods` headers; a disallowed origin gets none |
 
 ---
 
@@ -900,7 +915,7 @@ endpoint+SSE shell (interrupt semantics are P6-S7); endpoints require
 |---|------|-----------|
 | I176 | `run_monthly_summary` scheduled job | mints a per-Member **read-scoped** bearer token and POSTs `/run/proactive` once per Member |
 | I177 | Proactive run | the graph binds the **read-only** toolset (no write tool available) |
-| I178 | Proactive run output | an Insight message is posted into that Member's thread; the bubble unread badge reflects it |
+| I178 | Proactive run output | an Insight message is posted into that Member's thread; the Assistant nav-tab unread badge reflects it |
 | I179 | `run_budget_drift` run twice with unchanged data | the second run posts no message (dedup marker) |
 | I180 | `run_budget_drift` when a Category crosses its threshold | exactly one new Insight |
 | I181 | Proactive run wants an action taken | it emits a pending proposal (queued confirm card), never a direct write |
@@ -940,6 +955,6 @@ Balance figure.
 
 Phases 1–3 and 5 (shipped): **~340** tests (backend unit + integration + frontend). Phase 4's
 count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **62** more:
-`[F]`/`[FE]` tests in this repo (P6-S1 ~8 I + P6-S2 ~7 I + P6-S4 ~3 I + P6-S6 ~10 F + P6-S7 ~2 F +
+`[F]`/`[FE]` tests in this repo (P6-S1 ~8 I + P6-S2 ~7 I + P6-S4 ~3 I + P6-S6 ~13 F + P6-S7 ~2 F +
 P7-S2 ~6 I; P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 /
 P6-S5 / P6-S7 / P7-S1). Exact numbered rows are finalised when each streak is implemented.

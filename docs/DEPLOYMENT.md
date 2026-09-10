@@ -116,7 +116,9 @@ A separate repo ([`arunjoyt/expenso-assistant`](https://github.com/arunjoyt/expe
 
 **Deploy:** on the VPS, `git pull && docker compose up -d --build` in the `expenso-assistant` checkout. `/health` must return green before the Frappe-side cutover (P6-S4) deletes `expenso/mcp.py`.
 
-**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `SERVICE_TIMEZONE` (the Family's tz — used for "today" in the daily caps and the agent's date reasoning), `RUN_RECURSION_LIMIT` / `RUN_MAX_TOOL_CALLS` / `RUN_WALL_CLOCK_SECONDS` (per-run runaway guard), per-Member daily caps, `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
+**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `SERVICE_TIMEZONE` (the Family's tz — used for "today" in the daily caps and the agent's date reasoning), `RUN_RECURSION_LIMIT` / `RUN_MAX_TOOL_CALLS` / `RUN_WALL_CLOCK_SECONDS` (per-run runaway guard), per-Member daily caps, `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `ALLOWED_CORS_ORIGINS` (P6-S6 — comma-separated; the Frappe app's public origin, e.g. `https://<site>`, so the in-app Assistant tab can call `/chat` cross-origin), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
+
+**Frappe side (P6-S6):** set `expenso_assistant_url` in the site's `site_config.json` to the service's public base URL (e.g. `https://assistant.<site>`). The frontend reads it from the boot context (`window.assistant_url`); if unset, the Assistant tab shows an "isn't configured" notice rather than erroring.
 
 **Browse Langfuse:** SSH tunnel — `ssh -L 3000:127.0.0.1:3000 <vps>`, then `http://localhost:3000`.
 
@@ -224,7 +226,7 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] A hard monthly spend limit is set on the OpenAI account dashboard
 - [ ] Re-add the MCP connector in Claude against the new service URL; OAuth consent completes; `get_expenses` returns the right Family's data; a `create_expense` lands with `is_external_write=1` and `entry_method=connector`
 - [ ] `expenso/mcp.py` deleted, `frappe-mcp` gone from `pyproject.toml`, a fresh `bench build`/install resolves cleanly
-- [ ] Chat bubble + FAB visible on Feed, Analytics, Budget, Settings — stacked with a gap
+- [ ] 5 nav tabs (Feed, Analytics, Budget, Settings, Assistant); FAB visible on all except Assistant
 - [ ] Ask "what did I spend on groceries in March" → step log streams (`event: step`), then the answer streams (`event: token`), then `event: done`; in Langfuse, one trace tagged `user_id=<member>`, `metadata.feature=chat` + a `feature:chat` tag, `session_id=<thread>`, with the generation cost recorded on it (no `metadata.family` — dropped in the P6-S5 grill)
 - [ ] Reload the chat → `GET /history` returns the turn; "Clear chat" (`DELETE /history`) empties it; a second Member's `/history` never shows the first Member's thread
 - [ ] Force a per-run cap (e.g. a low `RUN_WALL_CLOCK_SECONDS`) → the stream ends with `event: error`, and the failed turn leaves nothing in `/history`
@@ -236,7 +238,7 @@ Run these in order after deploying a new phase or to the production site.
 
 ### Phase 7 — Proactive & Reporting
 
-- [ ] `bench --site <site> enable-scheduler`; `bench execute expenso.assistant.proactive.run_monthly_summary` posts an Insight into each Member's thread; the bubble shows an unread badge
+- [ ] `bench --site <site> enable-scheduler`; `bench execute expenso.assistant.proactive.run_monthly_summary` posts an Insight into each Member's thread; the Assistant nav tab shows an unread badge
 - [ ] Run the budget-drift job twice with unchanged data → no duplicate warning
 - [ ] Attach a receipt photo in chat → Expense proposed in a confirm card; confirm → `entry_method=receipt`; the Langfuse trace (`feature=receipt`) carries `receipt_accuracy_*` scores; **no** Frappe `File`, no image on the Expense
 - [ ] Attach a non-receipt photo → the agent asks what to do, no proposal

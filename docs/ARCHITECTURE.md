@@ -26,7 +26,7 @@ Frappe scheduler ──(per-Member read token)──> expenso-assistant /run/pro
 flowchart TD
     Member["Family Member"]
     App["Expenso PWA<br/>Feed · Analytics · Budget · Settings"]
-    ChatUI["Assistant chat<br/>(in-app overlay)"]
+    ChatUI["Assistant chat<br/>(in-app tab)"]
     Frappe["Frappe backend<br/>auth + ledger + realtime — system of record"]
     Assistant["expenso-assistant service<br/>LangGraph agent + tools"]
     LLM["OpenAI"]
@@ -305,13 +305,13 @@ Pattern is identical for `Expense`, `Income`, and `Expenso Budget`:
 
 ## Navigation (mobile)
 
-Bottom navigation bar with 4 tabs + FAB + Chat bubble:
+Bottom navigation bar with 5 tabs + FAB:
 - **Feed tab** — home screen, unified monthly Expense + Income ledger
 - **Analytics tab** — monthly financial summary (read-only), including Budget Status per Category
 - **Budget tab** — set each Category's Budget amount for the selected month (editing only)
 - **Settings tab** — Category/Source list management, logout, version
-- **FAB** — bottom-right, on **every** screen (was Feed-only until the Assistant shipped); opens the Add Expense bottom sheet directly, with an Expense/Income tab switcher inside
-- **Chat bubble** — bottom-right, on every screen, stacked directly above the FAB with a gap; opens the full-screen Assistant chat overlay. Carries an unread badge when the Assistant has posted an unseen Insight or pending proposal
+- **Assistant tab** — the **Chat** surface (full-screen conversation with the Assistant); carries an unread badge when the Assistant has posted an unseen Insight or pending proposal. (Phase 6; replaced the 2026-09-09 floating chat bubble — see `docs/adr/0008-in-app-assistant-architecture.md`'s 2026-09-10 P6-S6 update.)
+- **FAB** — bottom-right, on every screen **except the Assistant tab** (was Feed-only until the Assistant shipped); opens the Add Expense bottom sheet directly, with an Expense/Income tab switcher inside
 
 No Family Switcher — a Member belongs to exactly one Family.
 
@@ -370,9 +370,12 @@ No Family Switcher — a Member belongs to exactly one Family.
 
 > A Member-facing "your usage this month" readout was planned here (old #73) and **dropped for v1** (ADR 0008's 2026-09-10 update) — Members don't pay per call, so it is informational-only and waits for real demand.
 
-### Chat overlay (Assistant) — Phase 6
-- Opened by tapping the Chat bubble (present on every screen, stacked above the FAB)
-- Full-screen overlay (not a bottom sheet) — scrolling message history + a pinned input
+### Assistant tab (Chat) — Phase 6
+- The 5th bottom-nav tab, labelled "Assistant" (icon 💬); routes to a full-screen screen (`pages/Assistant.vue`), not an overlay or bottom sheet — scrolling message history + a pinned input above the nav bar
+- Header carries the "Clear chat" action (inline Confirm/Cancel, matching the Settings delete pattern)
+- The service base URL reaches the frontend via Frappe's boot context (`window.assistant_url` from `frappe.conf.expenso_assistant_url`); when unset the tab shows an "Assistant isn't configured" notice
+- The frontend calls the service cross-origin (`https://assistant.<site>`): `useAssistant.js` mints a read-only bearer via `mint_assistant_token`, then consumes `POST /chat` as SSE via `fetch()` + `ReadableStream` (not `EventSource` — the bearer rides an `Authorization` header). Event vocabulary `step` / `token` / `done` / `error` per the service's `session.py`; the humanized step log is transient (shown while streaming, gone after `done`), and `GET /history` returns only user+assistant messages
+- The service requires a `CORSMiddleware` allowing the Frappe origin (companion change in the `expenso-assistant` repo)
 - One continuous private thread per Member; history read from the `expenso-assistant` service
 - Sending a message opens an SSE stream: a humanized step log ("Reading March expenses…") streams first, then the answer as prose
 - A proposed write appears as a **confirm card** — the literal row(s), a before→after diff for edits, confirm-all / deselect / cancel. Batched: one card per turn for the whole proposed action set
@@ -416,16 +419,18 @@ expenso/                            ← Frappe app root (git repo)
 │   (expenso/mcp.py + the frappe-mcp dependency — deleted in the P6-S4 cutover; the MCP server is now the FastMCP server in expenso-assistant)
 └── frontend/                       ← Vue 3 SPA
     ├── src/
-    │   ├── App.vue                 ← mounts BottomNav + Fab + ChatBubble globally
+    │   ├── App.vue                 ← mounts BottomNav + Fab + the Add/Edit sheets globally
     │   ├── pages/                  ← Login · Feed · Analytics · Budget · Settings
     │   ├── components/
     │   │   ├── ExpenseSheet.vue · IncomeSheet.vue · BudgetSheet.vue · MonthNav.vue
-    │   │   ├── Fab.vue             ← Phase 6: extracted from Feed.vue, global
-    │   │   ├── ChatBubble.vue · ChatOverlay.vue · ConfirmCard.vue   ← Phase 6
+    │   │   ├── Fab.vue             ← Phase 6: extracted from Feed.vue, global (all screens except Assistant)
+    │   │   ├── ConfirmCard.vue     ← Phase 6 (P6-S7)
+    │   ├── pages/Assistant.vue     ← Phase 6 (P6-S6): the Chat screen (5th nav tab)
     │   ├── stores/month.js
     │   ├── composables/
     │   │   ├── useExpenses.js · useCategories.js · useIncome.js · useBudgets.js
-    │   │   └── useAssistant.js     ← Phase 6: token mint + SSE stream handling
+    │   │   ├── useEntrySheet.js    ← Phase 6: shared Add/Edit sheet state (Fab.vue + Feed.vue)
+    │   │   └── useAssistant.js     ← Phase 6: token mint + fetch/SSE stream parsing + unread badge
     │   └── main.js
     └── vite.config.js · package.json
 
@@ -439,5 +444,5 @@ expenso-assistant/                  ← separate repo (arunjoyt/expenso-assistan
     ├── auth.py                    ← FrappeTokenVerifier (RFC 7662 introspection) + OAuthProxy (PKCE); (P6-S5) resolve_member() via frappe.auth.get_logged_user + the FastAPI auth dependency + thread_id derivation
     ├── mcp_server.py              ← FastMCP: registers tools.py fns for external connectors, SEP-2322 confirm on writes (mounted at /mcp iff MCP_ENABLED)
     ├── agent/                      ← P6-S5: graph.py (hand-rolled StateGraph, binds tools.py directly) · model.py (build_model — the one place OpenAI is named) · prompt.py (system prompt, today's date injected per-run) · observability.py (Langfuse trace + explicit-cost callback + daily-cap query)
-    └── api/main.py                ← FastAPI: /health · (P6-S5) POST /chat (SSE) · POST /resume · GET/DELETE /history · (P7-S2) /run/proactive · mounts mcp_server
+    └── api/main.py                ← FastAPI: /health · (P6-S5) POST /chat (SSE) · POST /resume · GET/DELETE /history · (P7-S2) /run/proactive · mounts mcp_server · (P6-S6) CORSMiddleware for the Frappe origin (allowed_cors_origins in config.py)
 ```

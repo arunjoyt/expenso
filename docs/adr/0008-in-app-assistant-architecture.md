@@ -63,7 +63,7 @@ Confirmed Assistant writes carry **no "unreviewed external write" marker** — t
 
 Scheduled runs get a **read-only toolset** — the write tools are not bound when the trigger is the scheduler. There is no confirm card when no human is present, so there must be no unattended mutation. Output is an **Insight** message in the Member's thread; a wanted action becomes a **pending proposal** — the same confirm card, queued for the Member's next visit.
 
-One run per Member (threads are private per-Member). v1 jobs, the first `scheduler_events` in `hooks.py`: a **monthly summary** (1st of the month, covering the month just ended) and a **budget-drift check** (weekly, current month, deduped against a "last warned" marker). Insights land as thread messages; the chat bubble carries an **unread badge** as the nudge — no push notifications (the GLOSSARY Realtime rule holds).
+One run per Member (threads are private per-Member). v1 jobs, the first `scheduler_events` in `hooks.py`: a **monthly summary** (1st of the month, covering the month just ended) and a **budget-drift check** (weekly, current month, deduped against a "last warned" marker). Insights land as thread messages; the Assistant nav tab carries an **unread badge** as the nudge — no push notifications (the GLOSSARY Realtime rule holds). (The badge was on a floating chat bubble in the 2026-09-09 design — see the 2026-09-10 P6-S6 update.)
 
 Both jobs are scheduled **off-hours** (e.g. early-morning cron), deliberately: a proactive run is a multi-step graph that can occupy the event loop for tens of seconds, and the single `app` process (one FastMCP server + agent, per the stack above) also serves the live chat SSE streams. Off-hours scheduling is the mitigation — at two Members the odds of a proactive run overlapping a live chat turn are already low, and the schedule removes them. If proactive volume ever grows, move these to a separate worker rather than relaxing the timing.
 
@@ -158,3 +158,23 @@ The MCP `2026-07-28` spec era (which FastMCP 4.x negotiates by default) **remove
 - If a connector only speaks a pre-`2026-07-28` era (classic `elicitation/create`), its writes degrade to "not supported"; reads are unaffected and `MCP_ENABLED=false` disables the adapter entirely. Revisit only if a connector we care about is stuck on the old era.
 
 Recorded in place: pre-cutover, a direct correction to "Capabilities and the confirm step" forced by an external spec change.
+
+---
+
+**Update (2026-09-10, P6-S6): the Chat surface is an "Assistant" tab, not a floating bubble.**
+
+The 2026-09-09 design put Chat behind a **floating bubble on every screen, stacked directly above the FAB**, opening a full-screen overlay. Building P6-S6, that was reconsidered and reversed.
+
+- **Chat is reached from a 5th bottom-nav tab, labelled "Assistant"** (Feed / Analytics / Budget / Settings / Assistant), routing to a normal screen — not an overlay, not a floating affordance. The bubble↔FAB stacking (z-index, "clear gap", one-thumb reach) was the fiddliest part of the streak for the least gain: the overlay was full-screen anyway, so the bubble's "invoke without leaving the screen" advantage was mostly notional. A routed screen is less code and removes a class of layout divergence.
+- **The tab is "Assistant", not "Chat".** It also hosts proactive **Insights** and pending proposals (the unread badge fires for those, P7-S2/P6-S7), so the tab represents the whole **Assistant** capability, not just the conversational surface. "Chat" stays the term for the thread mechanic — one continuous thread, "Clear chat" unchanged.
+- **The FAB becomes global on every screen *except* the Assistant tab** (which has its own pinned input). This narrows the GLOSSARY's "widens it to every screen".
+- **The unread badge moves from the bubble to the Assistant nav item.** Same rule (unseen Insight / pending proposal), same no-push-notifications constraint.
+
+Frontend mechanics settled here (were "resolved during implementation" open details):
+
+- **Service URL** reaches the frontend via Frappe's boot context — `window.assistant_url` from `frappe.conf.get("expenso_assistant_url")`; empty ⇒ the tab shows an "Assistant isn't configured" notice instead of erroring.
+- **Cross-origin.** The frontend (Frappe origin) calls the service (`https://assistant.<site>`, separate origin). The service gains a `CORSMiddleware` with a configurable `allowed_cors_origins` list — a companion change in the `expenso-assistant` repo, since P6-S6 is otherwise `[FE]`-only.
+- **SSE transport** is `fetch()` + `ReadableStream`, not `EventSource` — the bearer token rides an `Authorization` header, which `EventSource` cannot set. A ~30-line frame parser in `useAssistant.js`; no new dependency.
+- **Token.** P6-S6 mints **read-only** (`mint_assistant_token(write=False)`); the `expenso:write` scope is added in P6-S7 with the confirm card. Minted lazily on first tab open, cached in composable module scope, re-minted on 401 or near-expiry.
+
+Recorded in place: pre-code, a direct reversal of the bubble/overlay presentation in "Terminology" and "Proactive Insights" and a resolution of the "Token lifetime" open detail. The agent/service architecture is unchanged.

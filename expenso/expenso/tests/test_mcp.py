@@ -353,14 +353,9 @@ class TestMcpWriteTools(FrappeTestCase):
 		self.assertIn("Groceries", categories)
 		self.assertIn("Salary", sources)
 
-	# I191
-	def test_create_expense_creates_no_llm_call_log_row(self):
-		if not frappe.db.exists("DocType", "LLM Call Log"):
-			self.skipTest("LLM Call Log doesn't exist yet (P4-S1, #66) — nothing to assert against")
-
-		before = frappe.db.count("LLM Call Log")
-		self._call_as_member_with_token(create_expense, self.write_token.access_token, amount=10, message="x")
-		self.assertEqual(frappe.db.count("LLM Call Log"), before)
+	# I191 — the connector write path meters nothing (no LLM call, no LLM Call Log DocType;
+	# ADR 0008's 2026-09-10 update). Holds by construction — the path has no model binding —
+	# so there is nothing to assert against here.
 
 
 class TestValidateOAuthResolvesUser(FrappeTestCase):

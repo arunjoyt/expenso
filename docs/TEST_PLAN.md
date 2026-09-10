@@ -650,8 +650,8 @@ fields to Amount → Date → Notes → Category/Source, matching the new row hi
 
 **Folded into Phase 6/7 on 2026-09-09 ([ADR 0008](adr/0008-in-app-assistant-architecture.md)).** Receipt extraction is now a capability of the in-app Assistant (attach a photo in the Assistant chat), the vision call runs in the `expenso-assistant` service, and the image is never stored. The old streaks map as follows:
 
-- **P4-S1** (`extract_receipt` endpoint) → the `LLM Call Log` DocType survives in **P6-S1** below; the vision call itself moves to the service and is tested in the `expenso-assistant` repo (`build_extraction_prompt` / `parse_extraction_response` / `compute_cost` / `compute_field_accuracy` become service unit tests). #67's ExpenseSheet-scan tests (F110–F120) are dropped — there is no camera on the sheet.
-- **P4-S3 / P4-S4 / P4-S5** (admin + Member reporting) → **P7-S3** below, generalised to the `receipt` / `chat` / `insights` feature breakdown.
+- **P4-S1** (`extract_receipt` endpoint) → the vision call moves to the service and is tested in the `expenso-assistant` repo (`build_extraction_prompt` / `parse_extraction_response` / `compute_cost` / `compute_field_accuracy` become service unit tests). There is no `LLM Call Log` DocType (ADR 0008's 2026-09-10 update). #67's ExpenseSheet-scan tests (F110–F120) are dropped — there is no camera on the sheet.
+- **P4-S3 / P4-S4 / P4-S5** (admin + Member reporting) → dropped. Cost / latency / token visibility is the Langfuse dashboards; receipt accuracy is a Langfuse score. No Frappe reporting tests.
 
 ## Phase 5 — Chat via MCP connector (read + write)
 
@@ -699,7 +699,7 @@ See `docs/GLOSSARY.md` (Chat) and `docs/adr/0005-chat-via-mcp-connector-alternat
 | I188 | Member at the daily write cap calls either `create_expense` or `create_income` | raises `ValidationError`; no record created |
 | I189 | `create_expense`/`create_income` call with a token that has `expenso:read` but not `expenso:write` | rejected; no record created |
 | I190 | `list_categories()`/`list_sources()` via MCP | returns the calling Member's Family's Category/Source names, for the calling LLM to validate against before calling `create_expense`/`create_income` |
-| I191 | `create_expense`/`create_income` call | creates no `LLM Call Log` row (Expenso makes no OpenAI call for this path) |
+| I191 | `create_expense`/`create_income` via the connector | the write path invokes no LLM call and meters nothing — Expenso bills nothing for connector writes (holds by construction: the connector path has no model binding) |
 | I192 | `create_expense(amount, notes, message)` with distinct `notes` and `message` values | `notes` stored on the Expense's own `notes` field (same field a manual entry uses); `message` stored separately in `external_write_message` |
 | I193 | `create_income(amount, notes, message)` with distinct `notes` and `message` values | same `notes`/`external_write_message` separation as `create_expense` |
 
@@ -717,17 +717,14 @@ See `docs/GLOSSARY.md` (Chat) and `docs/adr/0005-chat-via-mcp-connector-alternat
 
 See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design. ADR 0004 is largely superseded. `[F]`/`[FE]` tests live in this repo; `[A]` tests live in the `expenso-assistant` repo's own suite and are sketched here for completeness.
 
-### P6-S1 · `[F]` `LLM Call Log` + `record_llm_call` + `entry_method` + `api.py` plumbing (reuses #66)
+### P6-S1 · `[F]` `entry_method` + `api.py` plumbing + concurrency guard (reuses #66)
+
+No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 0008's 2026-09-10 update. LLM call tracking is Langfuse traces only, tested in the `expenso-assistant` repo (P6-S5).
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I150 | `record_llm_call(feature="chat", tokens…, cost…, model…, latency_ms…)` by a Family Member | inserts one `LLM Call Log` row with those values and `member`/`family` set from the caller |
-| I151 | `record_llm_call(status="error", …)` | row still created with `status: "error"` and latency recorded |
-| I152 | Non-System-Manager user lists / reads `LLM Call Log` directly | returns no rows / raises `PermissionError` (only `record_llm_call` and `get_my_llm_cost` are Member-reachable) |
-| I153 | `get_my_llm_cost()` for a Member with `receipt` + `chat` + `insights` rows this month | returns `{total, receipt, chat, insights}` matching the sum of that Member's own rows only |
-| I154 | `get_my_llm_cost()` — another Member of the same Family has rows | response never includes the other Member's rows or any raw field |
 | I155 | `update_expense(name, …, if_modified_since=<stale timestamp>)` | raises a distinct conflict error; the row is not changed |
 | I156 | `update_expense(name, …, if_modified_since=<current timestamp>)` | write succeeds |
 | I157 | `create_expense(…, entry_method="assistant")` | Expense created with `entry_method="assistant"` and **no** `is_external_write` |
@@ -736,19 +733,20 @@ See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design. ADR
 
 ---
 
-### P6-S3 · `[A]` FastMCP server (Frappe-REST-backed, elicitation on writes)
+### P6-S3 · `[A]` `tools.py` + FastMCP external adapter (Frappe-REST-backed)
 
 **Service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
 |------|-----------|
-| A read tool (`get_expenses`) called with a Member's bearer token | calls Frappe REST as that Member; returns only that Family's rows |
-| A read tool called with a token for a different Family, crafted params | still scoped to the token's Family (Frappe `permission_query_conditions` enforce it, not the tool) |
-| A write tool (`create_expense`) | issues an MCP elicitation request before any Frappe write |
-| Elicitation accepted | Frappe REST `create_expense` fires with `entry_method` set by the caller path |
+| `tools.py` read fn (`get_expenses`) called with a Member's bearer token | calls Frappe REST as that Member; returns only that Family's rows |
+| `tools.py` read fn called with a token for a different Family, crafted params | still scoped to the token's Family (Frappe `permission_query_conditions` enforce it, not the fn) |
+| FastMCP `create_expense` tool | issues an MCP elicitation request before any Frappe write |
+| Elicitation accepted | Frappe REST `create_expense` fires with `entry_method="connector"` |
 | Elicitation declined | no Frappe write |
-| Token missing the `expenso:write` scope calls a write tool | rejected before elicitation |
-| `build_read_tool_schema()` / `build_write_tool_schema()` | read set has no write-capable tool; write set is exactly the D2 list |
+| Token missing the `expenso:write` scope calls a FastMCP write tool | rejected before elicitation |
+| `MCP_ENABLED=false` | `/mcp` is not mounted; the agent's own endpoints and tool binding are unaffected |
+| the read fn set / write fn set exposed to the agent | read set has no write-capable fn; write set is exactly the D2 list |
 
 ---
 
@@ -770,10 +768,12 @@ See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design. ADR
 
 | Test | Assertion |
 |------|-----------|
-| Agent given "what did I spend on groceries in March", OpenAI mock | calls the right read tool(s) with month/year params; returns a final answer; one `LLM Call Log` row written via `record_llm_call` with a `langfuse_trace_id` |
-| Per-run `recursion_limit` / max-tool-calls / wall-clock cap exceeded | run ends in error; caller sees an error; `LLM Call Log` row `status: "error"`; no partial answer emitted |
-| Monthly spend cap already exceeded (mock `LLM Call Log` sum) | run refused with "paused until next month"; OpenAI not called |
-| Per-Member daily chat cap reached | refused; OpenAI not called |
+| Agent binds tools | the graph's tool list is the `tools.py` read fns bound directly — no `langchain[mcp]` import, no MCP client in the agent path |
+| Agent given "what did I spend on groceries in March", OpenAI mock | calls the right read tool(s) with month/year params; returns a final answer; one Langfuse trace emitted, tagged `user_id`=<member> / `metadata.family` / `metadata.feature="chat"` / `session_id`=<thread>, generation cost set from the `config.py` pricing constant |
+| Cost is computed from returned token usage | mock OpenAI returns known `prompt_tokens` / `completion_tokens` (+ `cached_tokens`); the trace's cost = the `config.py` rate table applied per token class (cached input discounted, reasoning as output) — not Langfuse's own estimate |
+| Per-run `recursion_limit` / max-tool-calls / wall-clock cap exceeded | run ends in error; caller sees an error; no partial answer emitted |
+| Per-Member daily chat cap reached (mock Langfuse trace count) | refused; OpenAI not called |
+| Langfuse unreachable during the daily-cap check | the check fails open — the run proceeds; a warning is logged |
 | SSE stream | emits humanized step events then the streamed answer; ends with `done` |
 | Bearer token for Member A used to open Member B's thread | rejected by the custom auth |
 
@@ -804,8 +804,8 @@ See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design. ADR
 
 | Test | Assertion |
 |------|-----------|
-| Write prompt → one batched confirm card | payload lists every proposed action with concrete values; updates show a before→after diff |
-| Card confirmed | each Frappe write fires with `entry_method="assistant"`, no `is_external_write` |
+| Write prompt → the proposal node raises `interrupt()` (no MCP elicitation on this path) → one batched confirm card | payload lists every proposed action with concrete values; updates show a before→after diff; no `tools.py` write fn has run yet |
+| Card confirmed → `/resume` | the graph calls the `tools.py` write fns for the approved set; each Frappe write fires with `entry_method="assistant"`, no `is_external_write` |
 | Card with one row deselected | only the selected rows are written |
 | Card cancelled | nothing is written |
 | Target row edited from a second session between the agent's read and the resume | write rejected via `if_modified_since`; the agent re-reads and re-proposes with the new values |
@@ -830,9 +830,9 @@ See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design. ADR
 | Test | Assertion |
 |------|-----------|
 | A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values |
-| Confirm the proposal (unedited) | Expense created with `entry_method="receipt"`; `LLM Call Log` `feature: "receipt"` row has proposed values recorded, then confirmed values + per-field accuracy after save |
-| Edit the amount in the card, then confirm | Expense saved with the edited amount; that field marked corrected in the accuracy round-trip |
-| Reject the proposal | no Expense; `LLM Call Log` row stays unlinked (still valid for latency/cost) |
+| Confirm the proposal (unedited) | Expense created with `entry_method="receipt"`; the receipt trace gets `receipt_accuracy_{amount,date,category,notes}` scores = 1 (proposed matched confirmed) |
+| Edit the amount in the card, then confirm | Expense saved with the edited amount; `receipt_accuracy_amount` score = 0 on the trace, the other three = 1 |
+| Reject the proposal | no Expense; the trace still carries cost/latency but no accuracy scores |
 | Non-receipt photo | agent asks what the Member wants; no proposal |
 | After processing | no Frappe `File` created, no image on the Expense, no image in the thread — only a text marker |
 | Vision mock returns a category not in the Family list | proposed `category` is `None` |
@@ -854,23 +854,9 @@ See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design. ADR
 
 ---
 
-### P7-S3 · `[F]`+`[FE]` Consolidated LLM reporting (reuses #68; absorbs #71/#72/#73)
+### P7-S3 — removed
 
-**Integration tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| I182 | Workspace Number Cards | "Total Cost This Month" and "Avg Latency" over `LLM Call Log`, filterable/broken out by `feature` (`receipt`/`chat`/`insights`) |
-| I183 | Daily-trend Script Report | one aggregated row per day, broken out by `feature`; System-Manager-only |
-| I184 | "Cost by Member by Month" Script Report | one row per (Member, Month) with per-feature cost columns summing to the total; separate rows per Member |
-| I185 | `LLM Call Log` list view | a `langfuse_trace_id` link opens the corresponding Langfuse trace |
-
-**Frontend unit tests**
-
-| # | Test | Assertion |
-|---|------|-----------|
-| F142 | Settings "Your usage this month" | shows the total and a per-feature breakdown (receipt / chat / insights); own usage only |
-| F143 | Member with no usage this month | section shows $0, not hidden or broken |
+Consolidated LLM reporting (old #68, absorbing #71/#72/#73) is dropped by ADR 0008's 2026-09-10 update. There is no `LLM Call Log` DocType and no Frappe reporting surface — cost / latency / token visibility is the Langfuse dashboards (saved views set up in P6-S5), and receipt-extraction accuracy is a Langfuse score on the receipt trace. No Frappe integration or frontend tests here. The Member-facing "your usage this month" (#73) is deferred out of v1.
 
 ---
 
@@ -900,7 +886,7 @@ Balance figure.
 ## Totals
 
 Phases 1–3 and 5 (shipped): **~340** tests (backend unit + integration + frontend). Phase 4's
-count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **70** more:
-`[F]`/`[FE]` tests in this repo (P6-S1 ~9 I + P6-S4 ~3 I + P6-S6 ~10 F + P6-S7 ~2 F + P7-S2 ~6 I
-+ P7-S3 ~4 I / ~2 F), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 / P6-S5 /
+count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **55** more:
+`[F]`/`[FE]` tests in this repo (P6-S1 ~4 I + P6-S4 ~3 I + P6-S6 ~10 F + P6-S7 ~2 F + P7-S2 ~6 I;
+P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 / P6-S5 /
 P6-S7 / P7-S1). Exact numbered rows are finalised when each streak is implemented.

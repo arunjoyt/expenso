@@ -72,9 +72,9 @@ From Phase 6 onward, work spans two repos. Streaks are tagged with the repo they
 
 **Superseded 2026-09-09 ([ADR 0008](adr/0008-in-app-assistant-architecture.md)).** Receipt extraction is no longer a standalone feature — it is a capability of the in-app Assistant (attach a photo in the Assistant chat, the agent proposes an Expense in a confirm card). What remains of the old plan:
 
-- The `LLM Call Log` DocType → built in **P6-S1** (feature-agnostic; the Assistant writes its rows via a whitelisted `record_llm_call`). No `content` field (the trace lives in Langfuse). Adds a `langfuse_trace_id` column.
-- Receipt extraction itself → **P7-S1** (in `expenso-assistant`). No image storage anywhere; no camera on the Add Expense sheet. #67 dropped.
-- Admin cost/accuracy reporting, Cost-by-Member report, "your usage this month" → **P7-S3** (consolidated across receipt / chat / insights).
+- LLM call tracking → **not built in Frappe** (ADR 0008's 2026-09-10 update). Every call is a Langfuse trace tagged with the Member / Family / feature, cost attached explicitly. No `LLM Call Log` DocType, no `record_llm_call`.
+- Receipt extraction itself → **P7-S1** (in `expenso-assistant`). No image storage anywhere; no camera on the Add Expense sheet. #67 dropped. Extraction accuracy is a Langfuse score, not a Frappe row.
+- Admin cost/accuracy reporting → the **Langfuse dashboards** (folds into P6-S5). #68/#72 dropped. The Member-facing "your usage this month" (#73) is deferred out of v1.
 
 ---
 
@@ -97,17 +97,17 @@ Shipped: `Expense`/`Income` carry `is_external_write` + `external_write_message`
 
 **Goal:** A full-agentic in-app Assistant — answers questions, manages the ledger (every write confirmed by the Member), on every screen. Runs in the new `expenso-assistant` service. The external MCP connector is re-pointed at the same service. See `docs/adr/0008-in-app-assistant-architecture.md` for the settled design; ADR 0004 is largely superseded.
 
-**New:** `LLM Call Log` DocType (Frappe); `entry_method` field on Expense/Income; `expenso-assistant` repo (FastMCP server + LangGraph agent + Postgres + Langfuse v2). No `Chat Message` DocType — threads live in the LangGraph checkpointer's Postgres. `expenso/mcp.py` + the `frappe-mcp` dependency are deleted.
+**New:** `entry_method` field on Expense/Income; `expenso-assistant` repo (FastMCP server + LangGraph agent + Postgres + Langfuse v2). No `Chat Message` DocType — threads live in the LangGraph checkpointer's Postgres. **No `LLM Call Log` DocType** — call tracking is Langfuse traces only (ADR 0008's 2026-09-10 update). `expenso/mcp.py` + the `frappe-mcp` dependency are deleted.
 
 | Streak | Repo | Issue | Title |
 |--------|------|-------|-------|
-| P6-S1 | `[F]` | #66 (reused) | `LLM Call Log` DocType + `record_llm_call` + `get_my_llm_cost` + `entry_method` field & backfill patch + `list_categories`/`list_sources` in `api.py` + `if_modified_since` concurrency guard on `update_*`/`delete_*` |
+| P6-S1 | `[F]` | #66 (reused) | `entry_method` field on Expense/Income & backfill patch (`is_external_write=1` → `connector`, else `manual`) + `list_categories`/`list_sources` promoted into `api.py` + `if_modified_since` concurrency guard on `update_*`/`delete_*`. No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 0008's 2026-09-10 update. |
 | P6-S2 | `[F]` | #91 | Assistant token mint endpoint (`mint_assistant_token`) + proactive scheduler stubs in `hooks.py` |
-| P6-S3 | `[A]` | #92 | `expenso-assistant` repo scaffold (compose: app + Postgres + `langfuse:2` + nginx) + FastMCP server (mirrors today's `mcp.py` tools, Frappe-REST-backed, elicitation on every write) + PKCE auth for external connectors |
+| P6-S3 | `[A]` | #92 | `expenso-assistant` repo scaffold (compose: app + Postgres + `langfuse:2` + nginx) + `tools.py` (the one tool definition, ported from `mcp.py`, Frappe-REST-backed) + FastMCP server registering those fns for external connectors (elicitation on writes; `/mcp`, `MCP_ENABLED`-gated — a pure adapter) + PKCE auth |
 | P6-S4 | `[F]` | #93 | Cutover: delete `expenso/mcp.py`, drop `frappe-mcp` from `pyproject.toml`, update DEPLOYMENT, re-point `OAuth Client` redirect URI, close #86/#88/#89 |
-| P6-S5 | `[A]` | #94 | LangGraph agent (read-only): graph over the FastMCP read tools; Postgres checkpointer; hand-rolled `astream_events`→SSE + `/resume` FastAPI; Langfuse callback; per-run + monthly + daily cap checks; `record_llm_call` write-back |
+| P6-S5 | `[A]` | #94 | LangGraph agent (read-only): graph binding the `tools.py` read fns **directly** (no `langchain[mcp]`); Postgres checkpointer; hand-rolled `astream_events`→SSE + `/resume` FastAPI; Langfuse callback tagging every trace with `user_id`/`family`/`feature`/`session_id` + explicit cost (computed from a per-model `{input,cached_input,output}` rate table in `config.py` — the API returns tokens, not cost); per-run caps + per-Member daily caps queried from Langfuse (fail-open); saved Langfuse dashboards for cost/latency/feature |
 | P6-S6 | `[FE]` | #70 (reused) | Chat surface: bubble + full-screen overlay on every screen; FAB extracted from `Feed.vue` into a global `Fab.vue`; SSE step log + streamed prose; history from the thread; "Clear chat" |
-| P6-S7 | `[A]`+`[FE]` | #95 | Agent writes + confirm-card flow (elicitation → interrupt, batched per turn, before→after diff, deselect/cancel) + concurrency guard wired + `entry_method=assistant` + daily write cap |
+| P6-S7 | `[A]`+`[FE]` | #95 | Agent writes + confirm-card flow (proposal node raises `interrupt()` directly — no elicitation bridge; batched per turn, before→after diff, deselect/cancel; `/resume` executes the approved subset) + concurrency guard wired + `entry_method=assistant` + daily write cap. FastMCP adapter keeps elicitation for external connectors. |
 
 **Incremental value:** P6-S1→S4 restore the connector on the new stack and clear the `frappe-mcp` debt (no regression). P6-S5→S6 is the first milestone with new user value (read-only in-app Assistant). P6-S7 adds agentic ledger management.
 
@@ -115,10 +115,9 @@ Shipped: `Expense`/`Income` carry `is_external_write` + `external_write_message`
 
 ## Phase 7 — Proactive & Reporting
 
-**Goal:** Receipts in the Assistant, proactive Insights, and consolidated LLM cost/accuracy reporting.
+**Goal:** Receipts in the Assistant and proactive Insights. (Consolidated LLM reporting is gone — cost/latency/accuracy live in the Langfuse dashboards, set up in P6-S5. ADR 0008's 2026-09-10 update; #68/#72/#73 dropped or deferred.)
 
 | Streak | Repo | Issue | Title |
 |--------|------|-------|-------|
-| P7-S1 | `[A]`+`[FE]` | #96 | Receipts conversational: image attached in chat → multimodal agent → `create_expense` proposal in the confirm card; no image storage; `LLM Call Log` `feature:"receipt"` with proposed-vs-confirmed accuracy round-trip; `entry_method=receipt` |
-| P7-S2 | `[F]`+`[A]` | #97 | Proactive Insights: `hooks.py` `scheduler_events` (monthly 1st, weekly) → per-Member read-token → `/run/proactive` → read-only graph → Insight messages / pending proposals in the thread; drift dedup marker; frontend unread badge |
-| P7-S3 | `[F]`+`[FE]` | #68 (reused) | Consolidated reporting: Workspace Number Cards + daily-trend Script Report over `LLM Call Log` (feature breakdown); "Cost by Member by Month" report (#72); Settings "your usage this month" breakdown (#73); Desk→Langfuse jump via `langfuse_trace_id`. Absorbs #71. |
+| P7-S1 | `[A]`+`[FE]` | #96 | Receipts conversational: image attached in chat → multimodal agent → `create_expense` proposal in the confirm card; no image storage; `entry_method=receipt`; extraction accuracy posted as `receipt_accuracy_*` Langfuse scores (proposed-vs-confirmed diff at `/resume`) |
+| P7-S2 | `[F]`+`[A]` | #97 | Proactive Insights: `hooks.py` `scheduler_events` (monthly 1st, weekly — **off-hours slot** so a batch graph can't stall live chat streams) → per-Member read-token → `/run/proactive` → read-only graph → Insight messages / pending proposals in the thread; drift dedup marker; frontend unread badge |

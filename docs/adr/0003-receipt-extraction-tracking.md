@@ -1,5 +1,7 @@
 # Receipt extraction tracking: correction-based accuracy, dedicated log DocType
 
+> **Head note (2026-09-10):** the `LLM Call Log` DocType is **never built** — see the 2026-09-10 update block at the bottom. LLM call tracking is Langfuse traces only. The parts of this ADR that still stand: the correction-signal definition of "accuracy" and the rejection of hosted third-party observability. The body below is kept for the reasoning history.
+
 **Update:** the log DocType is named `LLM Call Log` (not `Receipt Extraction Log`), with a `feature` field (e.g. `"receipt_extraction"`), since a chat feature (issue #44) is planned and will also make OpenAI calls needing the same latency/token/cost tracking. This was a same-session refinement made before any code existed, so this ADR is updated in place rather than superseded — everything below applies to `LLM Call Log` filtered to `feature = "receipt_extraction"`. Accuracy fields remain specific to what a feature can measure; chat has no obvious equivalent to "did the Member correct this field" and isn't expected to populate them.
 
 Receipt extraction (ADR 0002) needed latency/token/cost/accuracy tracking for the OpenAI calls it makes. The hardest part is "accuracy" — there is no ground-truth oracle for a receipt (no second OCR pass, no manual grading pipeline). We defined accuracy as **field-level agreement between what the LLM extracted and what the Member actually saved**: for each of `amount`/`date`/`category`/`notes`, did the Member's final saved value match the extracted value. This is a correction signal, not a truth signal — it measures "how often did the Member need to fix this," which is the only thing observable without building a separate grading workflow. A reader should not assume "accuracy" here means verified-correct; it means unedited-by-the-Member.
@@ -28,3 +30,18 @@ The **model identifier itself** (`gpt-4o-mini`) is likewise a hardcoded literal 
 - **Model id + pricing constant moves** from a Frappe call function to the service's `config.py`. The "deploy is `git push`, config isn't git-tracked, code is" reasoning still holds — the service has its own `git push` deploy.
 - **Receipt accuracy — same metric, capture point relocated.** "Extracted" = the field values the service records on the `LLM Call Log` row before the Member confirms; "kept" = the values the Member confirms in the chat confirm card (after any inline edits). A rejected proposal leaves the row unlinked (still valid for latency/cost). The `null`-field exclusion and the exact-string `notes` rule are unchanged.
 - **New cost bounds** enforced in the service: per-run `recursion_limit` / max-tool-calls / wall-clock caps; a monthly spend cap (sum of this month's `LLM Call Log.cost`) hardcoded in service code; per-Member daily caps (chat / receipt / write) by counting today's rows. An error call still writes a row (`status: "error"`), matching this ADR's existing rule.
+
+---
+
+**Update (2026-09-10, [ADR 0008](0008-in-app-assistant-architecture.md) amendment): `LLM Call Log` is not built — the Assistant keeps no call-tracking store in Frappe.**
+
+The 2026-09-09 block above kept `LLM Call Log` as a Frappe DocType. Reversed before any Phase 6 code (full rationale in ADR 0008's 2026-09-10 update):
+
+- **No `LLM Call Log`, no `record_llm_call`, no `get_my_llm_cost`, no `langfuse_trace_id` round-trip.** Every call is recorded only as a Langfuse trace, tagged with the Member (`user_id`), Family, and `feature` (`chat` / `receipt` / `insights`), cost attached explicitly from the service's pricing constant.
+- **Admin cost/latency/token reporting is the Langfuse dashboards** — the Desk Number Cards and Script Reports (`#68`, `#72`) are dropped.
+- **Receipt extraction accuracy becomes a Langfuse score** on the receipt trace — at `/resume` the service diffs the proposed values (held in the checkpointed `interrupt` payload) against the confirmed values and posts `receipt_accuracy_*` scores. The metric definition — field-level agreement on `amount`/`date`/`category`/`notes`, `null`-field exclusion, exact-string `notes` — is unchanged; only the store changed. This retires the original two-request `extract_receipt` → `create_expense` row-linking mechanism described above.
+- **Caps:** per-run caps in-process; per-Member daily caps counted from Langfuse, failing open when Langfuse is unreachable. **No app-level monthly spend cap** — the OpenAI account's own hard spend limit is the backstop.
+- **The Member-facing "usage this month" is dropped for v1** (`#73` deferred).
+- **Per-token pricing and the model id** stay hardcoded constants, now in the service's `config.py` (as the 2026-09-09 block already moved them). The audit-trail-via-code-diff reasoning is unchanged — the service has its own `git push` deploy.
+
+The correction-signal definition of "accuracy" and the "no hosted third-party observability" stance are the parts of this ADR that still stand.

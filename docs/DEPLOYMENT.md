@@ -8,7 +8,7 @@ Internet → Nginx (SSL termination, static frontend)
               │     ├── MariaDB
               │     └── Redis (cache + realtime WebSocket)
               └── expenso-assistant  (Phase 6+, separate docker-compose stack)
-                    ├── app (FastMCP server + LangGraph agent, uvicorn)
+                    ├── app (uvicorn: FastAPI + LangGraph agent; FastMCP /mcp adapter iff MCP_ENABLED)
                     ├── Postgres (LangGraph checkpointer + Langfuse DB)
                     └── Langfuse v2 (loopback only — browse via SSH tunnel)
 ```
@@ -73,9 +73,9 @@ Nginx serves the built frontend bundle as static files at the site root. The Fra
 
 Phase 6 additions on the Frappe side:
 - The whitelisted `expenso.assistant.auth.mint_assistant_token` endpoint mints short-lived `OAuth Bearer Token` rows for the logged-in Member (the frontend calls it; the token is passed to the service).
-- The scheduler **must be enabled** (`bench --site <site> enable-scheduler`) for proactive Insight runs (Phase 7) — the scheduled jobs mint per-Member read tokens and POST the `expenso-assistant` service.
+- The scheduler **must be enabled** (`bench --site <site> enable-scheduler`) for proactive Insight runs (Phase 7) — the scheduled jobs mint per-Member read tokens and POST the `expenso-assistant` service. Keep these in an **off-hours slot**: a proactive run is a long batch graph and the `app` process also serves live chat streams.
 
-**Assistant service side:** configuration is env-driven (`config.py` reads it) — `OPENAI_API_KEY`, `OPENAI_MODEL` (+ its pricing constant), `FRAPPE_URL`, `LANGFUSE_*`, `MONTHLY_SPEND_CAP`, per-Member daily caps, Postgres DSN.
+**Assistant service side:** configuration is env-driven (`config.py` reads it) — `OPENAI_API_KEY`, `OPENAI_MODEL` (+ its per-model `{input, cached_input, output}` rate table; the API returns tokens, the service computes cost), `FRAPPE_URL`, `LANGFUSE_*`, per-Member daily caps, `MCP_ENABLED`, Postgres DSN. There is no app-level monthly spend cap — **set a hard monthly spend limit on the OpenAI account dashboard** (Settings → Limits); that is the money backstop.
 
 ---
 
@@ -110,11 +110,11 @@ The MCP server is reached by adding it as a connector inside a Member's own Chat
 
 A separate repo and a separate `docker-compose` stack, deployed alongside (not inside) the Frappe bench. See `docs/adr/0008-in-app-assistant-architecture.md`.
 
-**Stack:** `app` (FastMCP server + LangGraph agent, uvicorn) · `postgres` (LangGraph checkpointer **and** the Langfuse DB) · `langfuse` (pinned `langfuse/langfuse:2`, Postgres-only, bound to `127.0.0.1`) · `nginx` (TLS for the public `app` endpoint; the Langfuse UI is **not** exposed).
+**Stack:** `app` (one uvicorn process: FastAPI endpoints + the LangGraph agent, which binds the `tools.py` functions directly; the FastMCP server mounts at `/mcp` only when `MCP_ENABLED`) · `postgres` (LangGraph checkpointer **and** the Langfuse DB) · `langfuse` (pinned `langfuse/langfuse:2`, Postgres-only, bound to `127.0.0.1`) · `nginx` (TLS for the public `app` endpoint; the Langfuse UI is **not** exposed).
 
 **Deploy:** on the VPS, `git pull && docker compose up -d --build` in the `expenso-assistant` checkout. `/health` must return green before the Frappe-side cutover (P6-S4) deletes `expenso/mcp.py`.
 
-**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `MONTHLY_SPEND_CAP`, daily caps, `POSTGRES_*`.
+**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, per-Member daily caps, `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
 
 **Browse Langfuse:** SSH tunnel — `ssh -L 3000:127.0.0.1:3000 <vps>`, then `http://localhost:3000`.
 
@@ -167,24 +167,26 @@ Run these in order after deploying a new phase or to the production site.
 
 ### Phase 6 — Assistant core
 
-- [ ] `bench --site <site> migrate` after the `LLM Call Log` DocType + `entry_method` field + backfill patch
+- [ ] `bench --site <site> migrate` after the `entry_method` field + backfill patch (existing `is_external_write=1` rows → `connector`, the rest → `manual`)
 - [ ] `expenso-assistant` stack up; `/health` green; Langfuse reachable via SSH tunnel
+- [ ] A hard monthly spend limit is set on the OpenAI account dashboard
 - [ ] Re-add the MCP connector in Claude against the new service URL; OAuth consent completes; `get_expenses` returns the right Family's data; a `create_expense` lands with `is_external_write=1` and `entry_method=connector`
 - [ ] `expenso/mcp.py` deleted, `frappe-mcp` gone from `pyproject.toml`, a fresh `bench build`/install resolves cleanly
 - [ ] Chat bubble + FAB visible on Feed, Analytics, Budget, Settings — stacked with a gap
-- [ ] Ask "what did I spend on groceries in March" → step log streams, then the answer; one `LLM Call Log` row (`feature: chat`) with a `langfuse_trace_id` that opens in Langfuse
+- [ ] Ask "what did I spend on groceries in March" → step log streams, then the answer; in Langfuse, one trace tagged `user_id=<member>`, `feature=chat`, `session_id=<thread>`, with the generation cost recorded
 - [ ] Ask to add an expense → confirm card shows the concrete values; confirm → Expense created with `entry_method=assistant`, **no** "unreviewed external write" marker
 - [ ] Ask to recategorize several expenses → one batched confirm card lists every row; deselect one → only the rest are changed; cancel → nothing changes
 - [ ] Edit a target row from a second session before confirming → the write is rejected and the agent re-proposes with the new values
-- [ ] Seed `LLM Call Log` past `MONTHLY_SPEND_CAP` → the Assistant returns "paused until next month"; hit a per-Member daily cap → refused with a clear message, no OpenAI call
+- [ ] Hit a per-Member daily cap (chat / receipt / write) → refused with a clear message, no OpenAI call
+- [ ] Stop the Langfuse container, then send a chat message → the daily-cap check fails open and the run proceeds (a warning is logged); per-run caps still bound it
 
 ### Phase 7 — Proactive & Reporting
 
 - [ ] `bench --site <site> enable-scheduler`; `bench execute expenso.assistant.proactive.run_monthly_summary` posts an Insight into each Member's thread; the bubble shows an unread badge
 - [ ] Run the budget-drift job twice with unchanged data → no duplicate warning
-- [ ] Attach a receipt photo in chat → Expense proposed in a confirm card; confirm → `entry_method=receipt`, `LLM Call Log` `feature: receipt` with per-field accuracy; **no** Frappe `File`, no image on the Expense
+- [ ] Attach a receipt photo in chat → Expense proposed in a confirm card; confirm → `entry_method=receipt`; the Langfuse trace (`feature=receipt`) carries `receipt_accuracy_*` scores; **no** Frappe `File`, no image on the Expense
 - [ ] Attach a non-receipt photo → the agent asks what to do, no proposal
-- [ ] Workspace Number Cards + daily-trend report show the feature breakdown; Settings "your usage this month" shows receipt/chat/insights
+- [ ] Langfuse dashboards show cost / latency / token use broken out by `feature`; receipt traces carry the accuracy scores
 
 ### Production (all phases)
 

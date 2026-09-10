@@ -45,7 +45,7 @@ _Avoid_: Budgets, Spending, Caps
 **FAB (Floating Action Button)**: The persistent primary action button that opens the Add Expense sheet by default; an Expense/Income tab switcher inside the sheet reaches Add Income without a second tap on the FAB. Sits bottom-right. Visible on Feed only until the Assistant ships, which widens it to every screen; from then on the **Chat** bubble stacks directly above it in the same corner, both within single-hand thumb reach.
 _Avoid_: Add button, create button
 
-**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here. It has a "Your usage this month" section showing the logged-in Member's own LLM cost for the current month, broken down by feature (receipt, chat, insights) — their own usage only, never another Member's or the Family's total. The external MCP connector makes no call Expenso pays for, so it never appears here.
+**Settings**: A bottom-nav screen, alongside Feed, Analytics, and Budget. It is the primary surface for renaming or deleting Categories (Phase 1) and Sources (Phase 2); adding a new Category/Source can also be done here, or inline from the Add Expense/Income sheet without leaving it. Budget amounts are managed on the Budget screen, not here. (A "Your usage this month" LLM-cost readout was planned here and dropped for v1 — see `docs/adr/0008-in-app-assistant-architecture.md`.)
 _Avoid_: Profile, preferences, configuration
 
 ---

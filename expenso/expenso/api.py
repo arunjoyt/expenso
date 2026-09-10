@@ -1,18 +1,80 @@
 import frappe
 from frappe import _
-from frappe.utils import cint, get_datetime, get_first_day, get_last_day
+from frappe.utils import add_to_date, cint, get_datetime, get_first_day, get_last_day, today
 
 from expenso.expenso.doctype.expenso_budget.expenso_budget import compute_budget_status
-from expenso.expenso.permissions import get_user_family
+from expenso.expenso.permissions import (
+	READ_SCOPE,
+	WRITE_SCOPE,
+	get_user_family,
+	require_oauth_scope,
+)
 
 # Provenance of a ledger row, orthogonal to `is_external_write`. The frontend
-# and the in-app Assistant only ever set `manual` / `assistant` / `receipt`;
-# `connector` is set on the external-connector write path (see expenso/mcp.py).
+# and the in-app Assistant set `manual` / `assistant` / `receipt`; `connector`
+# is set by the `expenso-assistant` FastMCP adapter on an external-connector
+# write, and is the only value that also flags the row "unreviewed".
 ENTRY_METHODS = ("manual", "assistant", "connector", "receipt")
+
+# Combined create_expense + create_income cap per Member per day for connector
+# (unreviewed) writes — bounds unreviewed-write volume (ADR 0006). See #90 about
+# moving this out of hardcoded code.
+CONNECTOR_DAILY_WRITE_CAP = 100
 
 
 def _resolve_entry_method(value: str | None) -> str:
 	return value if value in ENTRY_METHODS else "manual"
+
+
+def _resolve_family_ref(doctype: str, label_field: str, value: str | None, family: str) -> str | None:
+	"""Resolve `value` to a `doctype` record name within `family`.
+
+	Accepts either the record name or its label, case-insensitively — the
+	frontend passes the name, an LLM-driven write passes the label. Never
+	auto-creates: an unresolvable value becomes None (ADR 0006).
+	"""
+	if not value:
+		return None
+	if frappe.db.exists(doctype, {"name": value, "family": family}):
+		return value
+	target = value.strip().lower()
+	for row in frappe.get_all(doctype, filters={"family": family}, fields=["name", label_field]):
+		if (row.get(label_field) or "").strip().lower() == target:
+			return row["name"]
+	return None
+
+
+def _todays_connector_write_count(user: str) -> int:
+	day_start = get_datetime(today())
+	next_day = add_to_date(day_start, days=1)
+	return sum(
+		frappe.db.count(
+			doctype,
+			{
+				"owner": user,
+				"is_external_write": 1,
+				"creation": ["between", [day_start, next_day]],
+			},
+		)
+		for doctype in ("Expense", "Income")
+	)
+
+
+def _connector_write_fields(entry_method: str, external_message: str | None) -> dict:
+	"""Marker + audit text for a connector write, gated by the daily cap.
+
+	Connector writes are unreviewed (ADR 0006): they carry the visible
+	"unreviewed external write" marker and store the caller's original request
+	text for audit, separate from `notes`. Nothing else sets `is_external_write`.
+	"""
+	if entry_method != "connector":
+		return {}
+	if _todays_connector_write_count(frappe.session.user) >= CONNECTOR_DAILY_WRITE_CAP:
+		frappe.throw(
+			_("Daily limit for connector-created entries reached. Try again tomorrow."),
+			frappe.ValidationError,
+		)
+	return {"is_external_write": 1, "external_write_message": external_message}
 
 
 def _guard_not_stale(doc, if_modified_since: str | None):
@@ -33,6 +95,7 @@ def _guard_not_stale(doc, if_modified_since: str | None):
 
 
 @frappe.whitelist()
+@require_oauth_scope(READ_SCOPE)
 def get_expenses(month: int, year: int):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -72,26 +135,30 @@ def _publish_family_event(event: str, family: str, doc_name: str):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def create_expense(
 	amount: float,
 	date: str | None = None,
 	category: str | None = None,
 	notes: str | None = None,
 	entry_method: str | None = None,
+	external_message: str | None = None,
 ):
 	family = get_user_family(frappe.session.user)
 	if not family:
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
 
+	entry_method = _resolve_entry_method(entry_method)
 	doc = frappe.get_doc(
 		{
 			"doctype": "Expense",
 			"amount": amount,
 			"date": date,
-			"category": category,
+			"category": _resolve_family_ref("Category", "category_name", category, family),
 			"notes": notes,
 			"family": family,
-			"entry_method": _resolve_entry_method(entry_method),
+			"entry_method": entry_method,
+			**_connector_write_fields(entry_method, external_message),
 		}
 	).insert(ignore_permissions=True)
 
@@ -100,6 +167,7 @@ def create_expense(
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def update_expense(
 	name: str,
 	amount: float | None = None,
@@ -116,7 +184,7 @@ def update_expense(
 		doc.amount = amount
 	if date is not None:
 		doc.date = date
-	doc.category = category
+	doc.category = _resolve_family_ref("Category", "category_name", category, doc.family)
 	doc.notes = notes
 
 	doc.save(ignore_permissions=True)
@@ -126,6 +194,7 @@ def update_expense(
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def delete_expense(name: str, if_modified_since: str | None = None):
 	doc = frappe.get_doc("Expense", name)
 	doc.check_permission("delete")
@@ -271,6 +340,7 @@ def compute_analytics(family: str, month: int, year: int):
 
 
 @frappe.whitelist()
+@require_oauth_scope(READ_SCOPE)
 def get_analytics(month: int, year: int):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -280,6 +350,7 @@ def get_analytics(month: int, year: int):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def add_category(name: str):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -295,6 +366,7 @@ def add_category(name: str):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def rename_category(name: str, new_name: str):
 	doc = frappe.get_doc("Category", name)
 	doc.check_permission("write")
@@ -305,6 +377,7 @@ def rename_category(name: str, new_name: str):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def delete_category(name: str):
 	doc = frappe.get_doc("Category", name)
 	doc.check_permission("delete")
@@ -327,6 +400,7 @@ def get_family_name():
 
 
 @frappe.whitelist()
+@require_oauth_scope(READ_SCOPE)
 def list_categories():
 	"""The calling Member's Family's Category names.
 
@@ -342,6 +416,7 @@ def list_categories():
 
 
 @frappe.whitelist()
+@require_oauth_scope(READ_SCOPE)
 def list_sources():
 	"""The calling Member's Family's Source names.
 
@@ -357,6 +432,7 @@ def list_sources():
 
 
 @frappe.whitelist()
+@require_oauth_scope(READ_SCOPE)
 def get_income(month: int, year: int):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -388,26 +464,30 @@ def get_income(month: int, year: int):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def create_income(
 	amount: float,
 	date: str | None = None,
 	source: str | None = None,
 	notes: str | None = None,
 	entry_method: str | None = None,
+	external_message: str | None = None,
 ):
 	family = get_user_family(frappe.session.user)
 	if not family:
 		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
 
+	entry_method = _resolve_entry_method(entry_method)
 	doc = frappe.get_doc(
 		{
 			"doctype": "Income",
 			"amount": amount,
 			"date": date,
-			"source": source,
+			"source": _resolve_family_ref("Source", "source_name", source, family),
 			"notes": notes,
 			"family": family,
-			"entry_method": _resolve_entry_method(entry_method),
+			"entry_method": entry_method,
+			**_connector_write_fields(entry_method, external_message),
 		}
 	).insert(ignore_permissions=True)
 
@@ -416,6 +496,7 @@ def create_income(
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def update_income(
 	name: str,
 	amount: float | None = None,
@@ -432,7 +513,7 @@ def update_income(
 		doc.amount = amount
 	if date is not None:
 		doc.date = date
-	doc.source = source
+	doc.source = _resolve_family_ref("Source", "source_name", source, doc.family)
 	doc.notes = notes
 
 	doc.save(ignore_permissions=True)
@@ -442,6 +523,7 @@ def update_income(
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def delete_income(name: str, if_modified_since: str | None = None):
 	doc = frappe.get_doc("Income", name)
 	doc.check_permission("delete")
@@ -454,6 +536,7 @@ def delete_income(name: str, if_modified_since: str | None = None):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def add_source(name: str):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -469,6 +552,7 @@ def add_source(name: str):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def rename_source(name: str, new_name: str):
 	doc = frappe.get_doc("Source", name)
 	doc.check_permission("write")
@@ -479,6 +563,7 @@ def rename_source(name: str, new_name: str):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def delete_source(name: str):
 	doc = frappe.get_doc("Source", name)
 	doc.check_permission("delete")
@@ -487,6 +572,7 @@ def delete_source(name: str):
 
 
 @frappe.whitelist()
+@require_oauth_scope(READ_SCOPE)
 def get_budgets(month: int, year: int):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -532,6 +618,7 @@ def get_budgets(month: int, year: int):
 
 
 @frappe.whitelist()
+@require_oauth_scope(WRITE_SCOPE)
 def set_budget(category: str, month: int, year: int, amount: float | None = None):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -539,6 +626,8 @@ def set_budget(category: str, month: int, year: int, amount: float | None = None
 
 	month = cint(month)
 	year = cint(year)
+
+	category = _resolve_family_ref("Category", "category_name", category, family) or category
 
 	existing_name = frappe.db.exists(
 		"Expenso Budget", {"category": category, "family": family, "month": month, "year": year}

@@ -771,13 +771,25 @@ No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 000
 
 ### P6-S4 · `[F]` Cutover: delete `expenso/mcp.py`, drop `frappe-mcp`
 
-**Integration tests**
+The Phase-5 connector semantics `expenso/mcp.py` owned move onto `api.py`:
+`create_expense`/`create_income` take `entry_method` + `external_message` and,
+for `entry_method="connector"`, set `is_external_write=1` + the audit message
+and enforce the daily cap; `require_oauth_scope` moves to `permissions.py` and
+guards every whitelisted read (`expenso:read`) and write (`expenso:write`).
+
+**Integration tests** (`test_connector.py`)
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I167 | `expenso/mcp.py` removed | no import of `frappe_mcp` anywhere in the app; `pyproject.toml` has no `frappe-mcp` dependency |
-| I168 | `test_mcp.py` | replaced or removed — the in-process MCP handler no longer exists |
-| I169 | OAuth discovery metadata (`/.well-known/oauth-authorization-server`) | still served (Frappe stays the authorization server) |
+| I167 | `import expenso.mcp` | `ModuleNotFoundError`; no `.py` file imports `frappe_mcp`; `pyproject.toml` has no `frappe-mcp` dependency |
+| I168 | `test_mcp.py` | removed; connector coverage lives in `test_connector.py` |
+| I169 | `OAuth Settings.show_auth_server_metadata` | still enabled — discovery metadata unaffected by the cutover |
+| I170 | `create_expense(entry_method="connector", external_message=…)` | Expense has `is_external_write=1`, `external_write_message` verbatim, `notes` separate; same for `create_income` |
+| I171 | `create_expense(entry_method="assistant", external_message=…)` | **not** marked; `external_write_message` stays null |
+| I172 | `create_expense(category="groceries", entry_method="connector")` | resolves to the Family's "Groceries" Category (case-insensitive); unknown label → `category` unset, never created |
+| I173 | connector `create_expense` + `create_income` share one daily counter; cap reached → `ValidationError`, row not written; manual writes don't count |
+| I174 | Bearer token with `expenso:read` only calls a write method | `PermissionError`; a token missing `expenso:read` calls a read method → `PermissionError`; session-authed calls are not scope-gated |
+| I175 | `validate_oauth(["Bearer", <valid>])` | resolves `frappe.session.user` to the token's Member; expired token does not |
 
 ---
 

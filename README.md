@@ -59,7 +59,7 @@ Ask questions about your Family's Expenses, Income, and Budgets directly in Clau
 Before you start, get the connector's **Client ID** from your admin. Expenso uses one pre-registered client per connecting app, not self-service registration.
 
 1. Open Claude and go to **Settings → Connectors → Add custom connector**.
-2. Enter the server URL your admin gives you (it looks like `https://<your-site>/api/method/expenso.mcp.handle_mcp`).
+2. Enter the server URL your admin gives you (the `expenso-assistant` service, e.g. `https://assistant.<your-site>/mcp`).
 3. Open **Advanced settings** and enter the Client ID from your admin.
 4. Click **Connect**.
 5. Log in with your own Expenso account, then approve access.

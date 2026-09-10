@@ -409,10 +409,11 @@ expenso/                            ← Frappe app root (git repo)
 │   ├── __init__.py                 ← __version__ bumped on every commit
 │   ├── hooks.py                    ← permission_query_conditions, scheduler_events (Phase 7)
 │   ├── assistant/                  ← Phase 6: auth.py (mint_assistant_token), proactive.py
-│   ├── expenso/api.py              ← whitelisted ledger methods (the Assistant's tools call these via REST)
+│   ├── expenso/api.py              ← whitelisted ledger methods (the Assistant's tools call these via REST); connector-write marker/message/cap + Category-Source resolution live here
+│   ├── expenso/permissions.py      ← family-scoping hooks + require_oauth_scope (expenso:read / expenso:write guards)
 │   └── doctype/
 │       └── family/ · family_member/ · expense/ · category/ · income/ · source/ · expenso_budget/
-│   (expenso/mcp.py — deleted in P6-S4, replaced by the FastMCP server in expenso-assistant)
+│   (expenso/mcp.py + the frappe-mcp dependency — deleted in the P6-S4 cutover; the MCP server is now the FastMCP server in expenso-assistant)
 └── frontend/                       ← Vue 3 SPA
     ├── src/
     │   ├── App.vue                 ← mounts BottomNav + Fab + ChatBubble globally
@@ -428,12 +429,15 @@ expenso/                            ← Frappe app root (git repo)
     │   └── main.js
     └── vite.config.js · package.json
 
-expenso-assistant/                  ← separate repo (Phase 6+); see its own docs/ and ADR 0008
+expenso-assistant/                  ← separate repo (arunjoyt/expenso-assistant, Phase 6+); uv, see ADR 0008
 ├── docker-compose.yml              ← app + postgres + langfuse:2 + nginx
-├── config.py                      ← OPENAI_MODEL + per-model {input,cached_input,output} rate table + per-run/daily caps + MCP_ENABLED (env-driven; no monthly spend cap)
-├── tools.py                       ← the one tool definition: typed async fns over frappe_client (ported from expenso/mcp.py)
-├── frappe_client.py               ← thin REST client, bearer passthrough
-├── mcp_server.py                  ← FastMCP: registers tools.py fns for external connectors (mounted at /mcp iff MCP_ENABLED)
-├── agent/                          ← graph.py (binds tools.py directly) · observability.py (Langfuse trace tagging + cost + daily-cap query)
-└── api/main.py                    ← FastAPI: /health · SSE run endpoint · /resume · /run/proactive · mounts mcp_server
+├── Dockerfile · nginx/ · .env.example · .github/workflows/ci.yml
+└── src/expenso_assistant/
+    ├── config.py                  ← OPENAI_MODEL + per-model {input,cached_input,output} rate table + cost_for() + per-run/daily caps + MCP_ENABLED (env-driven; no monthly spend cap)
+    ├── tools.py                   ← the one tool definition: typed async fns over frappe_client (ported from expenso/mcp.py); READ_TOOLS / WRITE_TOOLS
+    ├── frappe_client.py           ← thin REST client, bearer passthrough
+    ├── auth.py                    ← FrappeTokenVerifier (RFC 7662 introspection) + OAuthProxy (PKCE)
+    ├── mcp_server.py              ← FastMCP: registers tools.py fns for external connectors, SEP-2322 confirm on writes (mounted at /mcp iff MCP_ENABLED)
+    ├── agent/                      ← graph.py (binds tools.py directly) · observability.py — P6-S5
+    └── api/main.py                ← FastAPI: /health · (P6-S5) SSE run · /resume · /run/proactive · mounts mcp_server
 ```

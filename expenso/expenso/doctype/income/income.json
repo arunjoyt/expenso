@@ -52,6 +52,13 @@
             "fieldname": "external_write_message",
             "fieldtype": "Small Text",
             "label": "Original Message"
+        },
+        {
+            "fieldname": "entry_method",
+            "fieldtype": "Select",
+            "label": "Entry Method",
+            "options": "manual\nassistant\nconnector\nreceipt",
+            "default": "manual"
         }
     ],
     "permissions": [

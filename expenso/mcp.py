@@ -189,6 +189,7 @@ def _create_external_write(doctype: str, family: str, amount, date, message, not
 		"family": family,
 		"is_external_write": 1,
 		"external_write_message": message,
+		"entry_method": "connector",
 		"notes": notes,
 		**link_fields,
 	}

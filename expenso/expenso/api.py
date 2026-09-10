@@ -1,9 +1,35 @@
 import frappe
 from frappe import _
-from frappe.utils import cint, get_first_day, get_last_day
+from frappe.utils import cint, get_datetime, get_first_day, get_last_day
 
 from expenso.expenso.doctype.expenso_budget.expenso_budget import compute_budget_status
 from expenso.expenso.permissions import get_user_family
+
+# Provenance of a ledger row, orthogonal to `is_external_write`. The frontend
+# and the in-app Assistant only ever set `manual` / `assistant` / `receipt`;
+# `connector` is set on the external-connector write path (see expenso/mcp.py).
+ENTRY_METHODS = ("manual", "assistant", "connector", "receipt")
+
+
+def _resolve_entry_method(value: str | None) -> str:
+	return value if value in ENTRY_METHODS else "manual"
+
+
+def _guard_not_stale(doc, if_modified_since: str | None):
+	"""Reject a write when the row changed after the caller last read it.
+
+	The Assistant reads a row, shows it in a confirm card, and only later
+	sends the edit/delete. `if_modified_since` is the `modified` timestamp it
+	saw; if the row has moved on since, the write would silently clobber that
+	change, so we reject it and let the agent re-read and re-propose (ADR 0008).
+	"""
+	if not if_modified_since:
+		return
+	if get_datetime(doc.modified) > get_datetime(if_modified_since):
+		frappe.throw(
+			_("This entry changed since it was last read. Re-read it and try again."),
+			frappe.TimestampMismatchError,
+		)
 
 
 @frappe.whitelist()
@@ -51,6 +77,7 @@ def create_expense(
 	date: str | None = None,
 	category: str | None = None,
 	notes: str | None = None,
+	entry_method: str | None = None,
 ):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -64,6 +91,7 @@ def create_expense(
 			"category": category,
 			"notes": notes,
 			"family": family,
+			"entry_method": _resolve_entry_method(entry_method),
 		}
 	).insert(ignore_permissions=True)
 
@@ -78,9 +106,11 @@ def update_expense(
 	date: str | None = None,
 	category: str | None = None,
 	notes: str | None = None,
+	if_modified_since: str | None = None,
 ):
 	doc = frappe.get_doc("Expense", name)
 	doc.check_permission("write")
+	_guard_not_stale(doc, if_modified_since)
 
 	if amount is not None:
 		doc.amount = amount
@@ -96,9 +126,10 @@ def update_expense(
 
 
 @frappe.whitelist()
-def delete_expense(name: str):
+def delete_expense(name: str, if_modified_since: str | None = None):
 	doc = frappe.get_doc("Expense", name)
 	doc.check_permission("delete")
+	_guard_not_stale(doc, if_modified_since)
 
 	family = doc.family
 	frappe.delete_doc("Expense", name, ignore_permissions=True)
@@ -296,6 +327,36 @@ def get_family_name():
 
 
 @frappe.whitelist()
+def list_categories():
+	"""The calling Member's Family's Category names.
+
+	Used by the Assistant to validate a `category` value before a write.
+	"""
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	return frappe.get_all(
+		"Category", filters={"family": family}, pluck="category_name", order_by="category_name asc"
+	)
+
+
+@frappe.whitelist()
+def list_sources():
+	"""The calling Member's Family's Source names.
+
+	Used by the Assistant to validate a `source` value before a write.
+	"""
+	family = get_user_family(frappe.session.user)
+	if not family:
+		frappe.throw(_("You are not part of a Family"), frappe.PermissionError)
+
+	return frappe.get_all(
+		"Source", filters={"family": family}, pluck="source_name", order_by="source_name asc"
+	)
+
+
+@frappe.whitelist()
 def get_income(month: int, year: int):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -332,6 +393,7 @@ def create_income(
 	date: str | None = None,
 	source: str | None = None,
 	notes: str | None = None,
+	entry_method: str | None = None,
 ):
 	family = get_user_family(frappe.session.user)
 	if not family:
@@ -345,6 +407,7 @@ def create_income(
 			"source": source,
 			"notes": notes,
 			"family": family,
+			"entry_method": _resolve_entry_method(entry_method),
 		}
 	).insert(ignore_permissions=True)
 
@@ -359,9 +422,11 @@ def update_income(
 	date: str | None = None,
 	source: str | None = None,
 	notes: str | None = None,
+	if_modified_since: str | None = None,
 ):
 	doc = frappe.get_doc("Income", name)
 	doc.check_permission("write")
+	_guard_not_stale(doc, if_modified_since)
 
 	if amount is not None:
 		doc.amount = amount
@@ -377,9 +442,10 @@ def update_income(
 
 
 @frappe.whitelist()
-def delete_income(name: str):
+def delete_income(name: str, if_modified_since: str | None = None):
 	doc = frappe.get_doc("Income", name)
 	doc.check_permission("delete")
+	_guard_not_stale(doc, if_modified_since)
 
 	family = doc.family
 	frappe.delete_doc("Income", name, ignore_permissions=True)

@@ -969,18 +969,27 @@ actions only.
 
 ---
 
-### P7-S2 · `[F]`+`[A]` Proactive Insights
+### P7-S2 · `[F]`+`[A]`+`[FE]` Proactive Insights
+
+No dedup marker and no proposal mechanism in v1 — see ADR 0008's 2026-09-11 P7-S2 update. `run_budget_drift` re-warns every week a Category is still over threshold; both jobs bind `READ_TOOLS` only, so a proactive run is structurally incapable of producing a write tool-call, not merely gated by confirmation.
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I176 | `run_monthly_summary` scheduled job | mints a per-Member **read-scoped** bearer token and POSTs `/run/proactive` once per Member |
-| I177 | Proactive run | the graph binds the **read-only** toolset (no write tool available) |
-| I178 | Proactive run output | an Insight message is posted into that Member's thread; the Assistant nav-tab unread badge reflects it |
-| I179 | `run_budget_drift` run twice with unchanged data | the second run posts no message (dedup marker) |
-| I180 | `run_budget_drift` when a Category crosses its threshold | exactly one new Insight |
-| I181 | Proactive run wants an action taken | it emits a pending proposal (queued confirm card), never a direct write |
+| I176 | `run_monthly_summary` scheduled job | mints a per-Member **read-scoped** bearer token and POSTs `/run/proactive {"job": "monthly_summary"}` once per Member; the call returns `202` immediately — the graph run happens in a background task, not on Frappe's request thread |
+| I177 | Proactive run | the graph binds `READ_TOOLS` only — no write tool is ever bound for a scheduler-triggered run |
+| I178 | Proactive run output | an Insight message (`additional_kwargs.kind == "insight"`) is posted into that Member's thread; `GET /history` surfaces it and the Assistant nav-tab unread badge reflects it |
+| I179 | `run_budget_drift` when no Category is `Warning`/`Exceeded` this month | the deterministic pre-check (`compute_budget_status` via `get_analytics`) finds nothing to flag; no graph run, no Insight posted |
+| I180 | `run_budget_drift` run in two consecutive weeks with the same Category still over its threshold | **both** runs post an Insight — no dedup in v1 |
+| I181 | Proactive run when the Member's thread has a pending unconfirmed proposal from an earlier chat turn | the stale proposal is discarded (`_discard_pending`, same rule live chat uses) and the proactive run proceeds normally |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F144 | App-shell mount | `BottomNav.vue` calls `fetchHistory()` once on mount (no polling interval); the unread badge reflects whatever `GET /history` returned at that point |
+| F145 | Insight message rendering | an assistant message tagged `kind: "insight"` renders with a distinguishing "💡 Insight" label in `Assistant.vue`; an ordinary reply renders unchanged |
 
 ---
 
@@ -1018,5 +1027,5 @@ Balance figure.
 Phases 1–3 and 5 (shipped): **~340** tests (backend unit + integration + frontend). Phase 4's
 count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **62** more:
 `[F]`/`[FE]` tests in this repo (P6-S1 ~8 I + P6-S2 ~7 I + P6-S4 ~3 I + P6-S6 ~13 F + P6-S7 ~2 F +
-P7-S2 ~6 I; P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 /
-P6-S5 / P6-S7 / P7-S1). Exact numbered rows are finalised when each streak is implemented.
+P7-S2 ~6 I + ~2 F; P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 /
+P6-S5 / P6-S7 / P7-S1 / P7-S2). Exact numbered rows are finalised when each streak is implemented.

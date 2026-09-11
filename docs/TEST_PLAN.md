@@ -919,17 +919,53 @@ opens its own `feature:chat` trace and the chat cap is not re-checked; `resume_t
 
 ### P7-S1 · `[A]`+`[FE]` Receipts conversational in the Assistant
 
-**Service / integration tests**
+Decisions taken while implementing (grill 2026-09-11, recorded in ADR 0008's P7-S1 update):
+`ChatIn` gains an optional `image` (base64 JPEG data URI) sent alongside `message` — the
+frontend always re-encodes client-side via `<canvas>` first, so the service accepts one
+mime type plus a size backstop, never a whitelist. The image never enters checkpointed
+state — it rides in `config["configurable"]["receipt_image"]`, and `agent_node` splices it
+into a transient message list built just for `model_with_tools.ainvoke(...)`, re-spliced on
+every loop iteration in the turn since each model call is stateless. The checkpointed
+`HumanMessage` is `"[Attached a photo]"` plus the Member's caption if given. Tagging
+(`entry_method="receipt"`, trace `feature="receipt"`) is decided by input shape (an `image`
+present) before the graph runs, not by whether a proposal results; receipt turns count
+against the existing `daily_chat_cap`, no new cap. `session.py` emits a synthetic
+`step` ("Reading the receipt…") itself the moment it sees `image`, before driving the graph.
+`ConfirmCard.vue` gets always-editable inline inputs for any `kind: "create"` action (not
+receipt-specific); the resume decision shape grows to `{selected, edits: {actionId:
+{field: value}}}`, sparse and optional. `_build_action` captures `entry_method` at
+proposal-build time onto the action (so `_apply` knows a receipt-sourced action even on
+resume, when the caller's own binding is back to `"assistant"`); `receipt_accuracy_*`
+scores post on the **resume leg's own trace** (not the original `/chat` trace that ran the
+vision call) — the comparison only exists once the Member confirms/edits, which happens at
+resume — gated on `entry_method == "receipt"` and `tool == "create_expense"`, approved
+actions only.
+
+**Integration / service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
 |------|-----------|
-| A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values |
-| Confirm the proposal (unedited) | Expense created with `entry_method="receipt"`; the receipt trace gets `receipt_accuracy_{amount,date,category,notes}` scores = 1 (proposed matched confirmed) |
-| Edit the amount in the card, then confirm | Expense saved with the edited amount; `receipt_accuracy_amount` score = 0 on the trace, the other three = 1 |
-| Reject the proposal | no Expense; the trace still carries cost/latency but no accuracy scores |
-| Non-receipt photo | agent asks what the Member wants; no proposal |
-| After processing | no Frappe `File` created, no image on the Expense, no image in the thread — only a text marker |
-| Vision mock returns a category not in the Family list | proposed `category` is `None` |
+| `POST /chat` with `image` set | `entry_method` binds `"receipt"` for the turn; the trace opens with `feature="receipt"`; a synthetic `step` ("Reading the receipt…") is the first SSE event, before any tool/token event |
+| `agent_node` invocation with `config["configurable"]["receipt_image"]` set | the model call receives a multimodal message (text + image block); the graph's checkpointed `state["messages"]` after the turn contains only the text marker, never the image bytes or data URI |
+| A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values; the action's captured `entry_method` is `"receipt"` |
+| Confirm the proposal (unedited) — `POST /resume {selected:["a1"]}`, no `edits` | Expense created with `entry_method="receipt"`; the **resume leg's** trace gets `receipt_accuracy_{amount,date,category,notes}` scores = 1 (proposed matched confirmed) |
+| Edit the amount in the card — `POST /resume {selected:["a1"], edits:{a1:{amount:...}}}` | Expense saved with the edited amount (edits merged into `call_args` before the write); `receipt_accuracy_amount` score = 0 on the resume trace, the other three = 1 |
+| Reject the proposal — `{selected:[]}` | no Expense; no `receipt_accuracy_*` scores posted anywhere (the `/chat` trace still has cost/latency; the resume trace has neither) |
+| A non-receipt, non-image write proposal (e.g. "add this $20 coffee") gets edited at resume | `entry_method` stays `"assistant"` (not `"receipt"`) on the action; **no** `receipt_accuracy_*` scores posted — the gate is `entry_method=="receipt"`, not "was anything edited" |
+| Non-receipt photo | agent asks what the Member wants; no proposal; turn still traces `feature="receipt"` |
+| After processing | no Frappe `File` created, no image on the Expense, no image in the thread, no image anywhere in the Postgres checkpoint row — only the text marker |
+| Vision mock returns a category not in the Family list | proposed `category` is `None`; excluded from `receipt_accuracy_category` scoring (null-proposed-field exclusion, ADR 0003) |
+| Vision mock returns `notes` that differs from confirmed by only appended text | `receipt_accuracy_notes` = 0 (exact-string rule, ADR 0003 — not fuzzy/substring) |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F139 | Attach-photo control | an icon in the compose bar opens a file picker (`accept="image/*" capture="environment"`); a picked file renders as a removable thumbnail chip above the input before sending |
+| F140 | Client-side re-encode | a picked file is drawn to a `<canvas>`, downscaled to a capped long edge, and sent as a `image/jpeg` base64 data URI in the `/chat` body — regardless of the source file's original format |
+| F141 | Caption with photo | sending a photo with typed text includes both in one turn; the rendered user-message bubble (from history / the live send) reads `"[Attached a photo] <caption>"`; photo alone reads `"[Attached a photo]"` |
+| F142 | `ConfirmCard` inline edit inputs | a `kind:"create"` action renders amount/date/category/notes as editable inputs (not plain text); an `update`/`delete` action still renders read-only with a checkbox only |
+| F143 | Edited value flows to resume | changing a `create` action's field before confirming sends `resume({selected:[...], edits:{actionId:{field:newValue}}})`; an unedited action sends no `edits` entry for it |
 
 ---
 

@@ -30,7 +30,32 @@ beforeEach(() => {
 	assistant.clearChat.mockReset();
 	assistant.clearChat.mockResolvedValue();
 	assistant.markAllSeen.mockClear();
+
+	// jsdom has no real canvas/image decoder — stub the client-side re-encode
+	// pipeline (P7-S1) so the attach-photo flow can be exercised end to end.
+	global.Image = class {
+		set src(_value) {
+			queueMicrotask(() => this.onload?.());
+		}
+	};
+	vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage: vi.fn() });
+	vi.spyOn(HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
+		"data:image/jpeg;base64,MOCKED"
+	);
 });
+
+async function pickPhoto(wrapper, filename = "receipt.jpg") {
+	const input = wrapper.find('[data-test="attach-photo-input"]');
+	const file = new File(["fake-bytes"], filename, { type: "image/jpeg" });
+	Object.defineProperty(input.element, "files", { value: [file], configurable: true });
+	await input.trigger("change");
+	// jsdom's FileReader schedules its load event on a real timer, not a
+	// microtask — poll rather than guess how many ticks that takes.
+	await vi.waitFor(async () => {
+		await flushPromises();
+		expect(wrapper.find('[data-test="pending-photo"]').exists()).toBe(true);
+	});
+}
 
 afterEach(() => {
 	vi.clearAllMocks();
@@ -251,5 +276,88 @@ describe("Assistant screen", () => {
 
 		expect(wrapper.find('[data-test="confirm-card"]').exists()).toBe(true);
 		expect(wrapper.find('[data-test="confirm-card"]').text()).toContain("Retry");
+	});
+
+	// F139
+	it("picking a photo shows a removable thumbnail chip", async () => {
+		const wrapper = mountAssistant();
+		await flushPromises();
+		expect(wrapper.find('[data-test="pending-photo"]').exists()).toBe(false);
+
+		await pickPhoto(wrapper);
+		expect(wrapper.find('[data-test="pending-photo"]').exists()).toBe(true);
+
+		await wrapper.find('[data-test="remove-photo"]').trigger("click");
+		expect(wrapper.find('[data-test="pending-photo"]').exists()).toBe(false);
+	});
+
+	// F140/F141
+	it("sending a photo alone sends the image and shows the bare marker bubble", async () => {
+		assistant.sendMessage.mockResolvedValue(message("Got it."));
+		const wrapper = mountAssistant();
+		await flushPromises();
+		await pickPhoto(wrapper);
+
+		await wrapper.find("form").trigger("submit");
+		await flushPromises();
+
+		expect(assistant.sendMessage).toHaveBeenCalledWith("", expect.any(Object), {
+			image: "data:image/jpeg;base64,MOCKED",
+		});
+		expect(wrapper.find('[data-test="user-message"]').text()).toBe("[Attached a photo]");
+		// the picker clears once sent
+		expect(wrapper.find('[data-test="pending-photo"]').exists()).toBe(false);
+	});
+
+	// F141
+	it("sending a photo with a caption includes both in the marker bubble", async () => {
+		assistant.sendMessage.mockResolvedValue(message("Got it."));
+		const wrapper = mountAssistant();
+		await flushPromises();
+		await pickPhoto(wrapper);
+		await wrapper.find('[data-test="assistant-input"]').setValue("lunch with the team");
+
+		await wrapper.find("form").trigger("submit");
+		await flushPromises();
+
+		expect(assistant.sendMessage).toHaveBeenCalledWith(
+			"lunch with the team",
+			expect.any(Object),
+			{ image: "data:image/jpeg;base64,MOCKED" }
+		);
+		expect(wrapper.find('[data-test="user-message"]').text()).toBe(
+			"[Attached a photo] lunch with the team"
+		);
+	});
+
+	// F143
+	it("Confirm on an edited create action sends edits through to resume", async () => {
+		const CREATE_ACTIONS = [
+			{
+				id: "a2",
+				tool: "create_expense",
+				kind: "create",
+				entity: "expense",
+				summary: "New expense",
+				values: { amount: 12, category: "Groceries" },
+			},
+		];
+		assistant.sendMessage.mockResolvedValue(confirm(CREATE_ACTIONS));
+		assistant.resume.mockResolvedValue(message("Added it."));
+
+		const wrapper = mountAssistant();
+		await flushPromises();
+		await typeAndSend(wrapper, "add a 12 groceries expense");
+		await flushPromises();
+
+		const amountInput = wrapper.find('[data-field="amount"]');
+		await amountInput.setValue("15");
+		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
+		await flushPromises();
+
+		expect(assistant.resume).toHaveBeenCalledWith(
+			{ selected: ["a2"], edits: { a2: { amount: 15 } } },
+			expect.any(Object)
+		);
 	});
 });

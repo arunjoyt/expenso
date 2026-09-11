@@ -55,13 +55,26 @@
 						</span>
 
 						<span
-							v-else-if="action.values"
+							v-else-if="action.kind === 'create' && action.values"
 							data-test="confirm-values"
-							class="mt-1 flex flex-col gap-0.5 text-xs text-gray-600"
+							class="mt-1 flex flex-col gap-1 text-xs text-gray-600"
 						>
-							<span v-for="(value, key) in visibleValues(action.values)" :key="key">
-								<span class="text-gray-500">{{ key }}:</span>
-								{{ show(value) }}
+							<span
+								v-for="(value, key) in visibleValues(action.values)"
+								:key="key"
+								class="flex items-center gap-1"
+							>
+								<span class="w-14 shrink-0 text-gray-500">{{ key }}:</span>
+								<input
+									:type="inputType(key)"
+									:step="key === 'amount' ? '0.01' : undefined"
+									data-test="confirm-value-input"
+									:data-field="key"
+									class="min-w-0 flex-1 rounded border border-gray-200 px-1.5 py-0.5 text-xs"
+									:disabled="pending"
+									:value="edited[action.id][key]"
+									@input="onEdit(action, key, $event.target.value)"
+								/>
 							</span>
 						</span>
 					</span>
@@ -83,7 +96,7 @@
 				variant="solid"
 				theme="blue"
 				:loading="pending"
-				@click="$emit('confirm', checkedIds)"
+				@click="$emit('confirm', checkedIds, editsPayload())"
 			>
 				{{
 					checkedIds.length === actions.length
@@ -113,6 +126,25 @@ const selected = reactive(Object.fromEntries(props.actions.map((a) => [a.id, tru
 
 const checkedIds = computed(() => props.actions.filter((a) => selected[a.id]).map((a) => a.id));
 
+// Editable fields for `create` actions, seeded from the proposed values —
+// stringified for the inputs; `editsPayload()` diffs back against the
+// originals so an untouched field never rides in the resume decision.
+const edited = reactive(
+	Object.fromEntries(
+		props.actions
+			.filter((a) => a.kind === "create" && a.values)
+			.map((a) => [
+				a.id,
+				Object.fromEntries(
+					Object.entries(visibleValues(a.values)).map(([key, value]) => [
+						key,
+						value ?? "",
+					])
+				),
+			])
+	)
+);
+
 function verb(kind) {
 	return { create: "Add", update: "Edit", delete: "Delete" }[kind] ?? kind;
 }
@@ -126,5 +158,32 @@ function visibleValues(values) {
 	return Object.fromEntries(
 		Object.entries(values).filter(([key]) => key !== "name" && key !== "if_modified_since")
 	);
+}
+
+function inputType(key) {
+	if (key === "amount") return "number";
+	if (key === "date") return "date";
+	return "text";
+}
+
+function onEdit(action, key, value) {
+	edited[action.id][key] = action.kind === "create" && key === "amount" ? Number(value) : value;
+}
+
+// Only actions with at least one field actually changed from the proposal —
+// an untouched create sends no entry at all (P7-S1).
+function editsPayload() {
+	const out = {};
+	for (const action of props.actions) {
+		if (action.kind !== "create" || !action.values) continue;
+		const original = visibleValues(action.values);
+		const changed = Object.fromEntries(
+			Object.entries(edited[action.id]).filter(
+				([key, value]) => String(original[key] ?? "") !== String(value)
+			)
+		);
+		if (Object.keys(changed).length) out[action.id] = changed;
+	}
+	return out;
 }
 </script>

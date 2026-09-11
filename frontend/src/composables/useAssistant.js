@@ -62,16 +62,19 @@ async function fetchHistory() {
 }
 
 // Runs one turn. `onStep` gets each humanized activity line; `onToken` gets
-// each answer delta. Resolves with either
+// each answer delta. `image` (P7-S1) is a `data:image/jpeg;base64,...` data
+// URI, already re-encoded client-side — omitted entirely for a plain message.
+// Resolves with either
 //   { kind: "message", id, content }  — a `done` leg, or
 //   { kind: "confirm", actions }      — the leg ended on a confirm card;
 // rejects with an Error carrying `.code` on an `error` event.
-function sendMessage(text, handlers) {
-	return runLeg("/chat", { message: text }, handlers);
+function sendMessage(text, handlers, { image } = {}) {
+	return runLeg("/chat", image ? { message: text, image } : { message: text }, handlers);
 }
 
 // The member's decision on a pending confirm card. `decision` is
-// `{ selected: [actionId, …] }` — an empty list cancels.
+// `{ selected: [actionId, …], edits?: {actionId: {field: value}} }` — an
+// empty `selected` cancels; `edits` (P7-S1) is sparse and optional.
 function resume(decision, handlers) {
 	return runLeg("/resume", { decision }, handlers);
 }

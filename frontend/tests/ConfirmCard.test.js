@@ -40,10 +40,12 @@ describe("ConfirmCard", () => {
 		expect(diff).toContain("4.5");
 		expect(diff).toContain("6");
 
-		const values = wrapper.find('[data-test="confirm-values"]').text();
-		expect(values).toContain("12");
-		expect(values).toContain("Groceries");
-		expect(values).not.toContain("hidden"); // `name` is filtered out
+		const inputs = wrapper.findAll('[data-test="confirm-value-input"]');
+		const fields = inputs.map((i) => i.attributes("data-field"));
+		expect(fields).toEqual(["amount", "category", "notes"]);
+		expect(fields).not.toContain("name"); // `name` is filtered out
+		expect(inputs[0].element.value).toBe("12");
+		expect(inputs[1].element.value).toBe("Groceries");
 	});
 
 	// F131
@@ -61,7 +63,25 @@ describe("ConfirmCard", () => {
 		const wrapper = mountCard();
 		await wrapper.findAll('[data-test="confirm-action-checkbox"]')[1].setValue(false);
 		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
-		expect(wrapper.emitted("confirm")[0]).toEqual([["a1"]]);
+		expect(wrapper.emitted("confirm")[0]).toEqual([["a1"], {}]);
+	});
+
+	// F142/F143
+	it("editing a create action's field sends it in the edits map; untouched ones are absent", async () => {
+		const wrapper = mountCard();
+		const amountInput = wrapper.findAll('[data-test="confirm-value-input"]')[0];
+		await amountInput.setValue("15");
+		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
+		expect(wrapper.emitted("confirm")[0]).toEqual([["a1", "a2"], { a2: { amount: 15 } }]);
+	});
+
+	// F142 — update/delete actions never get inline edit inputs
+	it("does not render edit inputs for update/delete actions", () => {
+		const wrapper = mountCard();
+		const fields = wrapper
+			.findAll('[data-test="confirm-value-input"]')
+			.map((i) => i.attributes("data-field"));
+		expect(fields).toEqual(["amount", "category", "notes"]); // only a2 (create)
 	});
 
 	// F132

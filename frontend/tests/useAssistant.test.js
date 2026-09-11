@@ -116,6 +116,28 @@ describe("useAssistant — SSE parser (F134)", () => {
 	});
 });
 
+// F139/F140
+describe("useAssistant — attaching a photo (P7-S1)", () => {
+	it("includes the image field in the /chat body when given", async () => {
+		fetch.mockResolvedValueOnce(sseResponse([frame("done", { message_id: "m" })]));
+		const image = "data:image/jpeg;base64,Zm9v";
+
+		await useAssistant().sendMessage("lunch", {}, { image });
+
+		const [, options] = fetch.mock.calls[0];
+		expect(JSON.parse(options.body)).toEqual({ message: "lunch", image });
+	});
+
+	it("omits the image field entirely for a plain text message", async () => {
+		fetch.mockResolvedValueOnce(sseResponse([frame("done", { message_id: "m" })]));
+
+		await useAssistant().sendMessage("hello", {});
+
+		const [, options] = fetch.mock.calls[0];
+		expect(JSON.parse(options.body)).toEqual({ message: "hello" });
+	});
+});
+
 describe("useAssistant — resume (F136)", () => {
 	it("POSTs /resume with the decision and streams the continuation to done", async () => {
 		fetch.mockResolvedValueOnce(
@@ -136,6 +158,22 @@ describe("useAssistant — resume (F136)", () => {
 			id: "m9",
 			role: "assistant",
 			content: "Updated it.",
+		});
+	});
+
+	// F143
+	it("passes edits through in the resume decision body", async () => {
+		fetch.mockResolvedValueOnce(
+			sseResponse([
+				frame("token", { text: "Updated." }),
+				frame("done", { message_id: "m10" }),
+			])
+		);
+		await useAssistant().resume({ selected: ["a1"], edits: { a1: { amount: 15 } } }, {});
+
+		const [, options] = fetch.mock.calls[0];
+		expect(JSON.parse(options.body)).toEqual({
+			decision: { selected: ["a1"], edits: { a1: { amount: 15 } } },
 		});
 	});
 

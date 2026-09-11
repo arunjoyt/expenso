@@ -95,7 +95,46 @@
 				style="padding-bottom: calc(env(safe-area-inset-bottom) + 4.5rem)"
 			>
 				<ErrorMessage v-if="notice" class="mb-2" :message="notice" />
+
+				<div
+					v-if="pendingPhoto"
+					data-test="pending-photo"
+					class="mb-2 flex items-center gap-2 rounded-xl bg-gray-100 p-1.5"
+				>
+					<img
+						:src="pendingPhoto.dataUri"
+						class="h-10 w-10 rounded-lg object-cover"
+						alt="Attached photo"
+					/>
+					<button
+						type="button"
+						data-test="remove-photo"
+						class="text-xs font-semibold text-gray-400"
+						@click="pendingPhoto = null"
+					>
+						Remove
+					</button>
+				</div>
+
 				<form class="flex gap-2" @submit.prevent="send">
+					<input
+						ref="fileInput"
+						type="file"
+						accept="image/*"
+						capture="environment"
+						class="hidden"
+						data-test="attach-photo-input"
+						@change="onPickPhoto"
+					/>
+					<button
+						type="button"
+						data-test="attach-photo"
+						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg"
+						:disabled="sending"
+						@click="fileInput.click()"
+					>
+						📎
+					</button>
 					<Input
 						data-test="assistant-input"
 						placeholder="Ask the Assistant"
@@ -137,6 +176,10 @@ const confirmingClear = ref(false);
 const clearing = ref(false);
 // The pending confirm card, or null. { actions, pending }.
 const card = ref(null);
+const fileInput = ref(null);
+// A picked-but-not-yet-sent photo: { dataUri }. Replaced, not accumulated —
+// one photo per turn (P7-S1).
+const pendingPhoto = ref(null);
 
 onMounted(async () => {
 	if (!configured) return;
@@ -152,27 +195,90 @@ onMounted(async () => {
 	}
 });
 
+// Re-encodes to JPEG client-side (canvas), downscaled to a capped long edge —
+// so the service only ever sees one mime type and a bounded payload (P7-S1).
+// Decoding relies on the browser's own <img> support (HEIC included, on iOS
+// Safari where phone photos are commonly HEIC).
+const MAX_EDGE = 1600;
+
+function readAsDataUri(file) {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(reader.result);
+		reader.onerror = () => reject(reader.error);
+		reader.readAsDataURL(file);
+	});
+}
+
+function loadImage(src) {
+	return new Promise((resolve, reject) => {
+		const img = new Image();
+		img.onload = () => resolve(img);
+		img.onerror = reject;
+		img.src = src;
+	});
+}
+
+async function toJpegDataUri(file) {
+	const img = await loadImage(await readAsDataUri(file));
+	const scale = Math.min(1, MAX_EDGE / Math.max(img.width, img.height));
+	const canvas = document.createElement("canvas");
+	canvas.width = Math.round(img.width * scale);
+	canvas.height = Math.round(img.height * scale);
+	canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+	return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+async function onPickPhoto(event) {
+	const file = event.target.files?.[0];
+	event.target.value = ""; // let picking the same file again still fire `change`
+	if (!file) return;
+	try {
+		pendingPhoto.value = { dataUri: await toJpegDataUri(file) };
+	} catch {
+		notice.value = "Couldn't read that photo. Try a different one.";
+	}
+}
+
 async function send() {
 	const text = draft.value.trim();
-	if (!text || sending.value) return;
+	const photo = pendingPhoto.value;
+	if ((!text && !photo) || sending.value) return;
 
 	draft.value = "";
+	pendingPhoto.value = null;
 	notice.value = "";
 	steps.value = [];
 	card.value = null;
 	sending.value = true;
 
+	// What the service checkpoints in place of the image (agent/session.py's
+	// `_human_text`) — mirrored here so the optimistic bubble matches history.
+	const displayText = photo
+		? text
+			? `[Attached a photo] ${text}`
+			: "[Attached a photo]"
+		: text;
+
 	// Everything the turn adds sits past `baseline`; a failed turn is undone
 	// with one splice, matching the service rolling it back.
 	const baseline = messages.value.length;
-	messages.value.push({ id: null, role: "user", content: text });
-	await runLeg((handlers) => sendMessage(text, handlers), baseline);
+	messages.value.push({ id: null, role: "user", content: displayText });
+	await runLeg(
+		(handlers) =>
+			photo
+				? sendMessage(text, handlers, { image: photo.dataUri })
+				: sendMessage(text, handlers),
+		baseline
+	);
 }
 
-async function onConfirm(selectedIds) {
+async function onConfirm(selectedIds, edits) {
 	if (!card.value) return;
 	card.value.pending = true;
-	await runResume({ selected: selectedIds });
+	const decision = { selected: selectedIds };
+	if (edits && Object.keys(edits).length) decision.edits = edits;
+	await runResume(decision);
 }
 
 async function onCancel() {

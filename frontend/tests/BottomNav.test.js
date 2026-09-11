@@ -4,7 +4,11 @@ import { mount } from "@vue/test-utils";
 import { createAppRouter } from "@/router";
 import { session } from "@/data/session";
 
-const assistant = { unreadBadge: ref(false) };
+const assistant = {
+	unreadBadge: ref(false),
+	isConfigured: vi.fn(() => true),
+	fetchHistory: vi.fn(),
+};
 vi.mock("@/composables/useAssistant", () => ({
 	useAssistant: () => assistant,
 }));
@@ -20,6 +24,8 @@ async function mountNav(path = "/feed") {
 
 beforeEach(() => {
 	assistant.unreadBadge.value = false;
+	assistant.isConfigured.mockReturnValue(true);
+	assistant.fetchHistory.mockReset().mockResolvedValue([]);
 	session.user = "member@expenso.test";
 });
 
@@ -65,5 +71,26 @@ describe("BottomNav", () => {
 		expect(wrapper.findAll("a")[4].find('[data-test="assistant-unread-dot"]').exists()).toBe(
 			true
 		);
+	});
+
+	// F144
+	it("fetches history once on mount to discover a new Insight, no polling", async () => {
+		vi.useFakeTimers();
+		try {
+			await mountNav();
+			expect(assistant.fetchHistory).toHaveBeenCalledOnce();
+
+			await vi.advanceTimersByTimeAsync(10 * 60_000);
+			expect(assistant.fetchHistory).toHaveBeenCalledOnce();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	// F144
+	it("skips the fetch when the Assistant isn't configured for this site", async () => {
+		assistant.isConfigured.mockReturnValue(false);
+		await mountNav();
+		expect(assistant.fetchHistory).not.toHaveBeenCalled();
 	});
 });

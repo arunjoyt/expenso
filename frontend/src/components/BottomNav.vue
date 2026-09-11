@@ -28,12 +28,22 @@
 </template>
 
 <script setup>
+import { onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useAssistant } from "@/composables/useAssistant";
 
 const route = useRoute();
 const appVersion = window.app_version || "";
-const { unreadBadge } = useAssistant();
+const { isConfigured, unreadBadge, fetchHistory } = useAssistant();
+
+// The unread badge is discovered on app-shell mount only, not polled (P7-S2
+// grill: matches the no-Realtime rule — no push notifications, no background
+// refresh — already governing the Feed's own update model). A proactive
+// Insight posted while the Member wasn't on the Assistant tab shows up the
+// next time the app loads.
+onMounted(() => {
+	if (isConfigured()) fetchHistory().catch(() => {});
+});
 
 const tabs = [
 	{ name: "Feed", icon: "🧾", label: "Feed" },

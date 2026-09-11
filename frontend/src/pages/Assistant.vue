@@ -58,18 +58,30 @@
 				<div
 					v-for="(message, index) in messages"
 					:key="message.id ?? `pending-${index}`"
-					:data-test="message.role === 'user' ? 'user-message' : 'assistant-message'"
-					class="max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm"
-					:class="
-						message.role === 'user'
-							? 'ml-auto bg-accent-500 text-white'
-							: 'mr-auto bg-white text-gray-800'
-					"
+					class="max-w-[85%]"
+					:class="message.role === 'user' ? 'ml-auto' : 'mr-auto'"
 				>
-					<span>{{ message.content }}</span>
-					<span v-if="message.streaming" data-test="streaming-cursor" class="ml-0.5"
-						>▍</span
+					<div
+						v-if="message.kind === 'insight'"
+						data-test="insight-label"
+						class="mb-1 flex items-center gap-1 text-xs font-semibold text-amber-600"
 					>
+						💡 Insight
+					</div>
+					<div
+						:data-test="message.role === 'user' ? 'user-message' : 'assistant-message'"
+						class="whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm"
+						:class="
+							message.role === 'user'
+								? 'bg-accent-500 text-white'
+								: 'bg-white text-gray-800'
+						"
+					>
+						<span>{{ message.content }}</span>
+						<span v-if="message.streaming" data-test="streaming-cursor" class="ml-0.5"
+							>▍</span
+						>
+					</div>
 				</div>
 
 				<ConfirmCard

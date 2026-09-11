@@ -10,7 +10,6 @@ from expenso.assistant.auth import (
 	_assistant_oauth_client,
 	mint_assistant_token,
 )
-from expenso.assistant.proactive import run_budget_drift, run_monthly_summary
 from expenso.expenso.tests.test_api import _ensure_test_user
 
 
@@ -108,13 +107,8 @@ class TestMintAssistantToken(FrappeTestCase):
 
 
 class TestProactiveSchedulerStubs(FrappeTestCase):
-	# I166
+	# I166 — job bodies themselves are P7-S2, see test_proactive.py
 	def test_proactive_jobs_are_registered_as_cron_events(self):
 		cron_jobs = [job for jobs in hooks.scheduler_events["cron"].values() for job in jobs]
 		self.assertIn("expenso.assistant.proactive.run_monthly_summary", cron_jobs)
 		self.assertIn("expenso.assistant.proactive.run_budget_drift", cron_jobs)
-
-	# I166
-	def test_proactive_job_bodies_are_harmless_no_ops(self):
-		self.assertIsNone(run_monthly_summary())
-		self.assertIsNone(run_budget_drift())

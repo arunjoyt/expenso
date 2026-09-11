@@ -86,6 +86,30 @@ describe("Assistant screen", () => {
 		expect(bubbles[1].text()).toContain("You spent $412 in March.");
 	});
 
+	// F145
+	it("labels a proactive Insight message; an ordinary reply gets no label", async () => {
+		assistant.fetchHistory.mockResolvedValue([
+			{
+				id: "i1",
+				role: "assistant",
+				content: "August was quiet — you spent 100.",
+				kind: "insight",
+				posted_at: "2026-09-01T03:00:00+00:00",
+			},
+			{ id: "a1", role: "assistant", content: "You spent $412 in March." },
+		]);
+		const wrapper = mountAssistant();
+		await flushPromises();
+
+		const labels = wrapper.findAll('[data-test="insight-label"]');
+		expect(labels).toHaveLength(1);
+		expect(labels[0].text()).toContain("Insight");
+
+		const bubbles = wrapper.findAll('[data-test="assistant-message"]');
+		expect(bubbles[0].text()).toContain("August was quiet");
+		expect(bubbles[1].text()).toContain("You spent $412 in March.");
+	});
+
 	// F133
 	it("marks the thread seen on open (clears the nav badge)", async () => {
 		mountAssistant();

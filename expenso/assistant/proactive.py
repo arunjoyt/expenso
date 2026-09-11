@@ -46,6 +46,12 @@ def _trigger(job: str) -> None:
 
 	for user in _family_member_users():
 		token = mint_assistant_token_for(user, write=False)
+		# The assistant service introspects this token on a separate DB
+		# connection immediately after the POST below — without a commit here
+		# the row is still only visible inside this uncommitted transaction
+		# (bench/the scheduler commits at the very end of the job), so
+		# introspection sees "not found" and every run 401s.
+		frappe.db.commit()
 		try:
 			requests.post(
 				f"{url}/run/proactive",

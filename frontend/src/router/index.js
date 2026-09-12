@@ -32,6 +32,12 @@ const routes = [
 		component: () => import("@/pages/Settings.vue"),
 		meta: { requiresAuth: true },
 	},
+	{
+		path: "/assistant",
+		name: "Assistant",
+		component: () => import("@/pages/Assistant.vue"),
+		meta: { requiresAuth: true },
+	},
 ];
 
 export function createAppRouter() {

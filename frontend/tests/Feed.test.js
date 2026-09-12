@@ -5,8 +5,14 @@ import { createPinia, setActivePinia } from "pinia";
 import { createAppRouter } from "@/router";
 import { useMonthStore } from "@/stores/month";
 import Feed from "@/pages/Feed.vue";
-import ExpenseSheet from "@/components/ExpenseSheet.vue";
-import IncomeSheet from "@/components/IncomeSheet.vue";
+
+const entrySheet = {
+	openEditExpense: vi.fn(),
+	openEditIncome: vi.fn(),
+};
+vi.mock("@/composables/useEntrySheet", () => ({
+	useEntrySheet: () => entrySheet,
+}));
 
 vi.mock("@/composables/useExpenses", () => ({
 	useExpenses: vi.fn(),
@@ -74,6 +80,8 @@ function mountFeed() {
 beforeEach(() => {
 	setActivePinia(createPinia());
 	mockIncomes([]);
+	entrySheet.openEditExpense.mockClear();
+	entrySheet.openEditIncome.mockClear();
 });
 
 describe("Feed page", () => {
@@ -186,52 +194,9 @@ describe("Feed page", () => {
 		);
 	});
 
-	// F12
-	it("opens the ExpenseSheet directly in add mode on FAB click, defaulting to the Expense tab", async () => {
-		mockExpenses([]);
-		const wrapper = mountFeed();
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
-		await wrapper.find('[data-test="fab"]').trigger("click");
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
-		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
-	});
-
-	// F30
-	it("switches to the IncomeSheet on the Income tab click, without an extra FAB tap", async () => {
-		mockExpenses([]);
-		const wrapper = mountFeed();
-		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper
-			.find('[data-test="expense-sheet"] [data-test="tab-income"]')
-			.trigger("click");
-		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(true);
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
-	});
-
-	// F79
-	it("switches back to the ExpenseSheet on the Expense tab click", async () => {
-		mockExpenses([]);
-		const wrapper = mountFeed();
-		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper
-			.find('[data-test="expense-sheet"] [data-test="tab-income"]')
-			.trigger("click");
-		await wrapper
-			.find('[data-test="income-sheet"] [data-test="tab-expense"]')
-			.trigger("click");
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
-		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
-	});
-
-	// F80
-	it("does not show tabs when editing an existing Expense", async () => {
-		mockExpenses([
-			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
-		]);
-		const wrapper = mountFeed();
-		await wrapper.find('[data-test="expense-row"]').trigger("click");
-		expect(wrapper.find('[data-test="add-entry-tabs"]').exists()).toBe(false);
-	});
+	// The FAB, the sheets, and the Expense/Income switcher moved to the global
+	// Fab.vue + App.vue (P6-S6) — see Fab.test.js / EntrySheet.test.js. Feed
+	// only opens the edit sheet through the shared composable now.
 
 	// F103
 	it("shows Notes as the bold primary line and Category as the caption below it", () => {
@@ -262,52 +227,25 @@ describe("Feed page", () => {
 		expect(wrapper.find('[data-test="expense-row"]').text()).toContain("Dining");
 	});
 
-	// F17
-	it("opens the ExpenseSheet in edit mode with fields pre-filled on row tap", async () => {
-		mockExpenses([
-			{ name: "EXP-1", amount: 10, date: "2025-06-15", category_name: "Groceries" },
-		]);
+	// F17 — Feed no longer renders the sheet; a row tap opens the shared one.
+	it("opens the edit Expense sheet through the shared composable on row tap", async () => {
+		const expense = {
+			name: "EXP-1",
+			amount: 10,
+			date: "2025-06-15",
+			category_name: "Groceries",
+		};
+		mockExpenses([expense]);
 		const wrapper = mountFeed();
 		await wrapper.find('[data-test="expense-row"]').trigger("click");
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(true);
-		expect(wrapper.text()).toContain("Edit Expense");
-		expect(wrapper.find('[data-test="amount-input"]').element.value).toBe("10");
+		expect(entrySheet.openEditExpense).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "EXP-1" })
+		);
+		expect(entrySheet.openEditIncome).not.toHaveBeenCalled();
 	});
 
-	// F16
-	it("reloads both lists once the ExpenseSheet closes after a save", async () => {
-		const reloadExpenses = mockExpenses([]);
-		const reloadIncomes = mockIncomes([]);
-		const wrapper = mountFeed();
-		await wrapper.find('[data-test="fab"]').trigger("click");
-		reloadExpenses.mockClear();
-		reloadIncomes.mockClear();
-
-		await wrapper.findComponent(ExpenseSheet).vm.$emit("close");
-
-		expect(reloadExpenses).toHaveBeenCalled();
-		expect(reloadIncomes).toHaveBeenCalled();
-		expect(wrapper.find('[data-test="expense-sheet"]').exists()).toBe(false);
-	});
-
-	// F81 (superseded — Income now appears on Feed, so closing IncomeSheet must refresh it)
-	it("reloads both lists once the IncomeSheet closes after a save", async () => {
-		const reloadExpenses = mockExpenses([]);
-		const reloadIncomes = mockIncomes([]);
-		const wrapper = mountFeed();
-		await wrapper.find('[data-test="fab"]').trigger("click");
-		await wrapper
-			.find('[data-test="expense-sheet"] [data-test="tab-income"]')
-			.trigger("click");
-		reloadExpenses.mockClear();
-		reloadIncomes.mockClear();
-
-		await wrapper.findComponent(IncomeSheet).vm.$emit("close");
-
-		expect(reloadExpenses).toHaveBeenCalled();
-		expect(reloadIncomes).toHaveBeenCalled();
-		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(false);
-	});
+	// F16/F81 — Feed no longer reloads on sheet close; the realtime socket
+	// events on useExpenses/useIncome do that. Nothing to assert on Feed.
 
 	// F105
 	it("renders Income rows with a green, plus-signed amount", () => {
@@ -367,15 +305,16 @@ describe("Feed page", () => {
 		]);
 	});
 
-	// F109
-	it("opens the IncomeSheet in edit mode with fields pre-filled on Income row tap", async () => {
+	// F109 — a Feed Income row tap opens the shared edit Income sheet.
+	it("opens the edit Income sheet through the shared composable on Income row tap", async () => {
 		mockExpenses([]);
 		mockIncomes([{ name: "INC-1", amount: 500, date: "2025-06-15", source_name: "Salary" }]);
 		const wrapper = mountFeed();
 		await wrapper.find('[data-test="income-row"]').trigger("click");
-		expect(wrapper.find('[data-test="income-sheet"]').exists()).toBe(true);
-		expect(wrapper.text()).toContain("Edit Income");
-		expect(wrapper.find('[data-test="income-amount-input"]').element.value).toBe("500");
+		expect(entrySheet.openEditIncome).toHaveBeenCalledWith(
+			expect.objectContaining({ name: "INC-1" })
+		);
+		expect(entrySheet.openEditExpense).not.toHaveBeenCalled();
 	});
 
 	// F144

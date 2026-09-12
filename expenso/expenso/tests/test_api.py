@@ -17,6 +17,8 @@ from expenso.expenso.api import (
 	get_expenses,
 	get_family_name,
 	get_income,
+	list_categories,
+	list_sources,
 	rename_category,
 	rename_source,
 	set_budget,
@@ -126,6 +128,16 @@ class TestGetExpenses(FrappeTestCase):
 		result = get_expenses(month=6, year=2025)
 		row = next(r for r in result if r.name == self.expense_with_notes.name)
 		self.assertEqual(row.notes, "Dinner with the Smiths")
+
+	# P6-S7: the Assistant reads `modified` here and passes it back as
+	# `if_modified_since` on an edit/delete.
+	def test_get_expenses_includes_modified_for_the_concurrency_guard(self):
+		frappe.set_user(self.member)
+		row = next(r for r in get_expenses(month=6, year=2025) if r.name == self.june_expense.name)
+		self.assertEqual(
+			str(row.modified),
+			str(frappe.db.get_value("Expense", self.june_expense.name, "modified")),
+		)
 
 
 class TestExpenseCrudApi(FrappeTestCase):
@@ -1283,3 +1295,102 @@ class TestBudgetCarryForward(FrappeTestCase):
 		self.assertFalse(
 			frappe.db.exists("Expenso Budget", {"category": self.groceries.name, "month": 7, "year": 2025})
 		)
+
+
+class TestP6S1ApiPlumbing(FrappeTestCase):
+	def setUp(self):
+		self.member = _ensure_test_user("p6s1.member@expenso.test")
+		user = frappe.get_doc("User", self.member)
+		if "Family Member" not in {r.role for r in user.roles}:
+			user.add_roles("Family Member")
+
+		self.family = frappe.get_doc(
+			{
+				"doctype": "Family",
+				"family_name": "P6S1 Family",
+				"currency": "USD",
+				"members": [{"user": self.member}],
+			}
+		).insert(ignore_permissions=True)
+
+		self.other_family = frappe.get_doc(
+			{"doctype": "Family", "family_name": "P6S1 Other Family", "currency": "USD"}
+		).insert(ignore_permissions=True)
+
+	def tearDown(self):
+		frappe.set_user("Administrator")
+
+	# I155
+	def test_update_expense_with_stale_if_modified_since_raises_conflict(self):
+		frappe.set_user(self.member)
+		doc = create_expense(amount=25.0)
+
+		with self.assertRaises(frappe.TimestampMismatchError):
+			update_expense(name=doc.name, amount=99.0, if_modified_since="2000-01-01 00:00:00")
+
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "amount"), 25.0)
+
+	# I156
+	def test_update_expense_with_current_if_modified_since_succeeds(self):
+		frappe.set_user(self.member)
+		doc = create_expense(amount=25.0)
+		current = frappe.db.get_value("Expense", doc.name, "modified")
+
+		update_expense(name=doc.name, amount=99.0, if_modified_since=str(current))
+
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "amount"), 99.0)
+
+	# I155 (delete path)
+	def test_delete_income_with_stale_if_modified_since_raises_conflict(self):
+		frappe.set_user(self.member)
+		doc = create_income(amount=40.0)
+
+		with self.assertRaises(frappe.TimestampMismatchError):
+			delete_income(name=doc.name, if_modified_since="2000-01-01 00:00:00")
+
+		self.assertTrue(frappe.db.exists("Income", doc.name))
+
+	# I157
+	def test_create_expense_with_assistant_entry_method(self):
+		frappe.set_user(self.member)
+		doc = create_expense(amount=25.0, entry_method="assistant")
+
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "entry_method"), "assistant")
+		self.assertFalse(frappe.db.get_value("Expense", doc.name, "is_external_write"))
+
+	def test_create_expense_defaults_entry_method_to_manual(self):
+		frappe.set_user(self.member)
+		doc = create_expense(amount=25.0)
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "entry_method"), "manual")
+
+	def test_create_income_rejects_unknown_entry_method(self):
+		frappe.set_user(self.member)
+		doc = create_income(amount=40.0, entry_method="bogus")
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "entry_method"), "manual")
+
+	# I158
+	def test_list_categories_and_sources_scoped_to_callers_family(self):
+		frappe.set_user(self.member)
+		add_category("Travel")
+		frappe.get_doc(
+			{"doctype": "Category", "category_name": "Other Family Only", "family": self.other_family.name}
+		).insert(ignore_permissions=True)
+
+		categories = list_categories()
+		self.assertIn("Travel", categories)
+		self.assertNotIn("Other Family Only", categories)
+
+		add_source("Freelance")
+		frappe.get_doc(
+			{"doctype": "Source", "source_name": "Other Family Source", "family": self.other_family.name}
+		).insert(ignore_permissions=True)
+
+		sources = list_sources()
+		self.assertIn("Freelance", sources)
+		self.assertNotIn("Other Family Source", sources)
+
+	def test_list_categories_without_family_raises_permission_error(self):
+		outsider = _ensure_test_user("p6s1.outsider@expenso.test")
+		frappe.set_user(outsider)
+		with self.assertRaises(frappe.PermissionError):
+			list_categories()

@@ -733,6 +733,22 @@ No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 000
 
 ---
 
+### P6-S2 · `[F]` Assistant token mint endpoint + proactive scheduler stubs (reuses #91)
+
+**Integration tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I160 | `mint_assistant_token()` by a Member | returns `access_token` + `token_type="Bearer"` + `expires_in`; the token resolves to that Member via `validate_oauth` and carries `expenso:read` but **not** `expenso:write` |
+| I161 | `mint_assistant_token(write=True)` (incl. the string `"true"` from an HTTP call) | the minted token carries both `expenso:read` and `expenso:write` |
+| I162 | Minted token's `expiration_time` | short-lived — within `ASSISTANT_TOKEN_TTL_MINUTES` of now, and `expires_in` matches |
+| I163 | `mint_assistant_token()` by a signed-in user with no Family | raises `frappe.PermissionError`; no token row created |
+| I164 | `mint_assistant_token()` as `Guest` | raises `frappe.PermissionError` |
+| I165 | First mint on a site with no `Expenso Assistant` OAuth Client | creates one internal `OAuth Client` (scopes cover `expenso:read`+`expenso:write`); a second mint reuses it, not a duplicate |
+| I166 | `run_monthly_summary` / `run_budget_drift` | importable, registered in `hooks.scheduler_events["cron"]`, and a no-op call raises nothing (bodies are P7-S2) |
+
+---
+
 ### P6-S3 · `[A]` `tools.py` + FastMCP external adapter (Frappe-REST-backed)
 
 **Service tests** (`expenso-assistant` repo)
@@ -741,83 +757,161 @@ No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 000
 |------|-----------|
 | `tools.py` read fn (`get_expenses`) called with a Member's bearer token | calls Frappe REST as that Member; returns only that Family's rows |
 | `tools.py` read fn called with a token for a different Family, crafted params | still scoped to the token's Family (Frappe `permission_query_conditions` enforce it, not the fn) |
-| FastMCP `create_expense` tool | issues an MCP elicitation request before any Frappe write |
-| Elicitation accepted | Frappe REST `create_expense` fires with `entry_method="connector"` |
-| Elicitation declined | no Frappe write |
-| Token missing the `expenso:write` scope calls a FastMCP write tool | rejected before elicitation |
+| FastMCP `create_expense` tool, first call | returns an SEP-2322 `InputRequiredResult` (confirm request), no Frappe write yet |
+| confirmation accepted (re-invoked with `confirm=true`) | Frappe REST `create_expense` fires with `entry_method="connector"` |
+| confirmation declined, or `confirm=false` | no Frappe write; tool returns `status="cancelled"` |
+| Token missing the `expenso:write` scope calls a FastMCP write tool | rejected before the confirm round-trip starts |
+| read tool via FastMCP | no confirm round-trip — returns straight away |
 | `MCP_ENABLED=false` | `/mcp` is not mounted; the agent's own endpoints and tool binding are unaffected |
-| the read fn set / write fn set exposed to the agent | read set has no write-capable fn; write set is exactly the D2 list |
+| the read fn set / write fn set exposed to the agent | read set has no write-capable fn; write set is exactly the D2 list (no `rename/delete_category`, no `rename/delete_source`) |
+| `FrappeTokenVerifier` against Frappe's RFC 7662 introspection | active token → `AccessToken` with its scopes; inactive/unreachable → `None` |
+| model/pricing constant (`cost_for`) | applies the `config.py` rate table per token class — cached input discounted, reasoning billed as output; unknown model → `None` |
 
 ---
 
 ### P6-S4 · `[F]` Cutover: delete `expenso/mcp.py`, drop `frappe-mcp`
 
-**Integration tests**
+The Phase-5 connector semantics `expenso/mcp.py` owned move onto `api.py`:
+`create_expense`/`create_income` take `entry_method` + `external_message` and,
+for `entry_method="connector"`, set `is_external_write=1` + the audit message
+and enforce the daily cap; `require_oauth_scope` moves to `permissions.py` and
+guards every whitelisted read (`expenso:read`) and write (`expenso:write`).
+
+**Integration tests** (`test_connector.py`)
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I160 | `expenso/mcp.py` removed | no import of `frappe_mcp` anywhere in the app; `pyproject.toml` has no `frappe-mcp` dependency |
-| I161 | `test_mcp.py` | replaced or removed — the in-process MCP handler no longer exists |
-| I162 | OAuth discovery metadata (`/.well-known/oauth-authorization-server`) | still served (Frappe stays the authorization server) |
+| I167 | `import expenso.mcp` | `ModuleNotFoundError`; no `.py` file imports `frappe_mcp`; `pyproject.toml` has no `frappe-mcp` dependency |
+| I168 | `test_mcp.py` | removed; connector coverage lives in `test_connector.py` |
+| I169 | `OAuth Settings.show_auth_server_metadata` | still enabled — discovery metadata unaffected by the cutover |
+| I170 | `create_expense(entry_method="connector", external_message=…)` | Expense has `is_external_write=1`, `external_write_message` verbatim, `notes` separate; same for `create_income` |
+| I171 | `create_expense(entry_method="assistant", external_message=…)` | **not** marked; `external_write_message` stays null |
+| I172 | `create_expense(category="groceries", entry_method="connector")` | resolves to the Family's "Groceries" Category (case-insensitive); unknown label → `category` unset, never created |
+| I173 | connector `create_expense` + `create_income` share one daily counter; cap reached → `ValidationError`, row not written; manual writes don't count |
+| I174 | Bearer token with `expenso:read` only calls a write method | `PermissionError`; a token missing `expenso:read` calls a read method → `PermissionError`; session-authed calls are not scope-gated |
+| I175 | `validate_oauth(["Bearer", <valid>])` | resolves `frappe.session.user` to the token's Member; expired token does not |
 
 ---
 
 ### P6-S5 · `[A]` LangGraph agent (read-only) + SSE/resume FastAPI
 
+Decisions taken while implementing (grill 2026-09-10): `metadata.family` dropped
+(above); Member id resolved via `frappe.auth.get_logged_user` after introspection;
+`thread_id = "member:" + sha256(email)` **derived server-side** — no client-supplied
+thread id anywhere; hand-rolled `StateGraph` (`agent` ⇄ `tools`, `tool_call_count`
+in state); `build_model()` is the one place OpenAI is named; custom LangChain
+callback owns the explicit cost (not the stock Langfuse handler); `feature:chat`
+added as a trace **tag** so the daily-cap query is a tag filter, checked *before*
+this run's trace opens; on any cap error the turn is rolled back to the
+pre-run checkpoint (no orphaned user message); `/resume` ships as an
+endpoint+SSE shell (interrupt semantics are P6-S7); endpoints require
+`expenso:read`; saved Langfuse dashboards deferred to P7-S2.
+
 **Service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
 |------|-----------|
-| Agent binds tools | the graph's tool list is the `tools.py` read fns bound directly — no `langchain[mcp]` import, no MCP client in the agent path |
-| Agent given "what did I spend on groceries in March", OpenAI mock | calls the right read tool(s) with month/year params; returns a final answer; one Langfuse trace emitted, tagged `user_id`=<member> / `metadata.family` / `metadata.feature="chat"` / `session_id`=<thread>, generation cost set from the `config.py` pricing constant |
-| Cost is computed from returned token usage | mock OpenAI returns known `prompt_tokens` / `completion_tokens` (+ `cached_tokens`); the trace's cost = the `config.py` rate table applied per token class (cached input discounted, reasoning as output) — not Langfuse's own estimate |
-| Per-run `recursion_limit` / max-tool-calls / wall-clock cap exceeded | run ends in error; caller sees an error; no partial answer emitted |
-| Per-Member daily chat cap reached (mock Langfuse trace count) | refused; OpenAI not called |
-| Langfuse unreachable during the daily-cap check | the check fails open — the run proceeds; a warning is logged |
-| SSE stream | emits humanized step events then the streamed answer; ends with `done` |
-| Bearer token for Member A used to open Member B's thread | rejected by the custom auth |
+| Agent binds tools | `build_graph()` binds the `tools.py` `READ_TOOLS` directly (`model.bind_tools(READ_TOOLS)`); no `langchain[mcp]` / `langchain_mcp` import anywhere in `agent/`; no MCP client in the agent path |
+| Read-only graph never binds a write tool | `WRITE_TOOLS` names are absent from the compiled graph's tool set |
+| Agent given "what did I spend on groceries in March", fake tool-calling model | calls a read tool with `month=3` and the current year (date from the per-run system prompt); returns a final answer |
+| One Langfuse trace per turn, tagged | exactly one trace; `user_id`=<member email>, `metadata.feature="chat"`, tag `feature:chat`, `session_id`=<derived thread id>; no `metadata.family` |
+| Generation cost is the service's number | fake model reports known `prompt_tokens`/`completion_tokens` (+ `cached_tokens`, `reasoning_tokens`); the generation's recorded cost == `config.cost_for(...)` per token class (cached input discounted, reasoning as output) — Langfuse's own model-price estimate is not used |
+| `recursion_limit` exceeded | `GraphRecursionError` caught; SSE ends with `error` `{code:"recursion"}`; no `token` event was emitted; thread history unchanged (rolled back) |
+| max-tool-calls cap exceeded | routes to the terminal cap node, not `tools`; SSE `error` `{code:"tool_cap"}`; history unchanged |
+| wall-clock cap exceeded | `asyncio.wait_for` times out; SSE `error` `{code:"wall_clock"}`; history unchanged |
+| Per-Member daily chat cap reached (mock Langfuse count ≥ cap) | run refused with `error` `{code:"daily_cap"}` before the trace opens; the model is never called |
+| Langfuse unreachable during the daily-cap check | check fails open — run proceeds; a `warning` is logged |
+| Daily-cap query shape | counts today's traces (service tz) for `user_id` + tag `feature:chat`; this run's own trace is not counted (checked first) |
+| SSE happy path | `step` events (humanized from tool name/args) then `token` deltas then `done` `{message_id}` |
+| History endpoint | returns human + assistant messages in checkpoint order as `{id, role, content}`; tool messages and tool-call-only assistant messages omitted |
+| "Clear chat" | deletes the derived thread from the checkpointer; history then empty |
+| Client-supplied thread id is ignored | run / `/resume` / history / clear all operate on the id derived from the token's Member — a body/query `thread_id` for another Member has no effect |
+| Inactive or unintrospectable bearer | every endpoint returns 401; the graph is not invoked |
+| Token missing `expenso:read` | 401 (endpoints require the read scope) |
+| `/resume` with no pending interrupt | clean response (no 500); read-only graph has nothing to resume — full interrupt/resume path is P6-S7 |
 
 ---
 
-### P6-S6 · `[FE]` Chat surface: bubble + overlay on every screen, global FAB (reuses #70)
+### P6-S6 · `[FE]` Assistant tab (Chat surface) + global FAB (reuses #70)
+
+Chat is the 5th bottom-nav tab, "Assistant" — a routed screen, not a floating bubble/overlay
+(ADR 0008's 2026-09-10 P6-S6 update). FAB extracted from `Feed.vue` into a global `Fab.vue`
+via a shared `useEntrySheet.js`. `useAssistant.js` mints a read-only token, consumes `POST /chat`
+as SSE via `fetch()` + `ReadableStream`, and tracks a dormant unread badge.
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F121 | Chat bubble | visible on Feed, Analytics, Budget, and Settings |
-| F122 | FAB | now visible on Analytics, Budget, and Settings too (was Feed-only); extracted from `Feed.vue` into a global `Fab.vue`; same Add Expense sheet behaviour everywhere |
-| F123 | Chat bubble + FAB together, any screen | both bottom-right; bubble stacked directly above the FAB with a clear gap (no overlapping tap targets) |
-| F124 | Tapping the bubble | opens the full-screen chat overlay |
-| F125 | Overlay on open | fetches an Assistant token, renders thread history from the service |
-| F126 | Sending a message | opens the SSE stream; humanized step log renders, then the answer streams in |
-| F127 | Failed stream | transient error notice; nothing appended to the thread |
-| F128 | Daily cap error from the service | warning shown; input remains usable |
-| F129 | "Clear chat" | confirmation prompt; confirmed → service call deletes the thread and the visible list empties; cancelled → no call |
-| F130 | Overlay closed | returns to the underlying screen; thread present on reopen; unread badge cleared once seen |
+| F121 | `BottomNav` | 5 tabs — Feed, Analytics, Budget, Settings, Assistant (icon 💬); the Assistant tab routes to `pages/Assistant.vue` |
+| F122 | FAB | rendered by a global `Fab.vue` on Feed, Analytics, Budget, and Settings — **not** on the Assistant screen; opens the Add Expense sheet with the Expense/Income switcher, same behaviour on every screen |
+| F123 | `useEntrySheet` | `openAdd` / `openEditExpense` / `openEditIncome` / `close` drive one shared sheet; the sheets are mounted once (in `App.vue`), not per-page; a Feed row tap opens the edit sheet through the composable |
+| F124 | Assistant screen on mount | calls `mint_assistant_token` (read scope), then `GET /history`; renders the returned user + assistant messages in order |
+| F125 | `window.assistant_url` unset | the screen shows an "Assistant isn't configured" notice; no token mint, no fetch |
+| F126 | Sending a message | POSTs `/chat` with the bearer header; `step` events render as a transient humanized log, `token` events stream into the answer bubble, `done` commits the final assistant message; the step log clears after `done` |
+| F127 | Failed stream (`error` event / network failure) | a transient error notice shows; nothing is appended to the visible thread; input stays usable |
+| F128 | `error` `{code:"daily_cap"}` from the service | the cap warning shows; the input remains usable |
+| F129 | Expired token → 401 on a request | `useAssistant` re-mints once and retries; a second 401 surfaces the error notice |
+| F130 | "Clear chat" | inline Confirm/Cancel (no `window.confirm`); confirmed → `DELETE /history`, the visible list empties, `lastSeenMessageId` resets; cancelled → no call |
+| F133 | Unread badge (dormant mechanism) | history whose newest message is an unseen `assistant` message → a dot on the Assistant nav tab; opening the tab sets `lastSeenMessageId` to the newest id → the dot clears; a message received in a live turn never self-badges |
+| F134 | `useAssistant` SSE parser | frames split on `\n\n`, partial frames buffered across chunks, `event:`/`data:` parsed, `token` text accumulated, `done` returns the committed text, `error` returns without committing |
+
+_(F129/F133/F134 added beyond the original F121–F130; F131/F132 stay reserved for P6-S7. The ~10-test estimate in Totals becomes ~13.)_
+
+**Service test (companion `[A]` change, `expenso-assistant` repo)**
+
+| Test | Assertion |
+|------|-----------|
+| CORS preflight | an `OPTIONS` to `/chat` from an allowed origin returns the `Access-Control-Allow-Origin` / `-Headers: authorization` / `-Methods` headers; a disallowed origin gets none |
 
 ---
 
 ### P6-S7 · `[A]`+`[FE]` Agent writes + confirm-card flow + concurrency guard
 
-**Integration / service tests**
+Decisions taken while implementing (grill 2026-09-10, recorded in ADR 0008's P6-S7 update):
+`route()` sends a message with any **write** tool-call to a `propose` node (reads still go
+to `tools`); `propose` raises `interrupt({actions:[…]})` — the real `tools.py` write fns
+never run inline; `/resume` body is `{decision:{selected:[id,…]}}` (empty = cancel) and
+`propose` **re-derives** the action list from the still-pending `tool_calls` + tool history;
+the diff's "before" and `if_modified_since` come from the `ToolMessage`s already in state
+(no re-read); a per-action `TimestampMismatchError` doesn't abort the batch; the daily
+*write* cap is dropped for `max_proposed_writes_per_turn` (25, local check); `/resume`
+opens its own `feature:chat` trace and the chat cap is not re-checked; `resume_turn` binds
+`entry_method="assistant"` and re-mints the token; wall-clock resets per SSE leg.
+
+**Integration / service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
 |------|-----------|
-| Write prompt → the proposal node raises `interrupt()` (no MCP elicitation on this path) → one batched confirm card | payload lists every proposed action with concrete values; updates show a before→after diff; no `tools.py` write fn has run yet |
-| Card confirmed → `/resume` | the graph calls the `tools.py` write fns for the approved set; each Frappe write fires with `entry_method="assistant"`, no `is_external_write` |
-| Card with one row deselected | only the selected rows are written |
-| Card cancelled | nothing is written |
-| Target row edited from a second session between the agent's read and the resume | write rejected via `if_modified_since`; the agent re-reads and re-proposes with the new values |
-| Multi-step: step 2 needs step 1's created row | two confirm cards in the turn, each batched for its step |
-| Per-Member daily write cap reached | write path refused with a clear message |
+| Write prompt, scripted model emits one `update_expense` call | `route()` goes to `propose`, not `tools`; the graph interrupts; `astream` ends the leg with `needs_confirmation`, no `done`; no `tools.py` write fn ran |
+| Read-only call still routes to `tools` | a message with only `get_expenses` calls never reaches `propose` (regression) |
+| `needs_confirmation` payload shape | `actions[]` — each `{id:"a1"…, tool, kind, entity, summary}`; `update` carries `changes:[{field,from,to}]` from the tool history; `create`/`delete` carry `values`; `name`/`if_modified_since` are **not** in the payload |
+| Target row not in the tool history | `propose` returns a `ToolMessage` nudge ("re-read … first"), does **not** interrupt |
+| Card confirmed → `POST /resume` `{selected:["a1","a2"]}` | the `tools.py` write fns run for a1+a2; each Frappe call carries `entry_method="assistant"`, no `is_external_write`, and `if_modified_since` = the value the agent read; the continuation streams `token` then `done` |
+| One action deselected | `{selected:["a1"]}` → only a1 is written; a2's original `tool_call` gets a "skipped by the member" `ToolMessage` |
+| Cancelled | `{selected:[]}` (and `{}`) → nothing is written; the model is told the member cancelled |
+| Per-action conflict | 3 actions, a2's target changed underneath (`TimestampMismatchError`) → a1+a3 applied, a2 → `ToolMessage` → model re-reads and re-proposes → a **second** `needs_confirmation` with the new current values |
+| `max_proposed_writes_per_turn` exceeded | model proposes 30 writes in one message → card carries the first 25; after resume a `ToolMessage` says 5 remain → model proposes them → second card |
+| Multi-step: step 2 needs step 1's row | model creates a Category (card 1), resumes, then proposes an Expense using it (card 2) — two cards in the one turn |
+| New `POST /chat` while an interrupt is pending | the pending interrupt is discarded (a transient `step` "Discarded the unconfirmed changes"), the new message proceeds; `/history` shows no orphaned proposal |
+| `POST /resume` with nothing pending | clean response (no 500, no write), same as the P6-S5 shell |
+| `tool_call_count` persists across the interrupt | a turn that used N-1 tool cycles before proposing hits `run_max_tool_calls` on the post-resume cycle → `error` `{code:"tool_cap"}` |
+| Resume accounting | `/resume` opens its own trace tagged `feature:chat`; `within_daily_chat_cap` is **not** called on the resume path |
+| `set_budget` kind | `update` when a budget row for that category/month is in the tool history, else `create`; `add_category`/`add_source` always `create`, no `if_modified_since` |
+| Read-only (proactive) graph | built without `WRITE_TOOLS`, `route()` never reaches `propose`; `interrupt` is unreachable |
 
 **Frontend unit tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F131 | Confirm card | renders concrete rows and a before→after diff for edits; confirm / per-row deselect / cancel controls present |
-| F132 | Confirm / deselect / cancel | send the matching resume payload to the service |
+| F131 | `ConfirmCard` | renders each action's concrete `values` (create/delete) or `changes` before→after rows (update); a checkbox per action, checked by default; Confirm + Cancel present; goes read-only once `resume` starts |
+| F132 | Confirm / deselect / cancel | Confirm → `resume({selected:[checked ids]})`; unchecking a row drops its id; Cancel → `resume({selected:[]})` |
+| F135 | `useAssistant` parser | a `needs_confirmation` frame resolves `sendMessage`/`resume` with `{kind:"confirm", actions}` (vs `{kind:"message"}` on `done`) |
+| F136 | `useAssistant.resume` | `POST /resume` with the bearer and `{decision}` body; parses the continuation stream; a `done` commits the follow-up assistant message |
+| F137 | `Assistant.vue` confirm flow | a `needs_confirmation` turn renders `ConfirmCard` inline; Confirm drives `resume` and the streamed follow-up answer is appended; a second `needs_confirmation` replaces the card |
+| F138 | Token scope | the Assistant screen mints with `write=true` (P6-S7 raised it from read-only) |
+
+**Frappe-side:** the `if_modified_since` guard and `entry_method` plumbing shipped in P6-S1. P6-S7 adds `modified` to the `get_expenses` / `get_income` field lists so the agent can capture it at read and pass it back — one test: `get_expenses` rows carry `modified`.
 
 ---
 
@@ -825,38 +919,83 @@ No `LLM Call Log` / `record_llm_call` / `get_my_llm_cost` — dropped by ADR 000
 
 ### P7-S1 · `[A]`+`[FE]` Receipts conversational in the Assistant
 
-**Service / integration tests**
+Decisions taken while implementing (grill 2026-09-11, recorded in ADR 0008's P7-S1 update):
+`ChatIn` gains an optional `image` (base64 JPEG data URI) sent alongside `message` — the
+frontend always re-encodes client-side via `<canvas>` first, so the service accepts one
+mime type plus a size backstop, never a whitelist. The image never enters checkpointed
+state — it rides in `config["configurable"]["receipt_image"]`, and `agent_node` splices it
+into a transient message list built just for `model_with_tools.ainvoke(...)`, re-spliced on
+every loop iteration in the turn since each model call is stateless. The checkpointed
+`HumanMessage` is `"[Attached a photo]"` plus the Member's caption if given. Tagging
+(`entry_method="receipt"`, trace `feature="receipt"`) is decided by input shape (an `image`
+present) before the graph runs, not by whether a proposal results; receipt turns count
+against the existing `daily_chat_cap`, no new cap. `session.py` emits a synthetic
+`step` ("Reading the receipt…") itself the moment it sees `image`, before driving the graph.
+`ConfirmCard.vue` gets always-editable inline inputs for any `kind: "create"` action (not
+receipt-specific); the resume decision shape grows to `{selected, edits: {actionId:
+{field: value}}}`, sparse and optional. `_build_action` captures `entry_method` at
+proposal-build time onto the action (so `_apply` knows a receipt-sourced action even on
+resume, when the caller's own binding is back to `"assistant"`); `receipt_accuracy_*`
+scores post on the **resume leg's own trace** (not the original `/chat` trace that ran the
+vision call) — the comparison only exists once the Member confirms/edits, which happens at
+resume — gated on `entry_method == "receipt"` and `tool == "create_expense"`, approved
+actions only.
+
+**Integration / service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
 |------|-----------|
-| A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values |
-| Confirm the proposal (unedited) | Expense created with `entry_method="receipt"`; the receipt trace gets `receipt_accuracy_{amount,date,category,notes}` scores = 1 (proposed matched confirmed) |
-| Edit the amount in the card, then confirm | Expense saved with the edited amount; `receipt_accuracy_amount` score = 0 on the trace, the other three = 1 |
-| Reject the proposal | no Expense; the trace still carries cost/latency but no accuracy scores |
-| Non-receipt photo | agent asks what the Member wants; no proposal |
-| After processing | no Frappe `File` created, no image on the Expense, no image in the thread — only a text marker |
-| Vision mock returns a category not in the Family list | proposed `category` is `None` |
+| `POST /chat` with `image` set | `entry_method` binds `"receipt"` for the turn; the trace opens with `feature="receipt"`; a synthetic `step` ("Reading the receipt…") is the first SSE event, before any tool/token event |
+| `agent_node` invocation with `config["configurable"]["receipt_image"]` set | the model call receives a multimodal message (text + image block); the graph's checkpointed `state["messages"]` after the turn contains only the text marker, never the image bytes or data URI |
+| A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values; the action's captured `entry_method` is `"receipt"` |
+| Confirm the proposal (unedited) — `POST /resume {selected:["a1"]}`, no `edits` | Expense created with `entry_method="receipt"`; the **resume leg's** trace gets `receipt_accuracy_{amount,date,category,notes}` scores = 1 (proposed matched confirmed) |
+| Edit the amount in the card — `POST /resume {selected:["a1"], edits:{a1:{amount:...}}}` | Expense saved with the edited amount (edits merged into `call_args` before the write); `receipt_accuracy_amount` score = 0 on the resume trace, the other three = 1 |
+| Reject the proposal — `{selected:[]}` | no Expense; no `receipt_accuracy_*` scores posted anywhere (the `/chat` trace still has cost/latency; the resume trace has neither) |
+| A non-receipt, non-image write proposal (e.g. "add this $20 coffee") gets edited at resume | `entry_method` stays `"assistant"` (not `"receipt"`) on the action; **no** `receipt_accuracy_*` scores posted — the gate is `entry_method=="receipt"`, not "was anything edited" |
+| Non-receipt photo | agent asks what the Member wants; no proposal; turn still traces `feature="receipt"` |
+| After processing | no Frappe `File` created, no image on the Expense, no image in the thread, no image anywhere in the Postgres checkpoint row — only the text marker |
+| Vision mock returns a category not in the Family list | proposed `category` is `None`; excluded from `receipt_accuracy_category` scoring (null-proposed-field exclusion, ADR 0003) |
+| Vision mock returns `notes` that differs from confirmed by only appended text | `receipt_accuracy_notes` = 0 (exact-string rule, ADR 0003 — not fuzzy/substring) |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F139 | Attach-photo control | an icon in the compose bar opens a file picker (`accept="image/*" capture="environment"`); a picked file renders as a removable thumbnail chip above the input before sending |
+| F140 | Client-side re-encode | a picked file is drawn to a `<canvas>`, downscaled to a capped long edge, and sent as a `image/jpeg` base64 data URI in the `/chat` body — regardless of the source file's original format |
+| F141 | Caption with photo | sending a photo with typed text includes both in one turn; the rendered user-message bubble (from history / the live send) reads `"[Attached a photo] <caption>"`; photo alone reads `"[Attached a photo]"` |
+| F142 | `ConfirmCard` inline edit inputs | a `kind:"create"` action renders amount/date/category/notes as editable inputs (not plain text); an `update`/`delete` action still renders read-only with a checkbox only |
+| F143 | Edited value flows to resume | changing a `create` action's field before confirming sends `resume({selected:[...], edits:{actionId:{field:newValue}}})`; an unedited action sends no `edits` entry for it |
 
 ---
 
-### P7-S2 · `[F]`+`[A]` Proactive Insights
+### P7-S2 · `[F]`+`[A]`+`[FE]` Proactive Insights
+
+No dedup marker and no proposal mechanism in v1 — see ADR 0008's 2026-09-11 P7-S2 update. `run_budget_drift` re-warns every week a Category is still over threshold; both jobs bind `READ_TOOLS` only, so a proactive run is structurally incapable of producing a write tool-call, not merely gated by confirmation.
 
 **Integration tests**
 
 | # | Test | Assertion |
 |---|------|-----------|
-| I176 | `run_monthly_summary` scheduled job | mints a per-Member **read-scoped** bearer token and POSTs `/run/proactive` once per Member |
-| I177 | Proactive run | the graph binds the **read-only** toolset (no write tool available) |
-| I178 | Proactive run output | an Insight message is posted into that Member's thread; the bubble unread badge reflects it |
-| I179 | `run_budget_drift` run twice with unchanged data | the second run posts no message (dedup marker) |
-| I180 | `run_budget_drift` when a Category crosses its threshold | exactly one new Insight |
-| I181 | Proactive run wants an action taken | it emits a pending proposal (queued confirm card), never a direct write |
+| I176 | `run_monthly_summary` scheduled job | mints a per-Member **read-scoped** bearer token and POSTs `/run/proactive {"job": "monthly_summary"}` once per Member; the call returns `202` immediately — the graph run happens in a background task, not on Frappe's request thread |
+| I177 | Proactive run | the graph binds `READ_TOOLS` only — no write tool is ever bound for a scheduler-triggered run |
+| I178 | Proactive run output | an Insight message (`additional_kwargs.kind == "insight"`) is posted into that Member's thread; `GET /history` surfaces it and the Assistant nav-tab unread badge reflects it |
+| I179 | `run_budget_drift` when no Category is `Warning`/`Exceeded` this month | the deterministic pre-check (`compute_budget_status` via `get_analytics`) finds nothing to flag; no graph run, no Insight posted |
+| I180 | `run_budget_drift` run in two consecutive weeks with the same Category still over its threshold | **both** runs post an Insight — no dedup in v1 |
+| I181 | Proactive run when the Member's thread has a pending unconfirmed proposal from an earlier chat turn | the stale proposal is discarded (`_discard_pending`, same rule live chat uses) and the proactive run proceeds normally |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F144 | App-shell mount | `BottomNav.vue` calls `fetchHistory()` once on mount (no polling interval); the unread badge reflects whatever `GET /history` returned at that point |
+| F145 | Insight message rendering | an assistant message tagged `kind: "insight"` renders with a distinguishing "💡 Insight" label in `Assistant.vue`; an ordinary reply renders unchanged |
 
 ---
 
 ### P7-S3 — removed
 
-Consolidated LLM reporting (old #68, absorbing #71/#72/#73) is dropped by ADR 0008's 2026-09-10 update. There is no `LLM Call Log` DocType and no Frappe reporting surface — cost / latency / token visibility is the Langfuse dashboards (saved views set up in P6-S5), and receipt-extraction accuracy is a Langfuse score on the receipt trace. No Frappe integration or frontend tests here. The Member-facing "your usage this month" (#73) is deferred out of v1.
+Consolidated LLM reporting (old #68, absorbing #71/#72/#73) is dropped by ADR 0008's 2026-09-10 update. There is no `LLM Call Log` DocType and no Frappe reporting surface — cost / latency / token visibility is the Langfuse dashboards (P6-S5 ships the trace tagging + explicit cost; the saved views are built in P7-S2), and receipt-extraction accuracy is a Langfuse score on the receipt trace. No Frappe integration or frontend tests here. The Member-facing "your usage this month" (#73) is deferred out of v1.
 
 ---
 
@@ -886,7 +1025,7 @@ Balance figure.
 ## Totals
 
 Phases 1–3 and 5 (shipped): **~340** tests (backend unit + integration + frontend). Phase 4's
-count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **55** more:
-`[F]`/`[FE]` tests in this repo (P6-S1 ~4 I + P6-S4 ~3 I + P6-S6 ~10 F + P6-S7 ~2 F + P7-S2 ~6 I;
-P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 / P6-S5 /
-P6-S7 / P7-S1). Exact numbered rows are finalised when each streak is implemented.
+count is retired — the section was folded into Phases 6–7. Phases 6–7 add roughly **62** more:
+`[F]`/`[FE]` tests in this repo (P6-S1 ~8 I + P6-S2 ~7 I + P6-S4 ~3 I + P6-S6 ~13 F + P6-S7 ~2 F +
+P7-S2 ~6 I + ~2 F; P7-S3 removed), plus `[A]` service tests in the `expenso-assistant` repo (P6-S3 /
+P6-S5 / P6-S7 / P7-S1 / P7-S2). Exact numbered rows are finalised when each streak is implemented.

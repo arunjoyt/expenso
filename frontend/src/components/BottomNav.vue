@@ -48,9 +48,9 @@ onMounted(() => {
 const tabs = [
 	{ name: "Feed", icon: "🧾", label: "Feed" },
 	{ name: "Analytics", icon: "📊", label: "Analytics" },
+	{ name: "Assistant", icon: "💬", label: "Assistant" },
 	{ name: "Budget", icon: "💰", label: "Budget" },
 	{ name: "Settings", icon: "⚙️", label: "Settings" },
-	{ name: "Assistant", icon: "💬", label: "Assistant" },
 ];
 
 function isActive(name) {

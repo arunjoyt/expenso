@@ -187,8 +187,10 @@ def update_expense(
 		doc.amount = amount
 	if date is not None:
 		doc.date = date
-	doc.category = _resolve_family_ref("Category", "category_name", category, doc.family)
-	doc.notes = notes
+	if category is not None:
+		doc.category = _resolve_family_ref("Category", "category_name", category, doc.family)
+	if notes is not None:
+		doc.notes = notes
 
 	doc.save(ignore_permissions=True)
 
@@ -518,8 +520,10 @@ def update_income(
 		doc.amount = amount
 	if date is not None:
 		doc.date = date
-	doc.source = _resolve_family_ref("Source", "source_name", source, doc.family)
-	doc.notes = notes
+	if source is not None:
+		doc.source = _resolve_family_ref("Source", "source_name", source, doc.family)
+	if notes is not None:
+		doc.notes = notes
 
 	doc.save(ignore_permissions=True)
 

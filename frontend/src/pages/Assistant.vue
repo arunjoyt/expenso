@@ -28,7 +28,7 @@
 					v-else
 					type="button"
 					data-test="clear-chat"
-					class="text-sm font-semibold text-gray-400 transition active:scale-95"
+					class="text-sm font-semibold text-gray-600 transition active:scale-95"
 					@click="confirmingClear = true"
 				>
 					Clear chat

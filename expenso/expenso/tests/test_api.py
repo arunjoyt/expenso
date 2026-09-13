@@ -216,6 +216,20 @@ class TestExpenseCrudApi(FrappeTestCase):
 		self.assertEqual(updated.notes, "Updated note")
 		self.assertEqual(frappe.db.get_value("Expense", doc.name, "notes"), "Updated note")
 
+	def test_update_expense_amount_only_leaves_category_and_notes_untouched(self):
+		frappe.set_user(self.member_a)
+		doc = create_expense(amount=25.0, category="Groceries", notes="Original note")
+		update_expense(name=doc.name, amount=99.0)
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "notes"), "Original note")
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "category.category_name"), "Groceries")
+
+	def test_update_expense_category_only_leaves_notes_untouched(self):
+		frappe.set_user(self.member_a)
+		doc = create_expense(amount=25.0, category="Groceries", notes="Carrot")
+		update_expense(name=doc.name, category="Other")
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "notes"), "Carrot")
+		self.assertEqual(frappe.db.get_value("Expense", doc.name, "category.category_name"), "Other")
+
 	# I34
 	def test_delete_expense_removes_from_db(self):
 		frappe.set_user(self.member_a)
@@ -928,6 +942,20 @@ class TestIncomeCrudApi(FrappeTestCase):
 		updated = update_income(name=doc.name, notes="Updated note")
 		self.assertEqual(updated.notes, "Updated note")
 		self.assertEqual(frappe.db.get_value("Income", doc.name, "notes"), "Updated note")
+
+	def test_update_income_amount_only_leaves_source_and_notes_untouched(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0, source="Salary", notes="Original note")
+		update_income(name=doc.name, amount=300.0)
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "notes"), "Original note")
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "source.source_name"), "Salary")
+
+	def test_update_income_source_only_leaves_notes_untouched(self):
+		frappe.set_user(self.member_a)
+		doc = create_income(amount=250.0, source="Salary", notes="Bonus")
+		update_income(name=doc.name, source="Other")
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "notes"), "Bonus")
+		self.assertEqual(frappe.db.get_value("Income", doc.name, "source.source_name"), "Other")
 
 	# I66
 	def test_delete_income_removes_from_db(self):

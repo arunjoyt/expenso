@@ -273,8 +273,8 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] Edit a target row from a second session before confirming → that row's write is rejected, the others still apply, and the agent re-proposes the rejected one with the new values (a second card)
 - [ ] Send a new chat message while a confirm card is open → the card is discarded (a transient step) and the new message is answered
 - [ ] Ask for more than `MAX_PROPOSED_WRITES_PER_TURN` changes at once → the card is capped and the agent offers to continue with the rest
-- [ ] Hit the per-Member daily **chat** cap → refused with a clear message, no OpenAI call
-- [ ] Stop the Langfuse container, then send a chat message → the daily-cap check fails open and the run proceeds (a warning is logged); per-run caps still bound it
+- [ ] Hit the per-Member daily **token** cap (`DAILY_TOKEN_CAP`) → refused with a clear message, no OpenAI call
+- [ ] Stop the Langfuse container, then send a chat message → the turn still runs and completes normally (the daily-cap counter is backed by the checkpointer's own Postgres, not Langfuse, since ADR 0008's 2026-09-11 update — Langfuse going down only loses tracing, not the cap gate); separately, stopping **Postgres** (a hard dependency either way) fails the cap check closed with an `internal` error, not open — there is no fail-open branch anymore
 
 ### Phase 7 — Proactive & Reporting
 

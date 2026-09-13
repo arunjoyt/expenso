@@ -315,6 +315,28 @@ describe("Assistant screen", () => {
 		expect(wrapper.find('[data-test="pending-photo"]').exists()).toBe(false);
 	});
 
+	// F139
+	it("attach-photo menu offers a camera option and a library option", async () => {
+		const wrapper = mountAssistant();
+		await flushPromises();
+		expect(wrapper.find('[data-test="attach-photo-menu"]').exists()).toBe(false);
+
+		await wrapper.find('[data-test="attach-photo"]').trigger("click");
+		expect(wrapper.find('[data-test="attach-photo-menu"]').exists()).toBe(true);
+
+		const input = wrapper.find('[data-test="attach-photo-input"]').element;
+		expect(input.hasAttribute("capture")).toBe(false);
+
+		await wrapper.find('[data-test="attach-photo-camera"]').trigger("click");
+		expect(input.getAttribute("capture")).toBe("environment");
+		expect(wrapper.find('[data-test="attach-photo-menu"]').exists()).toBe(false);
+
+		await wrapper.find('[data-test="attach-photo"]').trigger("click");
+		await wrapper.find('[data-test="attach-photo-library"]').trigger("click");
+		expect(input.hasAttribute("capture")).toBe(false);
+		expect(wrapper.find('[data-test="attach-photo-menu"]').exists()).toBe(false);
+	});
+
 	// F140/F141
 	it("sending a photo alone sends the image and shows the bare marker bubble", async () => {
 		assistant.sendMessage.mockResolvedValue(message("Got it."));

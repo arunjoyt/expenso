@@ -137,15 +137,45 @@
 						data-test="attach-photo-input"
 						@change="onPickPhoto"
 					/>
-					<button
-						type="button"
-						data-test="attach-photo"
-						class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg"
-						:disabled="sending"
-						@click="fileInput.click()"
-					>
-						📎
-					</button>
+					<div class="relative shrink-0">
+						<div
+							v-if="attachMenuOpen"
+							data-test="attach-photo-menu-backdrop"
+							class="fixed inset-0 z-10"
+							@click="attachMenuOpen = false"
+						></div>
+						<div
+							v-if="attachMenuOpen"
+							data-test="attach-photo-menu"
+							class="absolute bottom-11 left-0 z-20 flex flex-col overflow-hidden rounded-xl bg-white shadow-lg ring-1 ring-black/10"
+						>
+							<button
+								type="button"
+								data-test="attach-photo-camera"
+								class="whitespace-nowrap px-4 py-2.5 text-left text-sm font-medium text-gray-700 active:bg-gray-100"
+								@click="pickPhoto('environment')"
+							>
+								📷 Take Photo
+							</button>
+							<button
+								type="button"
+								data-test="attach-photo-library"
+								class="whitespace-nowrap border-t border-gray-100 px-4 py-2.5 text-left text-sm font-medium text-gray-700 active:bg-gray-100"
+								@click="pickPhoto(null)"
+							>
+								🖼️ Photo Library
+							</button>
+						</div>
+						<button
+							type="button"
+							data-test="attach-photo"
+							class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gray-100 text-lg"
+							:disabled="sending"
+							@click="attachMenuOpen = !attachMenuOpen"
+						>
+							📎
+						</button>
+					</div>
 					<Input
 						data-test="assistant-input"
 						placeholder="Ask the Assistant"
@@ -191,6 +221,7 @@ const fileInput = ref(null);
 // A picked-but-not-yet-sent photo: { dataUri }. Replaced, not accumulated —
 // one photo per turn (P7-S1).
 const pendingPhoto = ref(null);
+const attachMenuOpen = ref(false);
 
 onMounted(async () => {
 	if (!configured) return;
@@ -238,6 +269,19 @@ async function toJpegDataUri(file) {
 	canvas.height = Math.round(img.height * scale);
 	canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
 	return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+// Toggling `capture` on the same input right before the click, rather than
+// relying on a bare `accept="image/*"` input's chooser sheet, since on some
+// mobile browsers that chooser doesn't reliably offer a camera option.
+function pickPhoto(capture) {
+	attachMenuOpen.value = false;
+	if (capture) {
+		fileInput.value.setAttribute("capture", capture);
+	} else {
+		fileInput.value.removeAttribute("capture");
+	}
+	fileInput.value.click();
 }
 
 async function onPickPhoto(event) {

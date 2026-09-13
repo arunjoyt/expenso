@@ -279,7 +279,7 @@ Run these in order after deploying a new phase or to the production site.
 ### Phase 7 — Proactive & Reporting
 
 - [ ] `bench --site <site> enable-scheduler`; `bench execute expenso.assistant.proactive.run_monthly_summary` posts an Insight into each Member's thread; the Assistant nav tab shows an unread badge
-- [ ] Run the budget-drift job twice with unchanged data → no duplicate warning
+- [ ] Run the budget-drift job twice with unchanged data → both runs post a warning Insight (intentional re-warn, not deduped — a Category stays over its threshold, so it warns every run; see `proactive.py`'s header comment)
 - [ ] Attach a receipt photo in chat → Expense proposed in a confirm card; confirm → `entry_method=receipt`; the Langfuse trace (`feature=receipt`) carries `receipt_accuracy_*` scores; **no** Frappe `File`, no image on the Expense
 - [ ] Attach a non-receipt photo → the agent asks what to do, no proposal
 - [ ] Langfuse dashboards show cost / latency / token use broken out by `feature`; receipt traces carry the accuracy scores

@@ -133,7 +133,6 @@
 						ref="fileInput"
 						type="file"
 						accept="image/*"
-						capture="environment"
 						class="hidden"
 						data-test="attach-photo-input"
 						@change="onPickPhoto"

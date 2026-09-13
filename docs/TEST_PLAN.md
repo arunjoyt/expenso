@@ -961,7 +961,7 @@ actions only.
 
 | # | Test | Assertion |
 |---|------|-----------|
-| F139 | Attach-photo control | an icon in the compose bar opens a file picker (`accept="image/*" capture="environment"`); a picked file renders as a removable thumbnail chip above the input before sending |
+| F139 | Attach-photo control | an icon in the compose bar opens a file picker (`accept="image/*"`, no `capture` — mobile must offer camera *and* library, not force the camera); a picked file renders as a removable thumbnail chip above the input before sending |
 | F140 | Client-side re-encode | a picked file is drawn to a `<canvas>`, downscaled to a capped long edge, and sent as a `image/jpeg` base64 data URI in the `/chat` body — regardless of the source file's original format |
 | F141 | Caption with photo | sending a photo with typed text includes both in one turn; the rendered user-message bubble (from history / the live send) reads `"[Attached a photo] <caption>"`; photo alone reads `"[Attached a photo]"` |
 | F142 | `ConfirmCard` inline edit inputs | a `kind:"create"` action renders amount/date/category/notes as editable inputs (not plain text); an `update`/`delete` action still renders read-only with a checkbox only |

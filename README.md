@@ -2,7 +2,7 @@
 
 A mobile-first family expense tracker where multiple household members share and record shared spending and income, built on the [Frappe Framework](https://github.com/frappe/frappe).
 
-Expenso pairs a Vue 3 PWA with a guardrailed **MCP server**, so a household Member's Claude or ChatGPT can query and log spending directly. The MCP layer enforces separate `expenso:read` and `expenso:write` OAuth2 scopes, a combined per-Member daily write cap, and create-only access — no edit or delete through an AI client.
+Expenso is a Vue 3 PWA on a Frappe ledger. The in-app **Assistant** answers questions, proposes Expense and Income writes for Member confirmation, accepts receipt photos, and surfaces proactive Insights. Members can also connect Claude or ChatGPT through a remote **MCP** connector on the separate [`expenso-assistant`](https://github.com/arunjoyt/expenso-assistant) service. Usage caps apply on both paths (Assistant and MCP), each with its own rules. The MCP connector also uses separate `expenso:read` and `expenso:write` OAuth2 scopes and create-only access — no edit or delete through an AI client.
 
 ## Screenshots
 
@@ -16,9 +16,19 @@ Expenso pairs a Vue 3 PWA with a guardrailed **MCP server**, so a household Memb
 
 The Feed's + button opens the Add Expense sheet directly; the Expense/Income tab switcher inside it reaches Add Income without a second tap.
 
-| Budget | Settings |
+| Budget | Settings | Assistant |
+|---|---|---|
+| ![Budget](docs/images/budget.png) | ![Settings](docs/images/settings.png) | ![Assistant](docs/images/assistant.png) |
+
+| Assistant Chat | Confirm Card |
 |---|---|
-| ![Budget](docs/images/budget.png) | ![Settings](docs/images/settings.png) |
+| ![Assistant Chat](docs/images/assistant-chat.png) | ![Confirm Card](docs/images/assistant-confirm.png) |
+
+| Receipt Attach | Proactive Insight |
+|---|---|
+| ![Receipt Attach](docs/images/assistant-receipt.png) | ![Proactive Insight](docs/images/assistant-insight.png) |
+
+The Assistant answers questions directly, proposes Expense/Income writes in a confirm card for Member approval, accepts a receipt photo in place of typing, and posts unprompted Insight messages (budget drift, monthly summaries) into the same thread.
 
 ## Features
 
@@ -27,6 +37,9 @@ The Feed's + button opens the Add Expense sheet directly; the Expense/Income tab
 - **Budget** — a dedicated screen for setting each Category's spending cap for the selected month; unset months auto-fill by carrying forward the most recent earlier amount
 - **Settings** — the single surface for managing a Family's Category and Source lists (add, rename, delete)
 - **Shared Feed** — any Member can create, edit, or delete any Expense or Income belonging to their Family; the Feed refreshes live over Frappe's WebSocket when another Member makes a change, no manual refresh needed
+- **Assistant** — bottom-nav tab for chat with the Family ledger; proposed writes land in a confirm card before they apply
+- **Receipts** — attach a photo in Assistant chat; the agent proposes an Expense in the confirm card (no image storage)
+- **Proactive Insights** — scheduled read-only runs post Insight messages into the Assistant thread, with an unread badge on the nav tab
 
 ## User Roles
 
@@ -67,7 +80,15 @@ Before you start, get the connector's **Client ID** from your admin. Expenso use
 
 Claude only sees your own Family's data — access follows the same Family-scoped permissions as the app itself. Claude asks for approval before it calls a tool for the first time; change this under the connector's **Tool permissions**.
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#mcp-connector-setup-phase-5-admin-one-time) for the admin-side setup that creates the Client ID.
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md#mcp-connector-setup-admin-one-time) for the admin-side setup that creates the Client ID.
+
+## Docs
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — data model, screen specs, file layout
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) — ordered phases and streaks
+- [`docs/GLOSSARY.md`](docs/GLOSSARY.md) — domain terminology
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — production setup and verification checklist
+- [`docs/adr/`](docs/adr/) — architecture decision records
 
 ## Installation
 
@@ -78,6 +99,8 @@ cd $PATH_TO_YOUR_BENCH
 bench get-app $URL_OF_THIS_REPO --branch develop
 bench install-app expenso
 ```
+
+The in-app Assistant and the MCP connector need the separate [`expenso-assistant`](https://github.com/arunjoyt/expenso-assistant) service and `expenso_assistant_url` in site config. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## Testing
 
@@ -135,13 +158,12 @@ Pre-commit is configured to use the following tools for checking and formatting 
 - ruff
 - eslint
 - prettier
-- pyupgrade
 
 ## CI
 
-This app can use GitHub Actions for CI. The following workflows are configured:
+Workflow files for GitHub Actions are in the repo, but **CI** and **Linters** are currently disabled ([#55](https://github.com/arunjoyt/expenso/issues/55)). When enabled:
 
-- CI: Installs this app, runs backend and frontend unit tests, and builds the frontend on every push to `develop` branch.
+- CI: Installs this app, runs backend and frontend unit tests, and builds the frontend on every push to `develop`.
 - Linters: Runs [Frappe Semgrep Rules](https://github.com/frappe/semgrep-rules) and [pip-audit](https://pypi.org/project/pip-audit/) on every pull request.
 
 ## License

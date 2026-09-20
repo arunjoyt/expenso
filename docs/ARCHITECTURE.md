@@ -336,8 +336,9 @@ No Family Switcher — a Member belongs to exactly one Family.
 - **Phase 3 additions:** Budget Status indicator per Category row, budget amount shown alongside spend; a total Budget stat (sum of each Category's effective Budget for the month)
 - Stat tiles laid out as a 2×2 grid: Spent / Income on top, Savings / Budget below
 - Category breakdown includes any Category with spend this month, an effective Budget this month, or both — a Budget with $0 spent still shows a row; sorted by amount spent descending (zero-spend rows sort last)
+- Tapping a Category row with spend expands it inline (accordion) to list the matching Expenses for that month, newest first; a zero-spend row has no expand affordance. Multiple Category rows can be expanded at once. Each expanded Expense row shows its date, plus its Notes when present; tapping it opens the same Edit Expense sheet Feed uses
 - Prev / next month navigation; month state shared with Feed and Budget
-- Read-only — no add/edit entry points live here; editing a Budget happens on the Budget screen, adding Income/Expense happens via the Feed FAB
+- Read-only in the sense that Analytics has no add/edit chrome of its own (no FAB, no inline editing controls) — editing a Budget happens on the Budget screen, adding Income/Expense happens via the Feed FAB. Expanding a Category to view and tap through to its Expenses does not count as an entry point in that sense; it reveals existing data and reuses Feed's Edit sheet rather than introducing new mutation UI
 
 ### Add / Edit Expense (bottom sheet)
 - Slides up from the Feed FAB (add, defaults to the Expense tab) or tapping an Expense row (edit)

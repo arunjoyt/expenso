@@ -1022,6 +1022,24 @@ Balance figure.
 
 ---
 
+### P8-S1 · `[FE]` Analytics category drill-down (issue #105)
+
+Tapping a Category row with spend expands it inline to show the Expenses that make up its total for the month. Client-side only — filters the already-fetched month's Expense list (from `useExpenses`, the same composable Feed uses) by `category_name`, matching `_aggregate_categories`' own `"Uncategorized"` fallback (`expenso/expenso/api.py`). No backend change, so no integration tests here.
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F146 | Tap a Category row with spend | expands inline, showing one row per matching Expense (filtered by `category_name`), collapsed by default |
+| F147 | Tap a Category row with zero spend | no expand affordance (chevron) is shown; tapping it does nothing |
+| F148 | Tap two different Category rows in turn | both stay expanded at once — no auto-collapse of the other |
+| F149 | Expanded Expense row rendering | shows the date; appends `· <notes>` only when Notes is non-empty, otherwise date only |
+| F150 | Category with no Category assigned on its Expenses | rows with a null/empty `category_name` group under "Uncategorized", matching the backend's aggregation fallback |
+| F151 | Tap an Expense row inside the expanded list | opens the Edit sheet via `useEntrySheet().openEditExpense`, passed that exact Expense |
+| F152 | Tap an already-expanded Category row again | collapses it |
+
+---
+
 ## Totals
 
 Phases 1–3 and 5 (shipped): **~340** tests (backend unit + integration + frontend). Phase 4's

@@ -39,6 +39,8 @@
 				:key="category.name"
 				data-test="category-row"
 				class="rounded-2xl bg-white p-3 shadow-sm"
+				:class="{ 'cursor-pointer': category.amount }"
+				@click="category.amount && toggleExpanded(category.name)"
 			>
 				<div class="mb-2 flex items-center justify-between gap-2">
 					<span class="flex min-w-0 items-center gap-2 font-medium text-gray-800">
@@ -62,6 +64,14 @@
 							class="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700"
 						>
 							🚨 Over budget
+						</span>
+						<span
+							v-if="category.amount"
+							data-test="category-expand-chevron"
+							class="shrink-0 text-xs text-gray-400 transition-transform"
+							:class="{ 'rotate-180': isExpanded(category.name) }"
+						>
+							▾
 						</span>
 					</span>
 					<span class="shrink-0 font-bold text-gray-900">{{
@@ -91,23 +101,71 @@
 				<div v-else data-test="budget-summary-none" class="mt-1.5 text-xs text-gray-400">
 					No budget set
 				</div>
+
+				<div
+					v-if="isExpanded(category.name)"
+					data-test="category-expanded-expenses"
+					class="mt-2 flex flex-col gap-1 border-t border-gray-100 pt-2"
+				>
+					<div
+						v-for="expense in expensesForCategory(category.name)"
+						:key="expense.name"
+						data-test="category-expense-row"
+						class="flex cursor-pointer items-center justify-between gap-2 rounded-xl px-1 py-1.5 text-sm transition active:scale-[0.98]"
+						@click.stop="openEditExpense(expense)"
+					>
+						<span class="min-w-0 truncate text-gray-600">
+							{{ dateGroupLabel(expense.date) }}
+							<template v-if="expense.notes"> · {{ expense.notes }}</template>
+						</span>
+						<span class="shrink-0 font-semibold text-gray-900">{{
+							formatAmount(expense.amount)
+						}}</span>
+					</div>
+				</div>
 			</div>
 		</div>
 	</div>
 </template>
 
 <script setup>
-import { computed } from "vue";
+import { computed, reactive } from "vue";
 import { useMonthStore } from "@/stores/month";
 import { useAnalytics } from "@/composables/useAnalytics";
+import { useExpenses } from "@/composables/useExpenses";
+import { useEntrySheet } from "@/composables/useEntrySheet";
 import { getCategoryVisual } from "@/utils/categoryStyle";
+import { dateGroupLabel } from "@/utils/dateGroup";
 import MonthNav from "@/components/MonthNav.vue";
 
 const monthStore = useMonthStore();
 const { total, categories, incomeTotal, balance, loading } = useAnalytics(monthStore);
+const { expenses } = useExpenses(monthStore);
+const { openEditExpense } = useEntrySheet();
 
 function formatAmount(amount) {
 	return new Intl.NumberFormat().format(amount);
+}
+
+const expandedCategories = reactive(new Set());
+
+function isExpanded(categoryName) {
+	return expandedCategories.has(categoryName);
+}
+
+function toggleExpanded(categoryName) {
+	if (expandedCategories.has(categoryName)) {
+		expandedCategories.delete(categoryName);
+	} else {
+		expandedCategories.add(categoryName);
+	}
+}
+
+function expensesForCategory(categoryName) {
+	// Expenses already come back sorted newest-first from get_expenses.
+	return expenses.value.filter(
+		(expense) => (expense.category_name || "Uncategorized") === categoryName
+	);
 }
 
 const formattedTotal = computed(() => formatAmount(total.value));

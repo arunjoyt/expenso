@@ -8,8 +8,18 @@ import Analytics from "@/pages/Analytics.vue";
 vi.mock("@/composables/useAnalytics", () => ({
 	useAnalytics: vi.fn(),
 }));
+vi.mock("@/composables/useExpenses", () => ({
+	useExpenses: vi.fn(),
+}));
+const entrySheet = {
+	openEditExpense: vi.fn(),
+};
+vi.mock("@/composables/useEntrySheet", () => ({
+	useEntrySheet: () => entrySheet,
+}));
 
 import { useAnalytics } from "@/composables/useAnalytics";
+import { useExpenses } from "@/composables/useExpenses";
 
 function mockAnalytics(total, categories, { incomeTotal = 0, balance = 0, loading = false } = {}) {
 	useAnalytics.mockReturnValue({
@@ -22,8 +32,18 @@ function mockAnalytics(total, categories, { incomeTotal = 0, balance = 0, loadin
 	});
 }
 
+function mockExpenses(expenses, loading = false) {
+	useExpenses.mockReturnValue({
+		expenses: ref(expenses),
+		loading: ref(loading),
+		reload: vi.fn(),
+	});
+}
+
 beforeEach(() => {
 	setActivePinia(createPinia());
+	entrySheet.openEditExpense.mockClear();
+	mockExpenses([]);
 });
 
 describe("Analytics page", () => {
@@ -201,5 +221,162 @@ describe("Analytics page", () => {
 		const wrapper = mount(Analytics);
 		await wrapper.find('[aria-label="Next month"]').trigger("click");
 		expect(monthStore.month).toBe(7);
+	});
+
+	describe("category drill-down", () => {
+		// F146
+		it("expands a category with spend to show its matching Expenses", async () => {
+			mockAnalytics(50, [{ name: "Groceries", amount: 30 }]);
+			mockExpenses([
+				{
+					name: "EXP-1",
+					amount: 20,
+					date: "2026-09-03",
+					category_name: "Groceries",
+					notes: "",
+				},
+				{
+					name: "EXP-2",
+					amount: 10,
+					date: "2026-09-08",
+					category_name: "Groceries",
+					notes: "",
+				},
+				{
+					name: "EXP-3",
+					amount: 20,
+					date: "2026-09-05",
+					category_name: "Dining",
+					notes: "",
+				},
+			]);
+			const wrapper = mount(Analytics);
+			expect(wrapper.find('[data-test="category-expanded-expenses"]').exists()).toBe(false);
+
+			await wrapper.find('[data-test="category-row"]').trigger("click");
+
+			const rows = wrapper.findAll('[data-test="category-expense-row"]');
+			expect(rows).toHaveLength(2);
+		});
+
+		// F147
+		it("does not expand a category with zero spend", async () => {
+			mockAnalytics(0, [{ name: "Groceries", amount: 0, budget: 200 }]);
+			const wrapper = mount(Analytics);
+			expect(wrapper.find('[data-test="category-expand-chevron"]').exists()).toBe(false);
+
+			await wrapper.find('[data-test="category-row"]').trigger("click");
+			expect(wrapper.find('[data-test="category-expanded-expenses"]').exists()).toBe(false);
+		});
+
+		// F148
+		it("keeps multiple categories expanded at once", async () => {
+			mockAnalytics(50, [
+				{ name: "Groceries", amount: 30 },
+				{ name: "Dining", amount: 20 },
+			]);
+			mockExpenses([
+				{
+					name: "EXP-1",
+					amount: 30,
+					date: "2026-09-03",
+					category_name: "Groceries",
+					notes: "",
+				},
+				{
+					name: "EXP-2",
+					amount: 20,
+					date: "2026-09-05",
+					category_name: "Dining",
+					notes: "",
+				},
+			]);
+			const wrapper = mount(Analytics);
+			const categoryRows = wrapper.findAll('[data-test="category-row"]');
+			await categoryRows[0].trigger("click");
+			await categoryRows[1].trigger("click");
+
+			expect(wrapper.findAll('[data-test="category-expanded-expenses"]')).toHaveLength(2);
+		});
+
+		// F149
+		it("shows the date and notes on an expanded Expense row, falling back to date only", async () => {
+			mockAnalytics(50, [{ name: "Groceries", amount: 50 }]);
+			mockExpenses([
+				{
+					name: "EXP-1",
+					amount: 30,
+					date: "2026-09-12",
+					category_name: "Groceries",
+					notes: "Farmer's market",
+				},
+				{
+					name: "EXP-2",
+					amount: 20,
+					date: "2026-09-13",
+					category_name: "Groceries",
+					notes: "",
+				},
+			]);
+			const wrapper = mount(Analytics);
+			await wrapper.find('[data-test="category-row"]').trigger("click");
+
+			const rows = wrapper.findAll('[data-test="category-expense-row"]');
+			expect(rows[0].text()).toContain("Sep 12");
+			expect(rows[0].text()).toContain("Farmer's market");
+			expect(rows[1].text()).toContain("Sep 13");
+			expect(rows[1].text()).not.toContain("·");
+		});
+
+		// F150
+		it("groups Expenses with no category under Uncategorized", async () => {
+			mockAnalytics(15, [{ name: "Uncategorized", amount: 15 }]);
+			mockExpenses([
+				{ name: "EXP-1", amount: 15, date: "2026-09-01", category_name: null, notes: "" },
+			]);
+			const wrapper = mount(Analytics);
+			await wrapper.find('[data-test="category-row"]').trigger("click");
+
+			expect(wrapper.findAll('[data-test="category-expense-row"]')).toHaveLength(1);
+		});
+
+		// F151
+		it("opens the Edit sheet for an Expense tapped inside the expanded list", async () => {
+			mockAnalytics(30, [{ name: "Groceries", amount: 30 }]);
+			const expense = {
+				name: "EXP-1",
+				amount: 30,
+				date: "2026-09-03",
+				category_name: "Groceries",
+				notes: "",
+			};
+			mockExpenses([expense]);
+			const wrapper = mount(Analytics);
+			await wrapper.find('[data-test="category-row"]').trigger("click");
+			await wrapper.find('[data-test="category-expense-row"]').trigger("click");
+
+			expect(entrySheet.openEditExpense).toHaveBeenCalledWith(expense);
+		});
+
+		// F152
+		it("collapses an expanded category on a second tap", async () => {
+			mockAnalytics(30, [{ name: "Groceries", amount: 30 }]);
+			mockExpenses([
+				{
+					name: "EXP-1",
+					amount: 30,
+					date: "2026-09-03",
+					category_name: "Groceries",
+					notes: "",
+				},
+			]);
+			const wrapper = mount(Analytics);
+			const row = wrapper.find('[data-test="category-row"]');
+			await row.trigger("click");
+			expect(wrapper.find('[data-test="category-expanded-expenses"]').exists()).toBe(true);
+
+			await row.trigger("click");
+			expect(wrapper.find('[data-test="category-expanded-expenses"]').exists()).toBe(false);
+		});
 	});
 });

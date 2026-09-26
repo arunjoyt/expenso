@@ -86,8 +86,8 @@
 
 				<ConfirmCard
 					v-if="card"
-					:key="card.actions.map((a) => a.id).join(',')"
-					:actions="card.actions"
+					:key="card.key"
+					:requests="card.requests"
 					:pending="card.pending"
 					@confirm="onConfirm"
 					@cancel="onCancel"
@@ -215,8 +215,9 @@ const loading = ref(false);
 const sending = ref(false);
 const confirmingClear = ref(false);
 const clearing = ref(false);
-// The pending confirm card, or null. { actions, pending }.
+// The pending confirm card, or null. { requests, pending, key }.
 const card = ref(null);
+let cardCount = 0;
 const fileInput = ref(null);
 // A picked-but-not-yet-sent photo: { dataUri }. Replaced, not accumulated —
 // one photo per turn (P7-S1).
@@ -328,18 +329,16 @@ async function send() {
 	);
 }
 
-async function onConfirm(selectedIds, edits) {
+async function onConfirm(decisions) {
 	if (!card.value) return;
 	card.value.pending = true;
-	const decision = { selected: selectedIds };
-	if (edits && Object.keys(edits).length) decision.edits = edits;
-	await runResume(decision);
+	await runResume({ decisions });
 }
 
 async function onCancel() {
 	if (!card.value) return;
 	card.value.pending = true;
-	await runResume({ selected: [] });
+	await runResume({ decisions: card.value.requests.map(() => ({ type: "reject" })) });
 }
 
 async function runResume(decision) {
@@ -373,7 +372,8 @@ async function runLeg(runner, rollbackTo) {
 			if (streamIndex !== -1 && !messages.value[streamIndex].content) {
 				messages.value.splice(streamIndex, 1);
 			}
-			card.value = { actions: result.actions, pending: false };
+			// A fresh key per card, so a second card never reuses the first's rows.
+			card.value = { requests: result.requests, pending: false, key: ++cardCount };
 			return;
 		}
 

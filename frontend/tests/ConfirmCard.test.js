@@ -2,86 +2,97 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import ConfirmCard from "@/components/ConfirmCard.vue";
 
-const ACTIONS = [
+// Stock LangChain human-in-the-loop `action_requests` (ADR 0010).
+const REQUESTS = [
 	{
-		id: "a1",
-		tool: "update_expense",
-		kind: "update",
-		entity: "expense",
-		summary: "Coffee · Dining · 2026-03-14",
-		changes: [
-			{ field: "amount", from: 4.5, to: 6 },
-			{ field: "notes", from: null, to: "oat milk" },
-		],
+		name: "update_expense",
+		args: { name: "EXP-17", amount: 6, notes: "oat milk" },
+		description:
+			"Edit expense 4.5 · Dining · 2026-03-14 — amount: 4.5 → 6; notes: None → oat milk",
 	},
 	{
-		id: "a2",
-		tool: "create_expense",
-		kind: "create",
-		entity: "expense",
-		summary: "New expense",
-		values: { amount: 12, category: "Groceries", notes: null, name: "hidden" },
+		name: "create_expense",
+		args: { amount: 12, category: "Groceries", notes: null },
+		description: "New expense: 12, Groceries",
+	},
+	{
+		name: "delete_expense",
+		args: { name: "EXP-18" },
+		description: "Delete expense 3 · Dining · 2026-03-12",
 	},
 ];
 
 function mountCard(props = {}) {
-	return mount(ConfirmCard, { props: { actions: ACTIONS, ...props } });
+	return mount(ConfirmCard, { props: { requests: REQUESTS, ...props } });
+}
+
+function inputsOf(row) {
+	return row.findAll('[data-test="confirm-value-input"]');
 }
 
 describe("ConfirmCard", () => {
 	// F131
-	it("renders a row per action with the concrete values and an edit diff", () => {
+	it("renders a row per request with its description", () => {
 		const wrapper = mountCard();
 		const rows = wrapper.findAll('[data-test="confirm-action"]');
-		expect(rows.length).toBe(2);
+		expect(rows.length).toBe(3);
+		const descriptions = wrapper.findAll('[data-test="confirm-description"]');
+		expect(descriptions[0].text()).toContain("amount: 4.5 → 6");
+		expect(descriptions[2].text()).toBe("Delete expense 3 · Dining · 2026-03-12");
+	});
 
-		const diff = wrapper.find('[data-test="confirm-diff"]').text();
-		expect(diff).toContain("amount");
-		expect(diff).toContain("4.5");
-		expect(diff).toContain("6");
-
-		const inputs = wrapper.findAll('[data-test="confirm-value-input"]');
-		const fields = inputs.map((i) => i.attributes("data-field"));
-		expect(fields).toEqual(["amount", "category", "notes"]);
-		expect(fields).not.toContain("name"); // `name` is filtered out
-		expect(inputs[0].element.value).toBe("12");
-		expect(inputs[1].element.value).toBe("Groceries");
+	// F131/F142 — every write's args are editable, never the row id
+	it("shows editable args per row, hiding the row id", () => {
+		const rows = mountCard().findAll('[data-test="confirm-action"]');
+		expect(inputsOf(rows[0]).map((i) => i.attributes("data-field"))).toEqual([
+			"amount",
+			"notes",
+		]);
+		expect(inputsOf(rows[1]).map((i) => i.attributes("data-field"))).toEqual([
+			"amount",
+			"category",
+			"notes",
+		]);
+		expect(inputsOf(rows[2])).toHaveLength(0); // a delete has only the row id
+		expect(inputsOf(rows[1])[0].element.value).toBe("12");
 	});
 
 	// F131
-	it("has a checkbox per action, all checked, plus Confirm and Cancel", () => {
+	it("has a checkbox per request, all checked, plus Confirm and Cancel", () => {
 		const wrapper = mountCard();
 		const boxes = wrapper.findAll('[data-test="confirm-action-checkbox"]');
-		expect(boxes.length).toBe(2);
+		expect(boxes.length).toBe(3);
 		expect(boxes.every((b) => b.element.checked)).toBe(true);
-		expect(wrapper.find('[data-test="confirm-apply"]').exists()).toBe(true);
+		expect(wrapper.find('[data-test="confirm-apply"]').text()).toBe("Confirm all");
 		expect(wrapper.find('[data-test="confirm-cancel"]').exists()).toBe(true);
 	});
 
 	// F132
-	it("Confirm emits the checked ids; deselecting a row drops its id", async () => {
+	it("Confirm emits one decision per request; an unchecked row rejects", async () => {
 		const wrapper = mountCard();
 		await wrapper.findAll('[data-test="confirm-action-checkbox"]')[1].setValue(false);
+		expect(wrapper.find('[data-test="confirm-apply"]').text()).toBe("Confirm 2");
 		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
-		expect(wrapper.emitted("confirm")[0]).toEqual([["a1"], {}]);
+		expect(wrapper.emitted("confirm")[0]).toEqual([
+			[{ type: "approve" }, { type: "reject" }, { type: "approve" }],
+		]);
 	});
 
 	// F142/F143
-	it("editing a create action's field sends it in the edits map; untouched ones are absent", async () => {
+	it("an edited field sends an edit decision with the full args", async () => {
 		const wrapper = mountCard();
-		const amountInput = wrapper.findAll('[data-test="confirm-value-input"]')[0];
-		await amountInput.setValue("15");
+		const createRow = wrapper.findAll('[data-test="confirm-action"]')[1];
+		await inputsOf(createRow)[0].setValue("15");
 		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
-		expect(wrapper.emitted("confirm")[0]).toEqual([["a1", "a2"], { a2: { amount: 15 } }]);
-	});
-
-	// F142 — update/delete actions never get inline edit inputs
-	it("does not render edit inputs for update/delete actions", () => {
-		const wrapper = mountCard();
-		const fields = wrapper
-			.findAll('[data-test="confirm-value-input"]')
-			.map((i) => i.attributes("data-field"));
-		expect(fields).toEqual(["amount", "category", "notes"]); // only a2 (create)
+		const [decisions] = wrapper.emitted("confirm")[0];
+		expect(decisions[1]).toEqual({
+			type: "edit",
+			edited_action: {
+				name: "create_expense",
+				args: { amount: 15, category: "Groceries", notes: null },
+			},
+		});
+		expect(decisions[0]).toEqual({ type: "approve" }); // untouched rows approve
 	});
 
 	// F132
@@ -98,5 +109,8 @@ describe("ConfirmCard", () => {
 			wrapper.find('[data-test="confirm-action-checkbox"]').attributes("disabled")
 		).toBeDefined();
 		expect(wrapper.find('[data-test="confirm-cancel"]').attributes("disabled")).toBeDefined();
+		expect(
+			wrapper.find('[data-test="confirm-value-input"]').attributes("disabled")
+		).toBeDefined();
 	});
 });

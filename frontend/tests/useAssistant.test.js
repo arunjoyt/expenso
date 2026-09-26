@@ -104,15 +104,20 @@ describe("useAssistant — SSE parser (F134)", () => {
 
 	// F135
 	it("resolves as a confirm result when the leg ends on needs_confirmation", async () => {
-		const actions = [{ id: "a1", tool: "update_expense", kind: "update", summary: "Coffee" }];
+		const requests = [
+			{ name: "update_expense", args: { name: "EXP-17", amount: 6 }, description: "Coffee" },
+		];
 		fetch.mockResolvedValueOnce(
 			sseResponse([
 				frame("step", { text: "Reading expenses for March" }),
-				frame("needs_confirmation", { actions }),
+				frame("needs_confirmation", {
+					action_requests: requests,
+					review_configs: [{ action_name: "update_expense" }],
+				}),
 			])
 		);
 		const result = await useAssistant().sendMessage("bump the coffee", {});
-		expect(result).toEqual({ kind: "confirm", actions });
+		expect(result).toEqual({ kind: "confirm", requests });
 	});
 });
 
@@ -146,13 +151,15 @@ describe("useAssistant — resume (F136)", () => {
 				frame("done", { message_id: "m9" }),
 			])
 		);
-		const result = await useAssistant().resume({ selected: ["a1"] }, {});
+		const result = await useAssistant().resume({ decisions: [{ type: "approve" }] }, {});
 
 		const [url, options] = fetch.mock.calls[0];
 		expect(url).toBe(`${SERVICE}/resume`);
 		expect(options.method).toBe("POST");
 		expect(options.headers.Authorization).toBe("Bearer tok-1");
-		expect(JSON.parse(options.body)).toEqual({ decision: { selected: ["a1"] } });
+		expect(JSON.parse(options.body)).toEqual({
+			decision: { decisions: [{ type: "approve" }] },
+		});
 		expect(result).toEqual({
 			kind: "message",
 			id: "m9",
@@ -162,26 +169,31 @@ describe("useAssistant — resume (F136)", () => {
 	});
 
 	// F143
-	it("passes edits through in the resume decision body", async () => {
+	it("passes an edit decision through in the resume body", async () => {
 		fetch.mockResolvedValueOnce(
 			sseResponse([
 				frame("token", { text: "Updated." }),
 				frame("done", { message_id: "m10" }),
 			])
 		);
-		await useAssistant().resume({ selected: ["a1"], edits: { a1: { amount: 15 } } }, {});
+		const decision = {
+			decisions: [
+				{ type: "edit", edited_action: { name: "create_expense", args: { amount: 15 } } },
+			],
+		};
+		await useAssistant().resume(decision, {});
 
 		const [, options] = fetch.mock.calls[0];
-		expect(JSON.parse(options.body)).toEqual({
-			decision: { selected: ["a1"], edits: { a1: { amount: 15 } } },
-		});
+		expect(JSON.parse(options.body)).toEqual({ decision });
 	});
 
 	it("can resolve into a second confirm card", async () => {
-		const actions = [{ id: "b1", tool: "update_expense", kind: "update", summary: "Retry" }];
-		fetch.mockResolvedValueOnce(sseResponse([frame("needs_confirmation", { actions })]));
-		const result = await useAssistant().resume({ selected: ["a1"] }, {});
-		expect(result).toEqual({ kind: "confirm", actions });
+		const requests = [{ name: "update_expense", args: { name: "b1" }, description: "Retry" }];
+		fetch.mockResolvedValueOnce(
+			sseResponse([frame("needs_confirmation", { action_requests: requests })])
+		);
+		const result = await useAssistant().resume({ decisions: [{ type: "approve" }] }, {});
+		expect(result).toEqual({ kind: "confirm", requests });
 	});
 });
 

@@ -946,7 +946,7 @@ actions only.
 | Test | Assertion |
 |------|-----------|
 | `POST /chat` with `image` set | `entry_method` binds `"receipt"` for the turn; the trace opens with `feature="receipt"`; a synthetic `step` ("Reading the receipt…") is the first SSE event, before any tool/token event |
-| `agent_node` invocation with `config["configurable"]["receipt_image"]` set | the model call receives a multimodal message (text + image block); the graph's checkpointed `state["messages"]` after the turn contains only the text marker, never the image bytes or data URI |
+| A model call with `receipt_image` set (in `config["configurable"]` before ADR 0010, `RunContext` after) | the model call receives a multimodal message (text + image block); the graph's checkpointed `state["messages"]` after the turn contains only the text marker, never the image bytes or data URI |
 | A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values; the action's captured `entry_method` is `"receipt"` |
 | Confirm the proposal (unedited) — `POST /resume {selected:["a1"]}`, no `edits` | Expense created with `entry_method="receipt"`; the **resume leg's** trace gets `receipt_accuracy_{amount,date,category,notes}` scores = 1 (proposed matched confirmed) |
 | Edit the amount in the card — `POST /resume {selected:["a1"], edits:{a1:{amount:...}}}` | Expense saved with the edited amount (edits merged into `call_args` before the write); `receipt_accuracy_amount` score = 0 on the resume trace, the other three = 1 |
@@ -1037,6 +1037,62 @@ Tapping a Category row with spend expands it inline to show the Expenses that ma
 | F150 | Category with no Category assigned on its Expenses | rows with a null/empty `category_name` group under "Uncategorized", matching the backend's aggregation fallback |
 | F151 | Tap an Expense row inside the expanded list | opens the Edit sheet via `useEntrySheet().openEditExpense`, passed that exact Expense |
 | F152 | Tap an already-expanded Category row again | collapses it |
+
+### ADR 0010 · `[A]`+`[FE]` Agent on LangChain v1 `create_agent` with stock middleware
+
+Decisions taken while implementing (2026-09-26, recorded in ADR 0010): align with stock
+LangChain and park what it does not cover. `create_agent` runs the loop; the confirm card is
+the stock `HumanInTheLoopMiddleware` (approve / edit / reject per write call, payload
+`action_requests`, resume `{decisions: [...]}`), with a `description` callback for the row
+text (`from → to` when the row was read); the cap is the stock `ToolCallLimitMiddleware`
+(per-run, counts single calls, resets on `/resume`); the history bound is the stock
+`ContextEditingMiddleware` (transient, clears old tool outputs); `FrappeError`s from tools go
+back to the model through the stock `ToolErrorMiddleware`. The one custom middleware is
+`ModelCallShaping` (prompt, receipt image, proactive instruction, Insight tag). `today`,
+`receipt_image` and `proactive_instruction` ride in a typed `RunContext`; `entry_method` stays
+in state and `/resume` binds it from there; receipt-accuracy scores are computed at resume
+from the card and the decisions. `discard_pending` finds a stale card from state. Parked (see
+ADR 0010): the injected stale-write guard (now model-dependent — known issue), structured card
+fields, the per-card overflow cap, the "re-read first" nudge, row-specific outcome text, the
+cap across the confirm pause, and a hard token budget on chat text. Tests for those dropped
+behaviours are removed; the rest of the P6-S5/P6-S7/P7-S1/P7-S2 suites are ported to the new
+shapes.
+
+**Service tests** (`expenso-assistant` repo)
+
+| # | Test | Assertion |
+|---|------|-----------|
+| I194 | Test model double | `ScriptedChatModel` rejects a prompt holding a tool call with no `ToolMessage`, as OpenAI does (HTTP 400) — every agent test enforces it |
+| I195 | A card whose paused task was lost (simulated with `update_state(None, as_node=END)`) | `pending_card` is `None`, but the next `/chat` still emits the "Discarded the unconfirmed changes" step and ends `done`; the model never sees the orphaned call |
+| I196 | Interactive graph, one model call | the model is bound to every `ALL_TOOLS` name at call time (`create_agent` binds per call) |
+| I197 | Read-only graph, one model call | the model is bound to exactly `READ_TOOLS`; no human-in-the-loop node exists in the graph |
+| I198 | Write call | the leg ends on `needs_confirmation` with one `action_requests` entry (`name`, `args`, `description` with `amount: 4.5 → 6.0`) and `review_configs` allowing approve / edit / reject; nothing is written |
+| I199 | Write whose row was never read | the card still opens; its description says "(not in what you've read)" |
+| I200 | Read + write in one message | the card holds only the write; the read runs after the decision |
+| I201 | `approve` | the write runs with the proposed args; the leg ends `done` |
+| I202 | Stale-write guard (known issue) | the service does not inject `if_modified_since` — only what the model passed is sent |
+| I203 | `approve` + `reject` in one card | only the approved write runs; the rejected call's `ToolMessage` says it was rejected |
+| I204 | `reject` for every row | nothing is written; the leg ends `done` |
+| I205 | `edit` | the edited args are what Frappe receives, and the `ToolMessage` tells the model the call that actually ran |
+| I206 | A `TimestampMismatchError` on one approved write | both writes are attempted; the conflict reaches the model as "the row changed since you read it"; the leg ends `done` |
+| I207 | Cap on the resume leg, `RUN_MAX_TOOL_CALLS=2` | the per-run count resets on `/resume`: two calls before the card and one after end `done`, not `tool_cap` |
+| I208 | Card text for `set_budget` / `add_category` | "Budget — Groceries, 3/2026: amount 300 → 400" when a budget row was read; "Add category 'Travel'" |
+| I209 | Thread over `CHAT_HISTORY_TOKEN_BUDGET` with several tool results | older tool outputs reach the model as `[cleared]`; the checkpointed thread keeps every result |
+| I210 | Receipt resume (`approve` / `edit` / `reject`) | writes carry `entry_method=receipt`; `receipt_accuracy_*` scores post on the resume trace (1 for an unchanged field, 0 for an edited one, none on reject or for a non-receipt write) |
+| I211 | A read that gets a Frappe 503 once | the stock `ToolRetryMiddleware` retries it; the read is called twice; the leg ends `done` |
+| I212 | An approved write that gets a Frappe 503 | it is called once only (writes are never retried); the error reaches the model as "could not be applied"; the leg ends `done` |
+| I213 | Primary model raises, fallback model given | the stock `ModelFallbackMiddleware` answers with the fallback; the leg ends `done` |
+| I214 | Primary model raises, no fallback | the turn ends in `error` / `internal` |
+
+**Frontend unit tests**
+
+| # | Test | Assertion |
+|---|------|-----------|
+| F153 | `ConfirmCard` renders `action_requests` | a row per request with its description; editable inputs for every arg except `name` / `if_modified_since`; a delete shows none |
+| F154 | Confirm with one row unchecked | emits one decision per request, in order: `reject` for the unchecked row, `approve` for the others; the button reads "Confirm N" |
+| F155 | Edit a field, then Confirm | emits `{type: "edit", edited_action: {name, args}}` with the full args; untouched rows `approve` |
+| F156 | Cancel on the Assistant page | resumes with a `reject` for every request |
+| F157 | `useAssistant` on `needs_confirmation` | resolves `{kind: "confirm", requests}` from `action_requests`; `/resume` posts `{decision: {decisions: [...]}}` unchanged |
 
 ---
 

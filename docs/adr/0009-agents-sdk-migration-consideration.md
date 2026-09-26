@@ -1,6 +1,6 @@
 # Considering a move from LangGraph to the OpenAI Agents SDK
 
-**Status: proposed — under evaluation, not decided.** Written from a grill-style debate session, 2026-09-12. This is not a reversal of [ADR 0008](0008-in-app-assistant-architecture.md); it records the pros/cons surfaced while debating whether Phase 6/7's shipped LangGraph implementation should move to the OpenAI Agents SDK, and whether that move would also justify folding the Assistant into Frappe (dropping the standalone `expenso-assistant` service).
+**Status: rejected (2026-09-26) — superseded by [ADR 0010](0010-langchain-v1-create-agent-consideration.md).** The Assistant stays on LangGraph and moved to stock LangChain v1 `create_agent` middleware instead. The OpenAI Agents SDK is an alternative agent framework, not an add-on, so adopting it would mean a second framework for the same job. The `openai` API client stays, used by `langchain-openai`. Written from a grill-style debate session, 2026-09-12. This is not a reversal of [ADR 0008](0008-in-app-assistant-architecture.md); it records the pros/cons surfaced while debating whether Phase 6/7's shipped LangGraph implementation should move to the OpenAI Agents SDK, and whether that move would also justify folding the Assistant into Frappe (dropping the standalone `expenso-assistant` service).
 
 ## Context
 

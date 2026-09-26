@@ -14,7 +14,7 @@ vi.mock("@/composables/useAssistant", () => ({
 }));
 
 const message = (content, id = "a1") => ({ kind: "message", id, role: "assistant", content });
-const confirm = (actions) => ({ kind: "confirm", actions });
+const confirm = (requests) => ({ kind: "confirm", requests });
 
 import Assistant from "@/pages/Assistant.vue";
 
@@ -230,12 +230,9 @@ describe("Assistant screen", () => {
 
 	const ACTIONS = [
 		{
-			id: "a1",
-			tool: "update_expense",
-			kind: "update",
-			entity: "expense",
-			summary: "Coffee",
-			changes: [{ field: "amount", from: 4.5, to: 6 }],
+			name: "update_expense",
+			args: { name: "EXP-17", amount: 6 },
+			description: "Edit expense 4.5 · Dining · 2026-03-14 — amount: 4.5 → 6",
 		},
 	];
 
@@ -254,7 +251,10 @@ describe("Assistant screen", () => {
 		await wrapper.find('[data-test="confirm-apply"]').trigger("click");
 		await flushPromises();
 
-		expect(assistant.resume).toHaveBeenCalledWith({ selected: ["a1"] }, expect.any(Object));
+		expect(assistant.resume).toHaveBeenCalledWith(
+			{ decisions: [{ type: "approve" }] },
+			expect.any(Object)
+		);
 		expect(wrapper.find('[data-test="assistant-message"]').text()).toContain(
 			"Updated the coffee to 6."
 		);
@@ -262,7 +262,7 @@ describe("Assistant screen", () => {
 	});
 
 	// F137
-	it("Cancel resumes with an empty selection", async () => {
+	it("Cancel resumes with a reject for every request", async () => {
 		assistant.sendMessage.mockResolvedValue(confirm(ACTIONS));
 		assistant.resume.mockResolvedValue(message("Okay, left it as is."));
 
@@ -273,19 +273,19 @@ describe("Assistant screen", () => {
 		await wrapper.find('[data-test="confirm-cancel"]').trigger("click");
 		await flushPromises();
 
-		expect(assistant.resume).toHaveBeenCalledWith({ selected: [] }, expect.any(Object));
+		expect(assistant.resume).toHaveBeenCalledWith(
+			{ decisions: [{ type: "reject" }] },
+			expect.any(Object)
+		);
 	});
 
 	// F137
 	it("a second needs_confirmation replaces the card", async () => {
 		const RETRY = [
 			{
-				id: "b1",
-				tool: "update_expense",
-				kind: "update",
-				entity: "expense",
-				summary: "Retry",
-				changes: [{ field: "amount", from: 5, to: 6 }],
+				name: "update_expense",
+				args: { name: "EXP-17", amount: 6 },
+				description: "Retry: edit expense 5 · Dining — amount: 5 → 6",
 			},
 		];
 		assistant.sendMessage.mockResolvedValue(confirm(ACTIONS));
@@ -377,15 +377,12 @@ describe("Assistant screen", () => {
 	});
 
 	// F143
-	it("Confirm on an edited create action sends edits through to resume", async () => {
+	it("Confirm on an edited request sends an edit decision to resume", async () => {
 		const CREATE_ACTIONS = [
 			{
-				id: "a2",
-				tool: "create_expense",
-				kind: "create",
-				entity: "expense",
-				summary: "New expense",
-				values: { amount: 12, category: "Groceries" },
+				name: "create_expense",
+				args: { amount: 12, category: "Groceries" },
+				description: "New expense: 12, Groceries",
 			},
 		];
 		assistant.sendMessage.mockResolvedValue(confirm(CREATE_ACTIONS));
@@ -402,7 +399,17 @@ describe("Assistant screen", () => {
 		await flushPromises();
 
 		expect(assistant.resume).toHaveBeenCalledWith(
-			{ selected: ["a2"], edits: { a2: { amount: 15 } } },
+			{
+				decisions: [
+					{
+						type: "edit",
+						edited_action: {
+							name: "create_expense",
+							args: { amount: 15, category: "Groceries" },
+						},
+					},
+				],
+			},
 			expect.any(Object)
 		);
 	});

@@ -66,15 +66,16 @@ async function fetchHistory() {
 // URI, already re-encoded client-side — omitted entirely for a plain message.
 // Resolves with either
 //   { kind: "message", id, content }  — a `done` leg, or
-//   { kind: "confirm", actions }      — the leg ended on a confirm card;
+//   { kind: "confirm", requests }     — the leg ended on a confirm card
+//                                       (stock HITL `action_requests`);
 // rejects with an Error carrying `.code` on an `error` event.
 function sendMessage(text, handlers, { image } = {}) {
 	return runLeg("/chat", image ? { message: text, image } : { message: text }, handlers);
 }
 
-// The member's decision on a pending confirm card. `decision` is
-// `{ selected: [actionId, …], edits?: {actionId: {field: value}} }` — an
-// empty `selected` cancels; `edits` (P7-S1) is sparse and optional.
+// The member's decision on a pending confirm card: the stock LangChain
+// human-in-the-loop shape (ADR 0010), `{ decisions: [...] }` with one
+// `approve` / `edit` / `reject` per request, in order.
 function resume(decision, handlers) {
 	return runLeg("/resume", { decision }, handlers);
 }
@@ -89,7 +90,7 @@ async function runLeg(path, body, { onStep, onToken } = {}) {
 		throw error;
 	}
 	if (result.confirm) {
-		return { kind: "confirm", actions: result.confirm.actions ?? [] };
+		return { kind: "confirm", requests: result.confirm.action_requests ?? [] };
 	}
 
 	const message = { id: result.messageId, role: "assistant", content: result.text };

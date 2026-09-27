@@ -1,5 +1,7 @@
 # Receipt extraction tracking: correction-based accuracy, dedicated log DocType
 
+> **Head note (2026-09-27):** superseded again by [ADR 0011](0011-hosted-langsmith-tracing.md). Traces now go to hosted LangSmith (EU), with receipt images masked. The rejection of hosted observability below no longer stands. The accuracy metric is unchanged; it is now LangSmith feedback.
+
 > **Head note (2026-09-10):** the `LLM Call Log` DocType is **never built** — see the 2026-09-10 update block at the bottom. LLM call tracking is Langfuse traces only. The parts of this ADR that still stand: the correction-signal definition of "accuracy" and the rejection of hosted third-party observability. The body below is kept for the reasoning history.
 
 **Update:** the log DocType is named `LLM Call Log` (not `Receipt Extraction Log`), with a `feature` field (e.g. `"receipt_extraction"`), since a chat feature (issue #44) is planned and will also make OpenAI calls needing the same latency/token/cost tracking. This was a same-session refinement made before any code existed, so this ADR is updated in place rather than superseded — everything below applies to `LLM Call Log` filtered to `feature = "receipt_extraction"`. Accuracy fields remain specific to what a feature can measure; chat has no obvious equivalent to "did the Member correct this field" and isn't expected to populate them.

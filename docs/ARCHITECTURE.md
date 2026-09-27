@@ -14,8 +14,8 @@ Browser (PWA)
                      │        └── tools.py  ── Frappe REST /api/method/*  ← as the Member (bearer passthrough)
                      ├── FastMCP server (/mcp) ── registers the same tools.py functions
                      │        └── external ChatGPT/Claude connectors  (pure adapter — disableable)
-                     ├── Postgres (LangGraph checkpointer + Langfuse DB)
-                     └── Langfuse v2 (loopback only)
+                     ├── Postgres (LangGraph checkpointer + daily token counter)
+                     └── traces ──> hosted LangSmith, EU (receipt images masked)
 
 Frappe scheduler ──(per-Member read token)──> expenso-assistant /run/proactive
 ```
@@ -46,7 +46,7 @@ flowchart TD
     Frappe -->|"scheduled proactive run"| Assistant
 ```
 
-Frappe stays the OAuth **authorization server** and the system of record for the ledger. It holds **no** LLM dependency or key, and stores **nothing** about the Assistant. Conversation threads live in the service's Postgres; every LLM call and its cost live in Langfuse (there is no `LLM Call Log` DocType — ADR 0008's 2026-09-10 update). See `docs/adr/0008-in-app-assistant-architecture.md`.
+Frappe stays the OAuth **authorization server** and the system of record for the ledger. It holds **no** LLM dependency or key, and stores **nothing** about the Assistant. Conversation threads live in the service's Postgres; every LLM call and its cost live in LangSmith traces (there is no `LLM Call Log` DocType — ADR 0008's 2026-09-10 update; LangSmith since ADR 0011). See `docs/adr/0008-in-app-assistant-architecture.md` and `docs/adr/0011-hosted-langsmith-tracing.md`.
 
 ---
 
@@ -183,21 +183,21 @@ Auth: a single admin-configured `OAuth Client` (standard Frappe DocType) with sc
 
 ### Phase 6 additions — the Assistant
 
-#### LLM call telemetry — Langfuse only, nothing in Frappe
+#### LLM call telemetry — LangSmith only, nothing in Frappe
 
-The `expenso-assistant` service records every LLM call (chat, insights, receipt extraction) as a **Langfuse trace** — there is no `LLM Call Log` DocType and Frappe stores nothing about the Assistant (ADR 0008's 2026-09-10 update). (`metadata.family` was dropped by the 2026-09-10 P6-S5 update — the service has no server-side path to the Family and nothing in v1 slices by it.) Each trace carries:
+The `expenso-assistant` service records every turn (chat, insights, receipt extraction) as a **LangSmith trace**, in the EU region (ADR 0011). LangChain's stock `LangChainTracer` nests every model call, tool call, middleware step and confirm-card pause under the turn's root run. Receipt images are masked before upload; amounts, categories, notes and member emails are not. There is no `LLM Call Log` DocType and Frappe stores nothing about the Assistant (ADR 0008's 2026-09-10 update). (`metadata.family` was dropped by the 2026-09-10 P6-S5 update — the service has no server-side path to the Family and nothing in v1 slices by it.) Each trace carries:
 
-| On the trace | Value |
+| On the root run | Value |
 |---|---|
-| `user_id` | the Member the call was for |
+| name | `chat-turn` / `receipt-turn` / `insights-turn` |
+| tag | `feature:chat` / `feature:receipt` / `feature:insights` |
+| `metadata.user_id` | the Member the call was for |
 | `metadata.feature` | `chat` / `receipt` / `insights` |
-| `session_id` | the thread id |
-| generation cost | computed by the service and attached explicitly (not Langfuse's model-price table) |
-| `receipt_accuracy_{amount,date,category,notes}` scores | `receipt` traces only — proposed-vs-confirmed field agreement, posted at `/resume` (ADR 0003) |
+| `metadata.session_id` | the thread id — groups a Member's turns into one LangSmith thread |
+| cost | LangSmith's own figure, from the token counts on each model call |
+| `receipt_accuracy_{amount,date,category,notes}` feedback | `/resume` legs of `receipt` turns only — proposed-vs-confirmed field agreement (ADR 0003) |
 
-The OpenAI API returns **token counts, not cost** (`prompt_tokens` / `completion_tokens`, plus `cached_tokens` and `reasoning_tokens` details). The service computes the dollar figure from a small per-model rate table in `config.py` — `{input, cached_input, output}` per 1M tokens, cached input at its discount, reasoning tokens billed as output — and passes it on the trace.
-
-Admin cost / latency / token visibility is the Langfuse dashboards, browsed over the SSH tunnel. Per-Member daily caps are counted from Langfuse; there is no app-level monthly spend cap (the OpenAI account's hard limit is the backstop).
+Admin cost / latency / token visibility is LangSmith's monitoring, filtered by the `feature:<x>` tags. The per-Member daily token cap is a Postgres counter, not a trace query (ADR 0008's 2026-09-11 update); there is no app-level monthly spend cap (the OpenAI account's hard limit is the backstop).
 
 #### `Expense` / `Income` — new field
 
@@ -207,7 +207,7 @@ Admin cost / latency / token visibility is the Langfuse dashboards, browsed over
 
 #### Not in Frappe
 
-Conversation threads (LangGraph checkpointer's Postgres, in the `expenso-assistant` stack), full agent traces, and every LLM call + its cost (all Langfuse). "Clear chat" deletes the LangGraph thread. There is **no `Chat Message`, no `Chat Run`, and no `LLM Call Log` DocType.**
+Conversation threads (LangGraph checkpointer's Postgres, in the `expenso-assistant` stack), full agent traces, and every LLM call + its cost (all LangSmith). "Clear chat" deletes the LangGraph thread. There is **no `Chat Message`, no `Chat Run`, and no `LLM Call Log` DocType.**
 
 ---
 
@@ -216,13 +216,13 @@ Conversation threads (LangGraph checkpointer's Postgres, in the `expenso-assista
 The `expenso-assistant` repo is a standalone service (structured like the sibling `contract-intelligence` project). See `docs/adr/0008-in-app-assistant-architecture.md` for the full rationale.
 
 - **`tools.py`** — one module of typed async functions, the single tool definition (reads: `get_expenses`/`get_analytics`/`get_income`/`get_budgets`/`list_categories`/`list_sources`; writes: `create/update/delete_expense`, `create/update/delete_income`, `add_category`, `add_source`, `set_budget`). Each calls Frappe's REST API as the Member (bearer passthrough).
-- **LangGraph agent** — MIT framework; the Elastic-licensed `langgraph-api` server is not used. Hand-rolled FastAPI endpoints serve it: `POST /chat` drives `astream_events(version="v2")` → SSE, and `POST /resume` → `graph.ainvoke(Command(resume=…))` → a fresh SSE stream. Postgres checkpointer (`AsyncPostgresSaver`, same Postgres as Langfuse). The graph is a hand-rolled `StateGraph` — an `agent` node (model bound with the `tools.py` functions **directly**, no MCP) ⇄ a `ToolNode`, with a `tool_call_count` in state feeding the max-tool-calls cap. Interactive turns bind read+write tools; scheduled (proactive) runs bind read-only tools.
+- **LangGraph agent** — MIT framework; the Elastic-licensed `langgraph-api` server is not used. Hand-rolled FastAPI endpoints serve it: `POST /chat` drives `astream_events(version="v2")` → SSE, and `POST /resume` → `graph.ainvoke(Command(resume=…))` → a fresh SSE stream. Postgres checkpointer (`AsyncPostgresSaver`). The graph is a hand-rolled `StateGraph` — an `agent` node (model bound with the `tools.py` functions **directly**, no MCP) ⇄ a `ToolNode`, with a `tool_call_count` in state feeding the max-tool-calls cap. Interactive turns bind read+write tools; scheduled (proactive) runs bind read-only tools.
 - **Write confirmation (P6-S7)** — `route()` sends a message with any **write** tool-call to a `propose` node (read-only calls still go to `tools`). `propose` harvests every write call in the message, reads each `update`/`delete` target's current values + `modified` out of the tool history already in state, and raises `interrupt({actions: [{id, tool, kind, entity, summary, changes|values}]})` — one batched confirm card, capped at `max_proposed_writes_per_turn` (25). `POST /resume` carries `{decision: {selected: [id,…]}}` (empty = cancel); `propose` re-derives the action list from the still-pending `tool_calls` and calls the `tools.py` write fns for the selected subset with `if_modified_since` = the value the agent read, one `ToolMessage` per original call. A per-action `TimestampMismatchError` doesn't abort the batch — the rest apply, the conflict returns as a `ToolMessage`, the model re-reads and re-proposes (a second `needs_confirmation`). No MCP elicitation on this path — that stays on the FastMCP adapter for external connectors. Confirmed writes set `entry_method="assistant"`, no `is_external_write`.
 - **SSE event set** — `step` (humanized tool-call, one line per action), `token` (answer delta), `done` (`{message_id}`), `needs_confirmation` (`{actions}` — ends the leg with no `done`; the member answers via `/resume`), `error` (`{code, message}` — `recursion` / `tool_cap` / `wall_clock` / `daily_cap` / `tool_error` / `internal`). On any `error` the turn is rolled back to the pre-run checkpoint, so a capped/failed turn leaves no orphaned message in history. A new `/chat` while an `interrupt` is pending discards it (a transient `step`) and proceeds.
 - **FastMCP server (`/mcp`)** — registers the same `tools.py` functions for external ChatGPT/Claude connectors, gating every write behind an SEP-2322 input-required confirmation (the `2026-07-28` MCP era replacement for server-initiated elicitation; the connector renders its own confirm UI). A **pure external adapter**, config-flag gated — disabling it does not affect the in-app Assistant.
 - **Auth** — a FastAPI dependency introspects the Frappe OAuth bearer (RFC 7662; rejects inactive), requires `expenso:read`, and resolves the Member via `frappe.auth.get_logged_user`. The thread is **1:1 with the Member**: `thread_id = "member:" + sha256(email)`, derived server-side on every call — no client ever supplies a thread id, so one Member cannot address another's thread. History is the messages in the thread's latest checkpoint; "Clear chat" deletes the thread from the checkpointer.
-- **Observability** — Langfuse v2, self-hosted, Postgres-only, loopback + SSH tunnel. Every trace is tagged `user_id` (Member) / `metadata.feature` / `session_id`, with generation cost attached explicitly. This is the only record of a call.
-- **Cost bounds** — per-run `recursion_limit` / tool-call / wall-clock caps (the runaway guard); a per-Member **daily chat cap** counted from Langfuse, failing open if Langfuse is down; a per-turn **`max_proposed_writes_per_turn`** batch cap on the confirm card (local, no Langfuse — P6-S7 replaced the daily *write* cap with this, ADR 0008's 2026-09-10 P6-S7 update). No app-level monthly spend cap — the OpenAI account's hard spend limit is the money backstop.
+- **Observability** — hosted LangSmith, EU region (ADR 0011), through the stock `LangChainTracer`. Every trace is tagged `feature:<x>` with `user_id` (Member) / `feature` / `session_id` metadata. Receipt images are masked by the client's `hide_inputs` hook. Tracing is off when `LANGSMITH_API_KEY` is empty. This is the only record of a call.
+- **Cost bounds** — per-run `recursion_limit` / tool-call / wall-clock caps (the runaway guard); a per-Member **daily token cap** counted in the checkpointer's Postgres (ADR 0008's 2026-09-11 update); a per-turn **`max_proposed_writes_per_turn`** batch cap on the confirm card (local — P6-S7 replaced the daily *write* cap with this, ADR 0008's 2026-09-10 P6-S7 update). No app-level monthly spend cap — the OpenAI account's hard spend limit is the money backstop.
 - **One process, one event loop** — the `app` container runs the FastAPI endpoints + the agent + (optionally) the FastMCP adapter in one uvicorn. Fine at this scale, but proactive runs are scheduled **off-hours** so a tens-of-seconds batch graph can't stall a live chat SSE stream; grow into a separate worker before relaxing that.
 
 ### Service internals — components, tools, and interactions
@@ -242,7 +242,7 @@ flowchart LR
     In --> Entry
     Agent <--> OpenAI
     Tools -->|"as the Member"| Frappe["Frappe REST"]
-    Agent --> Obs["Langfuse + Postgres<br/>(traces, cost, threads)"]
+    Agent --> Obs["LangSmith + Postgres<br/>(traces, cost, threads)"]
 ```
 
 Detail:
@@ -261,13 +261,13 @@ flowchart TB
         Agent["LangGraph agent — agent/graph.py<br/>state graph · proposal node -> interrupt()<br/>interactive: read + write tools<br/>proactive: read-only tools<br/>caps: recursion / tool-call / wall-clock"]
         Tools["tools.py — one tool definition<br/>reads: get_expenses · get_analytics · get_income ·<br/>get_budgets · list_categories · list_sources<br/>writes: create/update/delete_expense ·<br/>create/update/delete_income · add_category ·<br/>add_source · set_budget"]
         FClient["frappe_client.py — thin REST client,<br/>bearer passthrough"]
-        Obs["observability.py — Langfuse trace tagging,<br/>explicit cost, daily-cap query"]
+        Obs["observability.py — LangSmith tracer,<br/>image masking, daily token cap"]
     end
 
     Frappe["Frappe REST /api/method/*<br/>(runs as the Member — all permission hooks apply)"]
     OpenAI["OpenAI"]
-    PG[("Postgres<br/>LangGraph checkpointer — threads<br/>+ Langfuse DB")]
-    LF["Langfuse v2 (loopback only)"]
+    PG[("Postgres<br/>LangGraph checkpointer — threads<br/>+ daily token counter")]
+    LF["LangSmith (hosted, EU)"]
 
     PWA -->|"SSE run + /resume"| FastAPI
     Ext -->|"MCP"| MCPsrv
@@ -283,9 +283,8 @@ flowchart TB
     Agent --> Obs
     Tools --> FClient
     FClient -->|"bearer passthrough"| Frappe
-    Obs -->|"traces + cost"| LF
-    Obs -->|"daily-cap counts"| LF
-    LF --> PG
+    Obs -->|"traces, images masked"| LF
+    Obs -->|"daily token counts"| PG
     Agent -->|"needs_confirmation -> confirm card"| PWA
     MCPsrv -->|"input-required -> connector's own confirm UI"| Ext
 ```
@@ -437,14 +436,14 @@ expenso/                            ← Frappe app root (git repo)
     └── vite.config.js · package.json
 
 expenso-assistant/                  ← separate repo (arunjoyt/expenso-assistant, Phase 6+); uv, see ADR 0008
-├── docker-compose.yml              ← app + postgres + langfuse:2 + nginx
+├── docker-compose.yml              ← app + postgres + nginx (traces go to hosted LangSmith)
 ├── Dockerfile · nginx/ · .env.example · .github/workflows/ci.yml
 └── src/expenso_assistant/
-    ├── config.py                  ← OPENAI_MODEL + per-model {input,cached_input,output} rate table + cost_for() + per-run caps + daily_chat_cap + max_proposed_writes_per_turn (P6-S7) + MCP_ENABLED (env-driven; no monthly spend cap)
+    ├── config.py                  ← OPENAI_MODEL + LANGSMITH_* + per-run caps + daily_token_cap + max_proposed_writes_per_turn (P6-S7) + MCP_ENABLED (env-driven; no monthly spend cap)
     ├── tools.py                   ← the one tool definition: typed async fns over frappe_client (ported from expenso/mcp.py); READ_TOOLS / WRITE_TOOLS
     ├── frappe_client.py           ← thin REST client, bearer passthrough
     ├── auth.py                    ← FrappeTokenVerifier (RFC 7662 introspection) + OAuthProxy (PKCE); (P6-S5) resolve_member() via frappe.auth.get_logged_user + the FastAPI auth dependency + thread_id derivation
     ├── mcp_server.py              ← FastMCP: registers tools.py fns for external connectors, SEP-2322 confirm on writes (mounted at /mcp iff MCP_ENABLED)
-    ├── agent/                      ← graph.py (`create_agent` + stock middleware since ADR 0010 — human-in-the-loop confirm card, tool-call limit, context editing, tool errors; binds tools.py directly) · middleware.py (the one custom middleware: prompt, receipt image, proactive instruction) · describe.py (confirm-card text per proposed write) · state.py (checkpointed state + per-run `RunContext`) · model.py (build_model — the one place OpenAI is named) · prompt.py (system prompt, today's date injected per-run; P6-S7 rewrites it for writes) · observability.py (Langfuse trace + explicit-cost callback + daily-chat-cap query) · session.py (SSE translation, turn rollback; P6-S7 wires resume_turn)
+    ├── agent/                      ← graph.py (`create_agent` + stock middleware since ADR 0010 — human-in-the-loop confirm card, tool-call limit, context editing, tool errors; binds tools.py directly) · middleware.py (the one custom middleware: prompt, receipt image, proactive instruction) · describe.py (confirm-card text per proposed write) · state.py (checkpointed state + per-run `RunContext`) · model.py (build_model — the one place OpenAI is named) · prompt.py (system prompt, today's date injected per-run; P6-S7 rewrites it for writes) · observability.py (LangSmith tracer + receipt-image masking + daily token cap) · session.py (SSE translation, turn rollback; P6-S7 wires resume_turn)
     └── api/main.py                ← FastAPI: /health · POST /chat (SSE) · POST /resume (SSE continuation, P6-S7) · GET/DELETE /history · (P7-S2) /run/proactive · mounts mcp_server · CORSMiddleware for the Frappe origin (allowed_cors_origins in config.py)
 ```

@@ -26,8 +26,8 @@ Internet → Traefik (SSL termination via frappe_docker's overrides/compose.http
                     │         fronted by the same Traefik, which it reaches
                     │         by joining the `frappe-bench_default` network)
                     ├── app (uvicorn: FastAPI + LangGraph agent; FastMCP /mcp adapter iff MCP_ENABLED)
-                    ├── Postgres (LangGraph checkpointer + Langfuse DB)
-                    └── Langfuse v2 (loopback only — browse via SSH tunnel)
+                    ├── Postgres (LangGraph checkpointer + daily token counter)
+                    └── traces ──> hosted LangSmith, EU (receipt images masked)
 ```
 
 The `expenso-assistant` stack is deployed separately (`git pull && docker
@@ -112,7 +112,7 @@ Phase 6 additions on the Frappe side:
 - The whitelisted `expenso.assistant.auth.mint_assistant_token` endpoint mints short-lived `OAuth Bearer Token` rows for the logged-in Member (the frontend calls it; the token is passed to the service).
 - The scheduler **must be enabled** (`bench --site <site> enable-scheduler`) for proactive Insight runs (Phase 7) — the scheduled jobs mint per-Member read tokens and POST the `expenso-assistant` service. Keep these in an **off-hours slot**: a proactive run is a long batch graph and the `app` process also serves live chat streams.
 
-**Assistant service side:** configuration is env-driven (`config.py` reads it) — `OPENAI_API_KEY`, `OPENAI_MODEL` (+ its per-model `{input, cached_input, output}` rate table; the API returns tokens, the service computes cost), `FRAPPE_URL`, `LANGFUSE_*`, `DAILY_TOKEN_CAP`, `CHAT_HISTORY_TOKEN_BUDGET`, `MAX_CHAT_MESSAGE_CHARS`, `MAX_PROPOSED_WRITES_PER_TURN` (P6-S7 — the confirm-card batch cap that replaced the daily write cap), `MCP_ENABLED`, Postgres DSN. There is no app-level monthly spend cap — **set a hard monthly spend limit on the OpenAI account dashboard** (Settings → Limits); that is the money backstop.
+**Assistant service side:** configuration is env-driven (`config.py` reads it) — `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGSMITH_*` (tracing; LangSmith prices each call itself — ADR 0011), `DAILY_TOKEN_CAP`, `CHAT_HISTORY_TOKEN_BUDGET`, `MAX_CHAT_MESSAGE_CHARS`, `MAX_PROPOSED_WRITES_PER_TURN` (P6-S7 — the confirm-card batch cap that replaced the daily write cap), `MCP_ENABLED`, Postgres DSN. There is no app-level monthly spend cap — **set a hard monthly spend limit on the OpenAI account dashboard** (Settings → Limits); that is the money backstop.
 
 ---
 
@@ -151,17 +151,19 @@ Since the P6-S4 cutover, the party actually exchanging a code at Frappe's token 
 
 A separate repo ([`arunjoyt/expenso-assistant`](https://github.com/arunjoyt/expenso-assistant), private) and a separate `docker-compose` stack, deployed alongside (not inside) the Frappe bench. See `docs/adr/0008-in-app-assistant-architecture.md`. The streak issues (P6-S3/S5/S7, P7-S1) are tracked in **this** repo; that repo's CI runs `ruff` + `pytest` via `uv`.
 
-**Stack:** `app` (one uvicorn process: FastAPI endpoints + the LangGraph agent, which binds the `tools.py` functions directly; the FastMCP server mounts at `/mcp` only when `MCP_ENABLED`) · `postgres` (LangGraph checkpointer **and** the Langfuse DB) · `langfuse` (pinned `langfuse/langfuse:2`, Postgres-only, bound to `127.0.0.1`) · `nginx` (TLS for the public `app` endpoint; the Langfuse UI is **not** exposed).
+**Stack:** `app` (one uvicorn process: FastAPI endpoints + the LangGraph agent, which binds the `tools.py` functions directly; the FastMCP server mounts at `/mcp` only when `MCP_ENABLED`) · `postgres` (LangGraph checkpointer and the daily token counter) · `nginx` (TLS for the public `app` endpoint). Traces go to hosted LangSmith (ADR 0011) — there is no tracing container.
 
 **Deploy:** on the VPS, `git pull && docker compose up -d --build` in the `expenso-assistant` checkout — **`frappe-bench` must already be running first** (its `frappe-bench_default` network must exist). `/health` must return green before the Frappe-side cutover (P6-S4) deletes `expenso/mcp.py`. The `nginx` service in this stack has no `ports:` of its own — it joins `frappe-bench_default` as an external network and carries Traefik labels, since Traefik already owns host 80/443 for the other sites on this box and auto-discovers containers on that network. Set `ASSISTANT_HOSTNAME`/`PUBLIC_BASE_URL` in `.env` to the real subdomain first. See "Fronting expenso-assistant through the existing Traefik" in `vps-ref-contabo`'s `RUNBOOK.md` for the confirmed-live details (certresolver name, single-router pattern).
 
-**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_NEXTAUTH_*` / `LANGFUSE_SALT`, `SERVICE_TIMEZONE` (the Family's tz — used for "today" in the daily cap and the agent's date reasoning), `RUN_RECURSION_LIMIT` / `RUN_MAX_TOOL_CALLS` / `RUN_WALL_CLOCK_SECONDS` (per-run runaway guard), `DAILY_TOKEN_CAP` (per-Member input+output tokens/day, counted from a small Postgres table in the checkpointer's own database — not Langfuse, no fail-open; ADR 0008's 2026-09-11 update replaced the old turn-count `DAILY_CHAT_CAP`), `CHAT_HISTORY_TOKEN_BUDGET` (how much of a thread's persisted history is resent to the model per turn — a transient trim, not a checkpoint prune), `MAX_CHAT_MESSAGE_CHARS` (rejects an oversized single message with a `413`, a secondary bound alongside the daily token cap), `MAX_PROPOSED_WRITES_PER_TURN` (P6-S7 — confirm-card batch cap; replaced the daily write cap), `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `ALLOWED_CORS_ORIGINS` (P6-S6 — comma-separated; the Frappe app's public origin, e.g. `https://<site>`, so the in-app Assistant tab can call `/chat` cross-origin), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
+**Env:** `OPENAI_API_KEY`, `OPENAI_MODEL`, `FRAPPE_URL`, `LANGSMITH_API_KEY` (empty turns tracing off) / `LANGSMITH_ENDPOINT` (default the EU region, `https://eu.api.smith.langchain.com`) / `LANGSMITH_PROJECT` (default `expenso-assistant`) — **do not set `LANGSMITH_TRACING`**: LangChain would add a second tracer that does not mask receipt images, `SERVICE_TIMEZONE` (the Family's tz — used for "today" in the daily cap and the agent's date reasoning), `RUN_RECURSION_LIMIT` / `RUN_MAX_TOOL_CALLS` / `RUN_WALL_CLOCK_SECONDS` (per-run runaway guard), `DAILY_TOKEN_CAP` (per-Member input+output tokens/day, counted from a small Postgres table in the checkpointer's own database — not the traces, no fail-open; ADR 0008's 2026-09-11 update replaced the old turn-count `DAILY_CHAT_CAP`), `CHAT_HISTORY_TOKEN_BUDGET` (how much of a thread's persisted history is resent to the model per turn — a transient trim, not a checkpoint prune), `MAX_CHAT_MESSAGE_CHARS` (rejects an oversized single message with a `413`, a secondary bound alongside the daily token cap), `MAX_PROPOSED_WRITES_PER_TURN` (P6-S7 — confirm-card batch cap; replaced the daily write cap), `MCP_ENABLED` (mount the external connector adapter at `/mcp`), `ALLOWED_CORS_ORIGINS` (P6-S6 — comma-separated; the Frappe app's public origin, e.g. `https://<site>`, so the in-app Assistant tab can call `/chat` cross-origin), `POSTGRES_*`. No `MONTHLY_SPEND_CAP` — the OpenAI account's own hard spend limit is the backstop.
 
 **Frappe side (P6-S6):** set `expenso_assistant_url` in the site's `site_config.json` to the service's public base URL (e.g. `https://assistant.<site>`). The frontend reads it from the boot context (`window.assistant_url`); if unset, the Assistant tab shows an "isn't configured" notice rather than erroring.
 
-**Browse Langfuse:** SSH tunnel — `ssh -L 3000:127.0.0.1:3000 <vps>`, then `http://localhost:3000`.
+**Browse traces:** `https://eu.smith.langchain.com`, project `expenso-assistant`. Create the API key in an EU-region LangSmith workspace.
 
-**Backups:** both Postgres roles must be in the backup script — the LangGraph checkpointer DB (conversation threads — "Clear chat" is the only other way they go away) and the Langfuse DB (agent traces, retention-windowed).
+**Removing Langfuse from an existing VPS (one-off, ADR 0011):** after the LangSmith build is deployed, `docker compose up -d --remove-orphans` removes the old `langfuse` container. Then drop its database: `docker compose exec postgres psql -U postgres -c 'DROP DATABASE langfuse;'`. Remove the `LANGFUSE_*` lines from `.env`. The old traces are not migrated.
+
+**Backups:** the LangGraph checkpointer DB must be in the backup script (conversation threads — "Clear chat" is the only other way they go away). Traces live in LangSmith, under its retention.
 
 **Cutover order (P6-S3 → P6-S4):** the connector is briefly unavailable between the old server being deleted and the new one being live. Sequence: stand up and verify the `expenso-assistant` FastMCP server (P6-S3) → then delete `expenso/mcp.py` and re-point the `OAuth Client` redirect URI (P6-S4).
 
@@ -181,20 +183,20 @@ images that will never be reused now that builds happen in CI.
 **Approach: deploy the full stack untuned first; tune only if it misbehaves.**
 The full ADR 0008 stack (`app` + `postgres` + `langfuse` + `nginx`) adds roughly
 0.9–1.5 GB resident, ~2 GB at peak (a chat run and a Langfuse trace flush at the
-same time). On paper that fits the ~4.6 GB headroom — confirm it in practice
+same time). Since ADR 0011 there is no `langfuse` container, so the real figure
+is lower. On paper that fits the ~4.6 GB headroom — confirm it in practice
 rather than pre-optimising.
 
 **Prerequisite before the first deploy** (disk hygiene, not tuning): reclaim the
-stale images so Langfuse's Postgres has room to grow within its retention
-window — `docker image prune -a` (keep the live `frappebench` tag + 1–2 recent
+stale images so the checkpointer's Postgres has room to grow — `docker image prune -a` (keep the live `frappebench` tag + 1–2 recent
 as rollback points), then `docker builder prune -af`. Frees ~50 GB.
 
 **Watch for a week of normal use, plus one proactive-run window:**
 
 - `free -m` — `available` stays above ~300 MB; `Swap` `used` does **not** climb
   during normal (non-deploy) operation.
-- `docker stats --no-stream` — no container pinned at a ceiling; Langfuse RSS
-  not growing unbounded day over day.
+- `docker stats --no-stream` — no container pinned at a ceiling; no RSS
+  growing unbounded day over day.
 - `journalctl -k | grep -i oom` — any OOM kill is an immediate escalation
   trigger.
 - The off-hours proactive Insights run completes without restarting a container.
@@ -203,15 +205,13 @@ as rollback points), then `docker builder prune -af`. Frees ~50 GB.
 requires:
 
 1. Swap 2 GB → 4–6 GB; `vm.swappiness=10`.
-2. `mem_limit` on the three new containers (`app` 768m, `postgres` 384m,
-   `langfuse` 768m) — stops an assistant-side leak from OOM-killing the Frappe
-   stack.
-3. Cap Langfuse's Node heap: `NODE_OPTIONS=--max-old-space-size=512`.
-4. Tune Postgres small: `shared_buffers=128MB`, `work_mem=4MB`,
+2. `mem_limit` on the new containers (`app` 768m, `postgres` 384m) — stops an
+   assistant-side leak from OOM-killing the Frappe stack.
+3. Tune Postgres small: `shared_buffers=128MB`, `work_mem=4MB`,
    `max_connections=20`, `effective_cache_size=256MB`.
-5. Pin MariaDB `innodb_buffer_pool_size` ≈ 1.5 GB explicit, so it cannot expand
+4. Pin MariaDB `innodb_buffer_pool_size` ≈ 1.5 GB explicit, so it cannot expand
    into the assistant's space.
-6. Sustained swap thrash under normal load after all of the above → 8 GB is
+5. Sustained swap thrash under normal load after all of the above → 8 GB is
    genuinely undersized; upgrade the Contabo plan.
 
 ---
@@ -261,13 +261,13 @@ Run these in order after deploying a new phase or to the production site.
 
 - [ ] `bench --site <site> migrate` after the `entry_method` field + backfill patch (existing `is_external_write=1` rows → `connector`, the rest → `manual`)
 - [ ] `frappe-bench` is up before `expenso-assistant` is started, so `frappe-bench_default` exists for its `nginx` to join (RUNBOOK.md) — `docker compose ps` in the `expenso-assistant` checkout shows no failure to find the external network
-- [ ] `expenso-assistant` stack up; `/health` green over `https://assistant.<site>/health` (not just internally); Langfuse reachable via SSH tunnel
-- [ ] The `assistant` Postgres DB exists before the `app` container starts (the checkpointer runs its `setup()` DDL on boot); `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY` and `SERVICE_TIMEZONE` set in `.env`
+- [ ] `expenso-assistant` stack up; `/health` green over `https://assistant.<site>/health` (not just internally)
+- [ ] The `assistant` Postgres DB exists before the `app` container starts (the checkpointer runs its `setup()` DDL on boot); `LANGSMITH_API_KEY` (EU workspace) and `SERVICE_TIMEZONE` set in `.env`; `LANGSMITH_TRACING` **not** set
 - [ ] A hard monthly spend limit is set on the OpenAI account dashboard
 - [ ] Re-add the MCP connector in Claude against the new service URL; OAuth consent completes; `get_expenses` returns the right Family's data; a `create_expense` lands with `is_external_write=1` and `entry_method=connector`
 - [ ] `expenso/mcp.py` deleted, `frappe-mcp` gone from `pyproject.toml`, a fresh `bench build`/install resolves cleanly
 - [ ] 5 nav tabs (Feed, Analytics, Budget, Settings, Assistant); FAB visible on all except Assistant
-- [ ] Ask "what did I spend on groceries in March" → step log streams (`event: step`), then the answer streams (`event: token`), then `event: done`; in Langfuse, one trace tagged `user_id=<member>`, `metadata.feature=chat` + a `feature:chat` tag, `session_id=<thread>`, with the generation cost recorded on it (no `metadata.family` — dropped in the P6-S5 grill)
+- [ ] Ask "what did I spend on groceries in March" → step log streams (`event: step`), then the answer streams (`event: token`), then `event: done`; in LangSmith, one `chat-turn` trace tagged `feature:chat`, with metadata `user_id=<member>`, `feature=chat`, `session_id=<thread>`; the model and tool calls are nested under it, and the model call shows tokens and cost
 - [ ] Reload the chat → `GET /history` returns the turn; "Clear chat" (`DELETE /history`) empties it; a second Member's `/history` never shows the first Member's thread
 - [ ] Force a per-run cap (e.g. a low `RUN_WALL_CLOCK_SECONDS`) → the stream ends with `event: error`, and the failed turn leaves nothing in `/history`
 - [ ] Ask to add an expense → the stream ends with `event: needs_confirmation`; the confirm card shows the concrete values; confirm → Expense created with `entry_method=assistant`, **no** "unreviewed external write" marker; the follow-up answer streams on the `/resume` leg
@@ -276,15 +276,15 @@ Run these in order after deploying a new phase or to the production site.
 - [ ] Send a new chat message while a confirm card is open → the card is discarded (a transient step) and the new message is answered
 - [ ] Ask for more than `MAX_PROPOSED_WRITES_PER_TURN` changes at once → the card is capped and the agent offers to continue with the rest
 - [ ] Hit the per-Member daily **token** cap (`DAILY_TOKEN_CAP`) → refused with a clear message, no OpenAI call
-- [ ] Stop the Langfuse container, then send a chat message → the turn still runs and completes normally (the daily-cap counter is backed by the checkpointer's own Postgres, not Langfuse, since ADR 0008's 2026-09-11 update — Langfuse going down only loses tracing, not the cap gate); separately, stopping **Postgres** (a hard dependency either way) fails the cap check closed with an `internal` error, not open — there is no fail-open branch anymore
+- [ ] Set a wrong `LANGSMITH_API_KEY` and restart `app`, then send a chat message → the turn still runs and completes normally (the daily-cap counter is backed by the checkpointer's own Postgres, not the traces — a tracing failure only loses the trace, not the turn); separately, stopping **Postgres** (a hard dependency either way) fails the cap check closed with an `internal` error, not open — there is no fail-open branch anymore
 
 ### Phase 7 — Proactive & Reporting
 
 - [ ] `bench --site <site> enable-scheduler`; `bench execute expenso.assistant.proactive.run_monthly_summary` posts an Insight into each Member's thread; the Assistant nav tab shows an unread badge
 - [ ] Run the budget-drift job twice with unchanged data → both runs post a warning Insight (intentional re-warn, not deduped — a Category stays over its threshold, so it warns every run; see `proactive.py`'s header comment)
-- [ ] Attach a receipt photo in chat → Expense proposed in a confirm card; confirm → `entry_method=receipt`; the Langfuse trace (`feature=receipt`) carries `receipt_accuracy_*` scores; **no** Frappe `File`, no image on the Expense
+- [ ] Attach a receipt photo in chat → Expense proposed in a confirm card; confirm → `entry_method=receipt`; the `/resume` leg's LangSmith trace carries `receipt_accuracy_*` feedback; the `receipt-turn` trace shows `[receipt image removed]` where the image was, never the image data; **no** Frappe `File`, no image on the Expense
 - [ ] Attach a non-receipt photo → the agent asks what to do, no proposal
-- [ ] Langfuse dashboards show cost / latency / token use broken out by `feature`; receipt traces carry the accuracy scores
+- [ ] LangSmith monitoring shows cost / latency / token use, filterable by the `feature:<x>` tags; receipt `/resume` traces carry the accuracy feedback
 
 ### Production (all phases)
 

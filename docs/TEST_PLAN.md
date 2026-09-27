@@ -807,6 +807,11 @@ pre-run checkpoint (no orphaned user message); `/resume` ships as an
 endpoint+SSE shell (interrupt semantics are P6-S7); endpoints require
 `expenso:read`; saved Langfuse dashboards deferred to P7-S2.
 
+**Tracing update (ADR 0011, 2026-09-27):** traces go to hosted LangSmith through the
+stock `LangChainTracer`; the explicit-cost and Langfuse-cap rows below are replaced.
+Tests use a `SpyLangSmith` client (a real `langsmith.Client` with no network) and a
+recording `LangChainTracer`, so runs carry the inputs LangSmith would get.
+
 **Service tests** (`expenso-assistant` repo)
 
 | Test | Assertion |
@@ -814,14 +819,18 @@ endpoint+SSE shell (interrupt semantics are P6-S7); endpoints require
 | Agent binds tools | `build_graph()` binds the `tools.py` `READ_TOOLS` directly (`model.bind_tools(READ_TOOLS)`); no `langchain[mcp]` / `langchain_mcp` import anywhere in `agent/`; no MCP client in the agent path |
 | Read-only graph never binds a write tool | `WRITE_TOOLS` names are absent from the compiled graph's tool set |
 | Agent given "what did I spend on groceries in March", fake tool-calling model | calls a read tool with `month=3` and the current year (date from the per-run system prompt); returns a final answer |
-| One Langfuse trace per turn, tagged | exactly one trace; `user_id`=<member email>, `metadata.feature="chat"`, tag `feature:chat`, `session_id`=<derived thread id>; no `metadata.family` |
-| Generation cost is the service's number | fake model reports known `prompt_tokens`/`completion_tokens` (+ `cached_tokens`, `reasoning_tokens`); the generation's recorded cost == `config.cost_for(...)` per token class (cached input discounted, reasoning as output) — Langfuse's own model-price estimate is not used |
+| One LangSmith trace per turn, tagged | exactly one root run named `chat-turn`; tag `feature:chat`; metadata `user_id`=<member email>, `feature="chat"`, `session_id`=<derived thread id>; no error; output holds the answer |
+| Model call nested under the turn | the trace has one `llm` child run whose output carries the fake model's `usage_metadata` (what LangSmith prices from) |
+| Failed turn recorded on its trace | the fake model raises → SSE `error` `{code:"internal"}`; the root run has an `error` |
+| Receipt image masked in every run | receipt turn: the raw run inputs contain the image data URI; after `mask_images`, no run's inputs contain `base64,` — both model runs (message dicts) and middleware runs (live message objects) |
+| `mask_images` keeps everything but image data | nested text blocks and numbers unchanged; the `image_url` URL becomes the placeholder |
+| Tracing off without an API key | `tracers() == []`; `flush_traces()` is a no-op |
+| Tracer targets the EU region with images masked | with `LANGSMITH_API_KEY` set: one `LangChainTracer`, project `expenso-assistant`, client `api_url` `https://eu.api.smith.langchain.com`, `hide_inputs` is `mask_images` |
 | `recursion_limit` exceeded | `GraphRecursionError` caught; SSE ends with `error` `{code:"recursion"}`; no `token` event was emitted; thread history unchanged (rolled back) |
 | max-tool-calls cap exceeded | routes to the terminal cap node, not `tools`; SSE `error` `{code:"tool_cap"}`; history unchanged |
 | wall-clock cap exceeded | `asyncio.wait_for` times out; SSE `error` `{code:"wall_clock"}`; history unchanged |
-| Per-Member daily chat cap reached (mock Langfuse count ≥ cap) | run refused with `error` `{code:"daily_cap"}` before the trace opens; the model is never called |
-| Langfuse unreachable during the daily-cap check | check fails open — run proceeds; a `warning` is logged |
-| Daily-cap query shape | counts today's traces (service tz) for `user_id` + tag `feature:chat`; this run's own trace is not counted (checked first) |
+| Per-Member daily token cap reached (spy token store at the cap) | run refused with `error` `{code:"daily_cap"}` before the trace opens; the model is never called |
+| Model-call tokens counted against the daily total | input + output tokens of each call are added to the Member's total for today |
 | SSE happy path | `step` events (humanized from tool name/args) then `token` deltas then `done` `{message_id}` |
 | History endpoint | returns human + assistant messages in checkpoint order as `{id, role, content}`; tool messages and tool-call-only assistant messages omitted |
 | "Clear chat" | deletes the derived thread from the checkpointer; history then empty |
@@ -948,7 +957,7 @@ actions only.
 | `POST /chat` with `image` set | `entry_method` binds `"receipt"` for the turn; the trace opens with `feature="receipt"`; a synthetic `step` ("Reading the receipt…") is the first SSE event, before any tool/token event |
 | A model call with `receipt_image` set (in `config["configurable"]` before ADR 0010, `RunContext` after) | the model call receives a multimodal message (text + image block); the graph's checkpointed `state["messages"]` after the turn contains only the text marker, never the image bytes or data URI |
 | A receipt image attached to a chat turn, vision mock returns full fields | agent proposes `create_expense` in a confirm card with those values; the action's captured `entry_method` is `"receipt"` |
-| Confirm the proposal (unedited) — `POST /resume {selected:["a1"]}`, no `edits` | Expense created with `entry_method="receipt"`; the **resume leg's** trace gets `receipt_accuracy_{amount,date,category,notes}` scores = 1 (proposed matched confirmed) |
+| Confirm the proposal (unedited) — `POST /resume {selected:["a1"]}`, no `edits` | Expense created with `entry_method="receipt"`; the **resume leg's** trace gets `receipt_accuracy_{amount,date,category,notes}` scores (LangSmith feedback since ADR 0011) = 1 (proposed matched confirmed) |
 | Edit the amount in the card — `POST /resume {selected:["a1"], edits:{a1:{amount:...}}}` | Expense saved with the edited amount (edits merged into `call_args` before the write); `receipt_accuracy_amount` score = 0 on the resume trace, the other three = 1 |
 | Reject the proposal — `{selected:[]}` | no Expense; no `receipt_accuracy_*` scores posted anywhere (the `/chat` trace still has cost/latency; the resume trace has neither) |
 | A non-receipt, non-image write proposal (e.g. "add this $20 coffee") gets edited at resume | `entry_method` stays `"assistant"` (not `"receipt"`) on the action; **no** `receipt_accuracy_*` scores posted — the gate is `entry_method=="receipt"`, not "was anything edited" |

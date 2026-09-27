@@ -72,6 +72,7 @@ From Phase 6 onward, work spans two repos. Streaks are tagged with the repo they
 
 **Superseded 2026-09-09 ([ADR 0008](adr/0008-in-app-assistant-architecture.md)).** Receipt extraction is no longer a standalone feature — it is a capability of the in-app Assistant (attach a photo in the Assistant chat, the agent proposes an Expense in a confirm card). What remains of the old plan:
 
+- Tracing → **hosted LangSmith (EU), receipt images masked** since ADR 0011 (2026-09-27). The Langfuse mentions in this plan are the history of what was built first.
 - LLM call tracking → **not built in Frappe** (ADR 0008's 2026-09-10 update). Every call is a Langfuse trace tagged with the Member / feature / thread, cost attached explicitly (no Family tag — dropped by the 2026-09-10 P6-S5 update). No `LLM Call Log` DocType, no `record_llm_call`.
 - Receipt extraction itself → **P7-S1** (in `expenso-assistant`). No image storage anywhere; no camera on the Add Expense sheet. #67 dropped. Extraction accuracy is a Langfuse score, not a Frappe row.
 - Admin cost/accuracy reporting → the **Langfuse dashboards** (tagging + explicit cost in P6-S5; saved views in P7-S2). #68/#72 dropped. The Member-facing "your usage this month" (#73) is deferred out of v1.

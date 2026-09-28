@@ -19,11 +19,11 @@ After ADR 0010 the agent is a stock `create_agent` graph. LangChain's `LangChain
 **Traces go to hosted LangSmith, in the US region** (`https://aws.api.smith.langchain.com`), project `expenso-assistant`.
 
 - **Data residency is accepted, with receipt images masked.** Traces carry amounts, categories, notes and member emails, and LangSmith now stores them. Receipt photos are never uploaded: the LangSmith client's `hide_inputs` hook (`observability.mask_images`) replaces every `data:image/...` URI in a run's inputs with a placeholder. This covers the model-call runs, which record messages as dicts, and the middleware runs, which record the live message objects. Notes and emails are not masked, because the traces are for debugging and those fields carry the meaning.
-- **The stock tracer.** Each turn puts `run_id`, `run_name` (`chat-turn` / `receipt-turn` / `insights-turn`; the confirm-card decision is its own trace, `chat-resume` / `receipt-resume`, with the turn's feature), the tag `feature:<x>` and the metadata `user_id` / `session_id` / `feature` on the run config, next to a `LangChainTracer`. The tracer records inputs, outputs and errors. `TurnTrace.finish`/`fail` and the per-turn flush are removed. The app flushes once at shutdown. `session_id` groups a Member's turns into one LangSmith thread.
+- **The stock tracer.** Each turn puts `run_id`, `run_name` (`chat-turn` / `receipt-turn` / `insights-turn`; the confirm-card decision is its own trace, `chat-resume` / `receipt-resume`, with the turn's feature), the tag `feature:<x>` and the metadata `user_id` / `session_id` / `feature` on the run config. LangChain adds its own `LangChainTracer` because `LANGSMITH_TRACING` is on (see the 2026-09-28 update). The tracer records inputs, outputs and errors. `TurnTrace.finish`/`fail` and the per-turn flush are removed. The app flushes once at shutdown. `session_id` groups a Member's turns into one LangSmith thread.
 - **Receipt accuracy is LangSmith feedback.** The `receipt_accuracy_{amount,date,category,notes}` metric from ADR 0003 is unchanged. The scores are posted with `create_feedback(trace_id=<resume-leg run id>)`, which the client batches with the runs.
 - **Cost is LangSmith's figure.** LangSmith prices each call from its own model table, using the token counts in `usage_metadata`. `config.MODEL_PRICING` and `cost_for` are deleted. A model swap is now only `agent/model.py`.
 - **The daily token cap is not affected.** It is a Postgres counter (ADR 0008's 2026-09-11 update). The callback that feeds it stays, as `TokenCounter`.
-- **Tracing is off when `LANGSMITH_API_KEY` is empty.** The key alone turns it on. Leave `LANGSMITH_TRACING` unset: it is not needed, and with it set, any LangChain call made outside a turn would be traced by LangChain's default client, which does not mask images. (A turn is not traced twice: LangChain adds its own tracer only when the run has none.)
+- **Tracing is set up from the environment, as LangSmith recommends.** `LANGSMITH_TRACING=true` turns it on. The SDK reads `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT` and `LANGSMITH_PROJECT` itself. At startup, the app makes a masking client LangSmith's default client, so every traced call masks images, also a call made outside a turn. This reverses the earlier rule "the key alone turns it on; leave `LANGSMITH_TRACING` unset" — see the 2026-09-28 update.
 - **Langfuse is removed completely.** The `langfuse` dependency, the compose service and its env vars are gone. Existing Langfuse traces are not migrated. On the VPS, the `langfuse` Postgres database and the container are removed by hand (see DEPLOYMENT.md).
 
 ## Consequences
@@ -33,3 +33,19 @@ After ADR 0010 the agent is a stock `create_agent` graph. LangChain's `LangChain
 - One container and one database fewer on the VPS. There is no SSH tunnel: the LangSmith UI is at `https://aws.smith.langchain.com`.
 - LangSmith datasets and evaluations are now available for agent-level evals (expenso-assistant#8).
 - The Langfuse dashboard views planned for P7-S2 are replaced by LangSmith's built-in monitoring, filtered by the `feature:<x>` tags.
+
+## Update (2026-09-28): tracing set up from the environment
+
+The first version of this ADR turned tracing on with `LANGSMITH_API_KEY` alone. The service built its own `LangChainTracer` for each turn, and `LANGSMITH_TRACING` had to stay unset. That is not how LangSmith is normally set up, and a developer who set the flag by habit would send unmasked receipt images for any LangChain call made outside a turn.
+
+The service now follows the LangSmith setup:
+
+- **Environment only.** `LANGSMITH_TRACING`, `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT` and `LANGSMITH_PROJECT` are read by the LangSmith SDK from the process environment. They are no longer fields in `config.Settings`. `LANGSMITH_TRACING=false` turns tracing off without removing the key.
+- **LangChain adds the tracer.** `TurnTrace.apply` no longer adds a `LangChainTracer`. It still sets `run_id`, `run_name`, the `feature:<x>` tag and the metadata on the run config, so each turn is still one tagged trace.
+- **Masking on the default client.** At startup, `observability.configure_tracing()` calls `langsmith.configure(client=Client(hide_inputs=mask_images))`. LangChain's tracer, feedback (`create_feedback`) and the shutdown flush all use this client.
+
+Consequences:
+
+- A deployment must set `LANGSMITH_TRACING=true`. With only the key set, nothing is traced.
+- The variables must be in the process environment. Docker Compose loads `.env` through `env_file`. A local run uses `uv run --env-file .env uvicorn ...`, because pydantic reads `.env` but does not export it.
+- The US endpoint is no longer a default in code. It comes from `LANGSMITH_ENDPOINT` (set in `.env.example`).

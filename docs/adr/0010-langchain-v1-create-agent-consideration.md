@@ -157,6 +157,16 @@ Three more items from the "use what the framework gives" review, same branch:
    - **Write tools are never retried.** A write that timed out may have committed, so a retry could duplicate a row.
    - **Model retry: not added.** `ChatOpenAI` already retries twice through the OpenAI SDK, honouring `Retry-After`. `ModelRetryMiddleware` would stack on top of that, up to 9 attempts.
    - **Model fallback:** stock `ModelFallbackMiddleware`, off unless `OPENAI_FALLBACK_MODEL` is set. Fallback tokens count against the daily cap; the local cost figure still uses the primary model's price.
-3. **Checkpoint durability: kept at LangGraph's default `"async"`, now stated explicitly.** Probes showed `"exit"` also saves after an exception or a cancelled leg, so graceful failures behave the same. But on a process crash mid-resume, `"exit"` would lose the record of a committed write and reopen the card, and a re-confirm would duplicate the row. The saving (a few Postgres writes per turn) is not worth that.
+3. **Checkpoint durability: kept at LangGraph's default `"async"`, now stated explicitly.** Probes showed `"exit"` also saves after an exception or a cancelled leg, so graceful failures behave the same. But on a process crash mid-resume, `"exit"` would lose the record of a committed write and reopen the card, and a re-confirm would duplicate the row. The saving (a few Postgres writes per turn) is not worth that. *Superseded on 2026-09-28: durability is now `"sync"`. See [Durability: `"sync"`](#durability-sync-2026-09-28).*
 
 **Not adopted:** the `langgraph-api` server (tracked in expenso-assistant#11), the Store, time travel, subgraphs, and node caching — no current need. ADR 0009 (OpenAI Agents SDK) is rejected: it is an alternative framework, not an add-on.
+
+## Durability: `"sync"` (2026-09-28)
+
+Checkpoint durability changes from `"async"` to `"sync"` (expenso-assistant `ec7c894`). This replaces item 3 of the follow-up above.
+
+The goal of item 3 does not change: a crash mid-resume must not lose the record of a committed write. Item 3 compared `"exit"` with `"async"` only. The LangGraph docs say that `"async"` also has "a small risk that LangGraph does not write checkpoints if the process crashes during execution". So `"async"` makes the duplicate-row risk smaller, but it does not remove it. Only `"sync"` writes each checkpoint before the next step starts.
+
+The cost is one awaited Postgres write for each super-step, about 4 to 8 for each turn. The same review gave the checkpointer a connection pool that reconnects after a Postgres restart (expenso-assistant#7).
+
+Source: [Durability modes](https://docs.langchain.com/oss/python/langgraph/checkpointers#durability-modes).

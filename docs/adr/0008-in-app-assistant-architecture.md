@@ -2,7 +2,7 @@
 
 **Status: accepted (2026-09-09).** Supersedes most of [ADR 0004](0004-chat-via-tool-calling.md) and amends [ADR 0002](0002-receipt-extraction-via-vision-llm.md), [ADR 0003](0003-receipt-extraction-tracking.md), [ADR 0005](0005-chat-via-mcp-connector-alternative.md), [ADR 0006](0006-chat-driven-manual-entry-mcp-connector.md). Settled in a grill-with-docs session; the full decision log lives in the session plan.
 
-> **Head note (2026-09-27):** the observability parts of this ADR are superseded by [ADR 0011](0011-hosted-langsmith-tracing.md). Traces go to hosted LangSmith (EU region), not self-hosted Langfuse, with receipt images masked. Cost is LangSmith's figure; `MODEL_PRICING` is gone. Receipt accuracy is LangSmith feedback. Read "Langfuse" below as the history of that decision.
+> **Head note (2026-09-27):** the observability parts of this ADR are superseded by [ADR 0011](0011-hosted-langsmith-tracing.md). Traces go to hosted LangSmith (US region), not self-hosted Langfuse, with receipt images masked. Cost is LangSmith's figure; `MODEL_PRICING` is gone. Receipt accuracy is LangSmith feedback. Read "Langfuse" below as the history of that decision.
 
 ## Context
 

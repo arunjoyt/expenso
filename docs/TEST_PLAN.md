@@ -822,10 +822,11 @@ recording `LangChainTracer`, so runs carry the inputs LangSmith would get.
 | One LangSmith trace per turn, tagged | exactly one root run named `chat-turn`; tag `feature:chat`; metadata `user_id`=<member email>, `feature="chat"`, `session_id`=<derived thread id>; no error; output holds the answer |
 | Model call nested under the turn | the trace has one `llm` child run whose output carries the fake model's `usage_metadata` (what LangSmith prices from) |
 | Failed turn recorded on its trace | the fake model raises → SSE `error` `{code:"internal"}`; the root run has an `error` |
+| Resume leg named and tagged for its turn | a write turn traces as `chat-turn` then `chat-resume`, both tagged `feature:chat`; a receipt's resume leg is `receipt-resume`, tagged and with metadata `feature:receipt`, and carries the accuracy feedback |
 | Receipt image masked in every run | receipt turn: the raw run inputs contain the image data URI; after `mask_images`, no run's inputs contain `base64,` — both model runs (message dicts) and middleware runs (live message objects) |
 | `mask_images` keeps everything but image data | nested text blocks and numbers unchanged; the `image_url` URL becomes the placeholder |
 | Tracing off without an API key | `tracers() == []`; `flush_traces()` is a no-op |
-| Tracer targets the EU region with images masked | with `LANGSMITH_API_KEY` set: one `LangChainTracer`, project `expenso-assistant`, client `api_url` `https://eu.api.smith.langchain.com`, `hide_inputs` is `mask_images` |
+| Tracer targets the US region with images masked | with `LANGSMITH_API_KEY` set: one `LangChainTracer`, project `expenso-assistant`, client `api_url` `https://aws.api.smith.langchain.com`, `hide_inputs` is `mask_images` |
 | `recursion_limit` exceeded | `GraphRecursionError` caught; SSE ends with `error` `{code:"recursion"}`; no `token` event was emitted; thread history unchanged (rolled back) |
 | max-tool-calls cap exceeded | routes to the terminal cap node, not `tools`; SSE `error` `{code:"tool_cap"}`; history unchanged |
 | wall-clock cap exceeded | `asyncio.wait_for` times out; SSE `error` `{code:"wall_clock"}`; history unchanged |
